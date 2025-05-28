@@ -6,40 +6,100 @@ use App\Actions\Fortify\CreateNewUser;
 use App\Actions\Fortify\ResetUserPassword;
 use App\Actions\Fortify\UpdateUserPassword;
 use App\Actions\Fortify\UpdateUserProfileInformation;
+use App\Http\Requests\LoginRequest;
+use App\Models\User;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\ValidationException;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Laravel\Fortify\Fortify;
+use Laravel\Fortify\Contracts\RegisterResponse;
+use Laravel\Fortify\Http\Requests\LoginRequest as FortifyLoginRequest;
+
+
+
+
 
 class FortifyServiceProvider extends ServiceProvider
 {
-    /**
-     * Register any application services.
-     */
+
     public function register(): void
     {
-        //
+        $this->app->instance(RegisterResponse::class, new class implements RegisterResponse {
+            public function toResponse($request)
+            {
+                return redirect('/attendance/register'); // 登録後のリダイレクト先
+            }
+        });
+
+        $this->app->bind(FortifyLoginRequest::class, LoginRequest::class);
+
     }
 
-    /**
-     * Bootstrap any application services.
-     */
+
     public function boot(): void
     {
         Fortify::createUsersUsing(CreateNewUser::class);
+        Fortify::updateUserProfileInformationUsing(UpdateUserProfileInformation::class);
+        Fortify::updateUserPasswordsUsing(UpdateUserPassword::class);
+        Fortify::resetUserPasswordsUsing(ResetUserPassword::class);
+
         Fortify::registerView(function () {
             return view('auth.register');
         });
+
+
         Fortify::loginView(function () {
-            return view('auth.login');
+            return request()->is('admin/*') ? view('admin.login') : view('auth.login');
+        });
+
+        Fortify::verifyEmailView(function () {
+            return view('auth.verify-email');
         });
 
         RateLimiter::for('login', function (Request $request) {
-            $email = (string) $request->email;
+            $throttleKey = Str::transliterate(Str::lower($request->input(Fortify::username())).'|'.$request->ip());
 
-            return Limit::perMinute(10)->by($email . $request->ip());
+            return Limit::perMinute(10)->by($throttleKey);
         });
+
+        Fortify::redirects('login', function () {
+            $user = Auth::user();
+            if (!$user) {
+                return '/login';
+            }
+            return $user->role === 'admin'
+                ? '/admin/attendance/list'
+                : '/attendance/register';
+        });
+
+
+
+        Fortify::authenticateUsing(function (LoginRequest $request) {
+            $credentials = $request->only('email', 'password');
+
+
+            $user = User::where('email', $credentials['email'])->first();
+
+
+            if (!$user || !Hash::check($credentials['password'], $user->password)) {
+                throw ValidationException::withMessages([
+                    'email' => ['ログイン情報が登録されていません。'],
+                ]);
+            }
+            if ($request->is('admin/*') && $user->role !== 'admin') {
+                throw ValidationException::withMessages([
+                    'email' => ['管理者権限がありません。'],
+                ]);
+            }
+            return $user;
+        });
+
+
+
     }
 }

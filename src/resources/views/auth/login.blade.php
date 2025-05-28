@@ -13,14 +13,14 @@
     <header class="header">
         <div class="container">
             <div class="logo">
-                <img src="{{ asset('images/logo.svg') }}" alt="Logo">
+                <img src="{{ asset('images/rabbit-shape.png') }}" alt="Rabbit Logo" class="logo-image">
             </div>
         </div>
     </header>
     <div class="form-container">
         <form class="login-form" action="/login" method="post">
             @csrf
-            <h1 class="login-title">ログイン</h1>
+            <h1 class="login-title">Login</h1>
             <div class="form-group">
                 <label class="form-label">メールアドレス</label>
                 <input type="text" class="form-input" name="email" value="{{ old('email') }}">
@@ -35,9 +35,9 @@
                     <div class="error">{{ $message }}</div>
                 @enderror
             </div>
-            <button type="submit" class="submit-button">登録する</button>
-            <div>
-                <a href="/register" class="signup-link">会員登録はこちら</a>
+            <button type="submit" class="submit-button">ログイン</button>
+            <div class="form-footer">
+                <a href="{{ route('password.request') }}" class="forgot-link">パスワードを忘れた方はこちら</a>
             </div>
         </form>
     </div>
