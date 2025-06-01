@@ -111,19 +111,18 @@ body {
     background-color: #cfcfcf;
 }
 
-/* .signup-link {
-    display: block;
-    text-align: center;
-    margin-top: 1.2rem;
-    font-size: 0.85rem;
-    color: #747373;
-    text-decoration: underline;
-    font-weight: 300;
-} */
-.forgot-link {
-    display: block;
+
+.form-footer {
     text-align: center;
     margin-top: 1rem;
     font-size: 0.85rem;
-    color: #777;
-    text-decoration: underline; }
+}
+
+.form-footer a {
+    color: var(--text-color);
+    text-decoration: underline;
+}
+
+.form-footer a:hover {
+    color: #9f9b9b;
+}

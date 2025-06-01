@@ -37,7 +37,13 @@
             </div>
             <button type="submit" class="submit-button">ログイン</button>
             <div class="form-footer">
-                <a href="{{ route('password.request') }}" class="forgot-link">パスワードを忘れた方はこちら</a>
+                <a href="{{ route('password.request') }}">パスワードを忘れた方はこちら</a>
+            </div>
+            <div class="form-footer">
+                <a href="{{ route('register') }}">アカウントをお持ちでない方はこちら</a>
+            </div>
+            <div class="form-footer">
+                <a href="{{ url('/') }}">トップページに戻る</a>
             </div>
         </form>
     </div>
