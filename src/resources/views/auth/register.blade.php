@@ -13,7 +13,7 @@
     <header class="header">
         <div class="container">
             <div class="logo">
-                <img src="{{ asset('images/rabbit-shape.png') }}" alt="Rabbit Logo" class="logo-image">
+                <img src="{{ asset('images/rabbit-shape.svg') }}" alt="Rabbit Logo" class="logo-image">
             </div>
         </div>
     </header>

@@ -13,14 +13,14 @@
     <header class="header">
         <div class="container">
             <div class="logo">
-                <img src="{{ asset('images/rabbit-shape.svg') }}" alt="Rabbit Logo" class="logo-image">
+                <img src="{{ asset('images/rabbit-shape.png') }}" alt="Rabbit Logo" class="logo-image">
             </div>
         </div>
     </header>
     <div class="form-container">
-        <form class="login-form" action="/login" method="post">
+        <form class="login-form" action="{{ route('admin.login') }}" method="post">
             @csrf
-            <h1 class="login-title">Login</h1>
+            <h1 class="login-title">Admin Login</h1>
             <div class="form-group">
                 <label class="form-label">メールアドレス</label>
                 <input type="text" class="form-input" name="email" value="{{ old('email') }}">
@@ -37,13 +37,7 @@
             </div>
             <button type="submit" class="submit-button">ログイン</button>
             <div class="form-footer">
-                <a href="{{ route('password.request') }}">パスワードを忘れた方はこちら</a>
-            </div>
-            <div class="form-footer">
-                <a href="{{ route('register') }}">アカウントをお持ちでない方はこちら</a>
-            </div>
-            <div class="form-footer">
-                <a href="{{ url('/') }}">トップページに戻る</a>
+                <a href="{{ route('password.request') }}">パスワードを忘れた場合はこちら</a>
             </div>
         </form>
     </div>
