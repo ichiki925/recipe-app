@@ -1,0 +1,85 @@
+
+ul,
+li,
+a,
+button {
+    margin: 0;
+    padding: 0;
+    font-family: cursive;
+    list-style: none;
+    text-decoration: none;
+    border: none;
+    background: none;
+}
+
+body {
+    color: #333;
+}
+
+header {
+    background-color: #ddd;
+    color: #000;
+    padding: 10px 20px;
+}
+
+.container {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+}
+
+.logo {
+    display: flex;
+    align-items: flex-end;
+    /* ここで文字を下に揃える */
+}
+.logo-image {
+    height: 50px;
+}
+
+.logo-text {
+    font-family: cursive;
+    font-size: 30px;
+    
+}
+
+nav ul {
+    display: flex;
+    gap: 20px;
+    padding: 0;
+    margin: 0;
+}
+
+nav ul li {
+    display: inline-block;
+}
+
+nav ul li a,
+nav ul li .logout-button {
+    color: #333;
+    font-size: 20px;
+    transition: color 0.3s;
+    padding: 5px 10px;
+    display: inline-block;
+    cursor: pointer;
+}
+
+nav ul li a:hover,
+nav ul li .logout-button:hover {
+    color: #aaa;
+}
+
+@media (min-width: 768px) and (max-width: 850px) {
+    nav ul {
+        display: flex;
+        gap: 10px;
+        padding: 0;
+        margin: 0;
+    }
+
+    nav ul li a,
+    nav ul li .logout-button {
+        font-size: 14px;
+    }
+}
