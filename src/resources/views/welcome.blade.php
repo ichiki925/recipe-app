@@ -8,7 +8,7 @@
 </head>
 <body>
     <div class="container">
-        <img src="{{ asset('images/rabbit-shape.png') }}" alt="ロゴ" class="logo">
+        <img src="{{ asset('images/rabbit-shape.svg') }}" alt="ロゴ" class="logo">
         <h1 class="title">Vanilla's Kitchen</h1>
         <p class="subtitle">日々のお料理レシピを記録</p>
         <div class="buttons">
