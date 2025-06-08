@@ -5,6 +5,7 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\Admin\RecipeController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\AdminLoginController;
+use App\Models\Recipe;
 
 
 
@@ -25,20 +26,40 @@ Route::prefix('admin')->name('admin.')->group(function () {
 
 // 管理者認証が必要なルート群
 Route::prefix('admin')->name('admin.')->group(function () {
-    Route::prefix('admin')->name('admin.')->group(function () {
-        Route::get('/recipes', [RecipeController::class, 'index'])->name('recipes.index');
-        Route::post('/recipes', [RecipeController::class, 'store'])->name('admin.recipes.store');
-    });
+    
+    Route::get('/recipes', [RecipeController::class, 'index'])->name('recipes.index');
+    Route::post('/recipes', [RecipeController::class, 'store'])->name('admin.recipes.store');
+    
     // ダッシュボード
     Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
     // レシピ関連
     
-    Route::get('recipes/create', [RecipeController::class, 'create'])->name('recipes.create');
-
     // 必要に応じて：
     // Route::post('recipes', [RecipeController::class, 'store'])->name('recipes.store');
     // Route::get('recipes/{id}/edit', [RecipeController::class, 'edit'])->name('recipes.edit');
     // Route::put('recipes/{id}', [RecipeController::class, 'update'])->name('recipes.update');
     // Route::delete('recipes/{id}', [RecipeController::class, 'destroy'])->name('recipes.destroy');
+});
+
+Route::prefix('admin')->name('admin.')->group(function () {
+    Route::get('comments', function () {
+        $comments = collect([
+            (object)[
+                'id' => 1,
+                'user' => (object)['name' => 'テストユーザー'],
+                'recipe' => (object)['title' => 'ハンバーグ'],
+                'body' => 'とてもおいしかったです！',
+                'created_at' => now(),
+            ],
+            (object)[
+                'id' => 2,
+                'user' => (object)['name' => 'サンプル太郎'],
+                'recipe' => (object)['title' => 'カレーライス'],
+                'body' => 'また作ります！',
+                'created_at' => now(),
+            ],
+        ]);
+        return view('admin.comments.index', compact('comments'));
+    })->name('comments.index');
 });

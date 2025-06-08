@@ -115,7 +115,7 @@ body {
     padding: 10px;
     border: 1px solid #ccc;
     border-radius: 6px;
-    font-size: 14px;
+    /* font-size: 14px; */
     box-sizing: border-box;
 }
 .servings-input {
@@ -128,6 +128,17 @@ body {
     height: 300px;
     resize: vertical;
 }
+
+input::placeholder,
+textarea::placeholder,
+input::-webkit-input-placeholder,
+textarea::-webkit-input-placeholder {
+    color: #ccc !important;
+    opacity: 1 !important;
+    /* Safariで効かない対策 */
+}
+
+
 
 .recipe-form button {
     margin-top: 20px;
