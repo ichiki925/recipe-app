@@ -1,5 +1,6 @@
 @extends('layouts.app')
 @section('css')
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 <link rel="stylesheet" href="{{ asset('css/admin/index.css') }}">
 
 @endsection
@@ -11,18 +12,11 @@
 <aside class="sidebar">
     <form method="GET" action="{{ route('admin.recipes.index') }}">
         <!-- 検索フォーム -->
-        <input type="text" name="keyword" placeholder="レシピ名で検索" value="{{ request('keyword') }}">
+        <div class="search-wrapper">
+            <i class="fa-solid fa-magnifying-glass"></i>
+            <input type="text" name="keyword" placeholder="料理名・材料で検索" value="{{ request('keyword') }}">
+        </div>
         <button type="submit">検索</button>
-
-        <!-- ジャンル選択 -->
-        <label>ジャンルで表示</label>
-        <select name="genre" onchange="this.form.submit()">
-            <option value="">すべてのジャンル</option>
-            <option value="和食" {{ request('genre') == '和食' ? 'selected' : '' }}>和食</option>
-            <option value="洋食" {{ request('genre') == '洋食' ? 'selected' : '' }}>洋食</option>
-            <option value="中華" {{ request('genre') == '中華' ? 'selected' : '' }}>中華</option>
-            <!-- 必要に応じて追加 -->
-        </select>
     </form>
 </aside>
 

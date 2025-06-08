@@ -19,6 +19,7 @@
                 @if (Auth::check() && Auth::user()->role === 'admin')
                 <ul>
                     <li><a href="#">Recipe List</a></li>
+                    <li><a href="#">New Recipe</a></li>
                     <li>
                         <form id="logout-form" action="{{ url('/admin/logout') }}" method="POST" style="display: inline;">
                             @csrf

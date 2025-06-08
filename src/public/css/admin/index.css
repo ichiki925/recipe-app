@@ -25,25 +25,50 @@
     margin-bottom: 8px;
 }
 
+.search-wrapper {
+    position: relative;
+    width: 100%;
+}
+
+.search-wrapper i.fa-solid {
+    position: absolute;
+    top: 50%;
+    left: 12px;
+    transform: translateY(-50%);
+    color: #e6e5e5;
+    pointer-events: none;
+}
+
+.search-wrapper input[type="text"] {
+    width: 100%;
+    padding: 10px 10px 10px 40px;
+    font-size: 16px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+}
 .sidebar input,
 .sidebar select {
     width: 100%;
     padding: 12px;
     font-size: 14px;
-    border: 1px solid #ccc;
+    border: 1px solid #999;
     border-radius: 4px;
+}
+
+.search-wrapper input::placeholder {
+    color: #ddd;
+    opacity: 1;
 }
 
 .sidebar button {
     width: 100%;
     background-color: #eee;
-    /* 明るい黄色 */
     border: none;
     color: #000;
     padding: 10px;
     font-weight: bold;
     border-radius: 8px;
-    margin-top: 10px;
+    margin-top: 20px;
     cursor: pointer;
 }
 
