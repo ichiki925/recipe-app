@@ -47,17 +47,27 @@ class RecipeController extends Controller
             $imagePath = $request->file('image')->store('recipes', 'public');
         }
 
-        // レシピ保存
+        // 材料の処理（名前と量をセットで保存）
+        $names = $request->input('ingredients_name', []);
+        $qtys  = $request->input('ingredients_qty', []);
+        $combo = collect($names)
+            ->zip($qtys)
+            ->map(fn($pair) => ['name' => $pair[0], 'qty' => $pair[1]])
+            ->values()
+            ->toJson();
+
+        // レシピ保存（1回でまとめて）
         Recipe::create([
-            'title' => $request->title,
-            'ingredients' => $request->ingredients,
-            'body' => $request->body,
-            'image_path' => $imagePath,
-            'admin_id' => Auth::id(), // 今ログインしている管理者
+            'title'       => $request->title,
+            'ingredients' => $combo,
+            'body'        => $request->body,
+            'image_path'  => $imagePath,
+            'admin_id'    => Auth::id(),
         ]);
 
         return redirect()->route('recipes.create')->with('success', 'レシピを投稿しました！');
     }
+
 
     /**
      * Display the specified resource.

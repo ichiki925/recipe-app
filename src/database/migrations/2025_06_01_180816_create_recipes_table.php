@@ -14,7 +14,7 @@ class CreateRecipesTable extends Migration
             $table->string('title');
             $table->text('ingredients');
             $table->text('body');
-            $table->string('genre'); // ← 追加されたジャンル
+            $table->string('genre')->nullable();
             $table->string('image_path')->nullable();
             $table->unsignedBigInteger('admin_id');
             $table->timestamps();

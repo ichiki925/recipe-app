@@ -24,15 +24,16 @@ Route::prefix('admin')->name('admin.')->group(function () {
 });
 
 // 管理者認証が必要なルート群
-// Route::prefix('admin')->name('admin.')->middleware(['auth', 'admin'])->group(function () {
+Route::prefix('admin')->name('admin.')->group(function () {
     Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('/recipes', [RecipeController::class, 'index'])->name('recipes.index');
+        Route::post('/recipes', [RecipeController::class, 'store'])->name('admin.recipes.store');
     });
     // ダッシュボード
     Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
     // レシピ関連
-    // Route::get('recipes', [RecipeController::class, 'index'])->name('recipes.index');
+    
     Route::get('recipes/create', [RecipeController::class, 'create'])->name('recipes.create');
 
     // 必要に応じて：
@@ -40,4 +41,4 @@ Route::prefix('admin')->name('admin.')->group(function () {
     // Route::get('recipes/{id}/edit', [RecipeController::class, 'edit'])->name('recipes.edit');
     // Route::put('recipes/{id}', [RecipeController::class, 'update'])->name('recipes.update');
     // Route::delete('recipes/{id}', [RecipeController::class, 'destroy'])->name('recipes.destroy');
-// });
+});
