@@ -1,7 +1,7 @@
-@extends('layouts.app_admin')
+@extends('layouts.app_user')
 @section('css')
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-<link rel="stylesheet" href="{{ asset('css/admin/index.css') }}">
+<link rel="stylesheet" href="{{ asset('css/user/index.css') }}">
 
 @endsection
 
@@ -10,7 +10,7 @@
 
 <!-- 左サイドバー -->
 <aside class="sidebar">
-    <form method="GET" action="{{ route('admin.recipes.index') }}">
+    <form method="GET" action="{{ route('user.recipes.index') }}">
         <!-- 検索フォーム -->
         <div class="search-wrapper">
             <i class="fa-solid fa-magnifying-glass"></i>
@@ -27,6 +27,9 @@
             <div class="no-image">No Image</div>
             <div class="recipe-title">テストレシピ</div>
             <div class="recipe-genre">ジャンル</div>
+            <div class="recipe-stats">
+                ❤️ 24　　⭐ 保存済
+            </div>
         </div>
         <div class="recipe-card">
             <div class="no-image">No Image</div>

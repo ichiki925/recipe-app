@@ -5,7 +5,9 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\Admin\RecipeController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\AdminLoginController;
+use App\Http\Controllers\User\RecipeController as UserRecipeController;
 use App\Models\Recipe;
+use App\Http\Controllers\User\MyPageController;
 
 
 
@@ -29,6 +31,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
     
     Route::get('/recipes', [RecipeController::class, 'index'])->name('recipes.index');
     Route::post('/recipes', [RecipeController::class, 'store'])->name('admin.recipes.store');
+    Route::get('/recipes/create', [RecipeController::class, 'create'])->name('admin.recipes.create');
+
     
     // ダッシュボード
     Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');
@@ -62,4 +66,21 @@ Route::prefix('admin')->name('admin.')->group(function () {
         ]);
         return view('admin.comments.index', compact('comments'));
     })->name('comments.index');
+});
+
+Route::get('/recipes', [UserRecipeController::class, 'index'])->name('user.recipes.index');
+Route::get('/recipes/{id}', [UserRecipeController::class, 'show'])->name('user.recipes.show');
+
+Route::middleware(['auth'])->group(function () {
+    Route::get('/mypage', [MyPageController::class, 'mypage'])->name('mypage');
+});
+
+Route::get('/profile', function () {
+    // ログインユーザーを仮で取得（開発時のみ）
+    $user = Auth::user() ?? (object)[
+        'name' => 'サンプルユーザー',
+        'email' => 'sample@example.com',
+        'avatar' => null, // または 'avatars/sample.jpg'
+    ];
+    return view('user.profile', compact('user'));
 });

@@ -54,3 +54,18 @@ body {
     color: #888;
     text-decoration: underline;
 }
+
+@media screen and (max-width: 768px) {
+    body {
+        background-color: #ffffff;
+        /* 白 */
+    }
+
+        .container {
+            box-shadow: none;
+            border-radius: 0;
+            margin: 30px;
+            max-width: 100%;
+            padding: 1rem;
+        }
+}

@@ -68,16 +68,6 @@ body {
     box-sizing: border-box;
 }
 
-/* 人数入力欄 */
-.servings-input {
-    width: 150px;
-    padding: 8px;
-    font-size: 14px;
-    margin-bottom: 10px;
-    border: 1px solid #ccc;
-    border-radius: 6px;
-    box-sizing: border-box;
-}
 
 /* 材料名と分量を横並び */
 .ingredient-row {
@@ -109,7 +99,7 @@ body {
 }
 
 
-.recipe-form textarea,
+
 .recipe-form input[type="file"] {
     width: 100%;
     padding: 10px;
@@ -124,9 +114,16 @@ body {
     font-size: 14px;
     margin-bottom: 10px;
 }
-.recipe-form textarea {
-    height: 300px;
-    resize: vertical;
+.auto-resize {
+    width: 100%;
+    min-height: 80px;
+    resize: none;
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    font-size: 14px;
+    box-sizing: border-box;
+    overflow: auto;
 }
 
 input::placeholder,
@@ -137,6 +134,7 @@ textarea::-webkit-input-placeholder {
     opacity: 1 !important;
     /* Safariで効かない対策 */
 }
+
 
 
 

@@ -24,4 +24,14 @@ class Recipe extends Model
         return $this->belongsTo(User::class, 'admin_id');
     }
 
+    public function ingredients()
+    {
+        return $this->hasMany(Ingredient::class);
+    }
+
+    public function favoredBy()
+    {
+        return $this->belongsToMany(User::class, 'favorites')->withTimestamps();
+    }
+
 }
