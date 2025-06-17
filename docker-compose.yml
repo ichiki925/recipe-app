@@ -13,6 +13,8 @@ services:
     build: ./docker/php
     volumes:
       - ./src:/var/www/
+    networks:
+      - recipe-network
 
   mysql:
     image: mysql:8.0
@@ -25,6 +27,8 @@ services:
     volumes:
       - ./docker/mysql/data:/var/lib/mysql
       - ./docker/mysql/my.cnf:/etc/mysql/conf.d/my.cnf
+    networks:
+      - recipe-network
 
   phpmyadmin:
     image: phpmyadmin/phpmyadmin
@@ -37,3 +41,35 @@ services:
       - mysql
     ports:
       - 8080:80
+    networks:
+      - recipe-network
+
+  # 既存のnuxt-appサービスを以下に変更
+  nuxt-app:
+    build:
+      context: ./nuxt-app
+      dockerfile: Dockerfile
+    container_name: recipe-app-nuxt
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./nuxt-app:/app
+      - /app/node_modules
+    working_dir: /app
+    environment:
+      - NODE_ENV=development
+    networks:
+      - recipe-network
+    depends_on:
+      - php
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
+    tty: true
+    stdin_open: true
+
+# ファイルの最後に追加
+networks:
+  recipe-network:
+    driver: bridge
+
+volumes:
+  recipe_db_data:
