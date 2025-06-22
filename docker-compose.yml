@@ -8,6 +8,8 @@ services:
       - ./src:/var/www/
     depends_on:
       - php
+    networks:
+      - recipe-network
 
   php:
     build: ./docker/php
