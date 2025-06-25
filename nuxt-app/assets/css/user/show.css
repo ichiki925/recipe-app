@@ -13,8 +13,6 @@ body {
     width: 100%;
 }
 
-
-
 /* 左カラム */
 .left-column {
     display: flex;
@@ -77,6 +75,7 @@ body {
     background-color: #ddd;
 }
 
+/* コメント入力エリア */
 .comment-wrapper {
     position: relative;
     width: 100%;
@@ -90,11 +89,11 @@ body {
     overflow: hidden;
     font-size: 14px;
     box-sizing: border-box;
-    padding: 10px;
     border-radius: 6px;
     border: 1px solid #ccc;
 }
 
+/* コメントリスト */
 .comment-item {
     display: flex;
     align-items: center;
@@ -105,19 +104,20 @@ body {
     object-fit: cover;
 }
 
+/* Font Awesome アバターアイコン用 */
 .avatar-icon,
 .avatar-img {
     width: 32px;
     height: 32px;
     border-radius: 50%;
     margin: 8px;
-    font-size: 32px;
-    display: inline-block;
+    font-size: 16px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     background-color: #eee;
-    text-align: center;
-    line-height: 32px;
+    color: #666;
 }
-
 
 .username {
     margin-right: 2px;
@@ -129,6 +129,7 @@ body {
     flex: 1;
 }
 
+/* いいねボタン */
 .icon-button {
     background: none;
     border: none;
@@ -138,30 +139,25 @@ body {
     align-items: center;
     gap: 2px;
     font-size: 14px;
-    padding-right: 15px
+    padding-right: 15px;
 }
 
 .like-count {
     font-size: 10px;
 }
 
-
-.material-symbols-outlined {
-    font-family: 'Material Symbols Outlined';
-    font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
-    font-weight: normal;
-    font-style: normal;
-    font-size: 24px;
-    display: inline-block;
-    line-height: 1;
-    letter-spacing: normal;
-    text-transform: none;
-    white-space: nowrap;
-    direction: ltr;
-    -webkit-font-feature-settings: 'liga';
-    -webkit-font-smoothing: antialiased;
+/* Font Awesome ハートアイコン */
+.heart-icon-filled {
+    color: #dc3545 !important;
+    font-size: 18px !important;
 }
 
+.heart-icon-outline {
+    color: #666 !important;
+    font-size: 18px !important;
+}
+
+/* 送信ボタン */
 .send-button {
     position: absolute;
     right: 12px;
@@ -203,8 +199,7 @@ body {
     margin-top: 100px;
 }
 
-/* 材料名と分量を横並び */
-
+/* 材料名と分量 */
 .ingredient-name,
 .ingredient-qty {
     width: 100%;
@@ -233,9 +228,155 @@ body {
     flex: 1;
 }
 
+/* テキストエリア自動リサイズ */
 .auto-resize {
     overflow: hidden;
     /* スクロールバーを出さない */
     resize: none;
     /* ユーザーが手でサイズ変更できないようにする */
+}
+
+@media (max-width: 768px) {
+    .recipe-create-container {
+        flex-direction: column;
+        padding: 20px;
+        gap: 30px;
+    }
+
+    .left-column {
+        width: 100%;
+        min-width: auto;
+        gap: 20px;
+    }
+
+    .recipe-form {
+        width: 100%;
+    }
+
+    .image-preview {
+        max-width: 250px;
+        max-height: 250px;
+    }
+
+    .recipe-title-heading {
+        font-size: 18px;
+    }
+}
+
+/* スマホ用 (480px以下) */
+@media (max-width: 480px) {
+    .recipe-create-container {
+        padding: 15px;
+        gap: 20px;
+    }
+
+    .left-column {
+        gap: 15px;
+    }
+
+    .image-preview {
+        max-width: 250px;
+        max-height: 250px;
+    }
+
+    .recipe-title-heading {
+        font-size: 16px;
+        margin-bottom: 5px;
+    }
+
+    .recipe-form label {
+        margin-top: 20px;
+        margin-bottom: 8px;
+    }
+
+    #comment-box {
+        padding: 8px 40px 8px 8px;
+        font-size: 13px;
+    }
+
+    .send-button {
+        right: 8px;
+        bottom: 8px;
+        font-size: 12px;
+    }
+
+    .comment-item {
+        margin-bottom: 8px;
+    }
+
+    .avatar-icon,
+    .avatar-img {
+        width: 28px;
+        height: 28px;
+        font-size: 14px;
+        margin: 6px;
+    }
+
+    .username {
+        font-size: 9px;
+    }
+
+    .comment-body {
+        font-size: 13px;
+    }
+
+    .icon-button {
+        padding-right: 10px;
+    }
+
+    .heart-icon-filled,
+    .heart-icon-outline {
+        font-size: 16px !important;
+    }
+
+    .like-count {
+        font-size: 9px;
+    }
+
+    .ingredient-name,
+    .ingredient-qty {
+        padding: 8px;
+        font-size: 13px;
+    }
+}
+
+/* 超小画面用 (320px以下) */
+@media (max-width: 320px) {
+    .recipe-create-container {
+        padding: 10px;
+    }
+
+    .image-preview {
+        max-width: 230px;
+        max-height: 230px;
+    }
+
+    .recipe-title-heading {
+        font-size: 15px;
+    }
+
+    #comment-box {
+        padding: 6px 35px 6px 6px;
+        font-size: 12px;
+    }
+
+    .send-button {
+        right: 6px;
+        bottom: 6px;
+        font-size: 11px;
+    }
+
+    .avatar-icon,
+    .avatar-img {
+        width: 24px;
+        height: 24px;
+        font-size: 12px;
+        margin: 4px;
+    }
+
+    .ingredient-name,
+    .ingredient-qty {
+        padding: 6px;
+        font-size: 12px;
+    }
 }

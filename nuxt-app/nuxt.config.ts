@@ -15,6 +15,8 @@ export default defineNuxtConfig({
     '@nuxt/ui'
   ],
 
+  
+
   // サーバー設定（Docker用）
   devServer: {
     host: '0.0.0.0',
