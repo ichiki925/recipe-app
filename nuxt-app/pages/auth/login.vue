@@ -57,7 +57,7 @@ export default {
     async handleLogin() {
       // バリデーションリセット
       this.errors = {}
-      
+
       // 簡単なバリデーション
       if (!this.form.email) {
         this.errors.email = 'メールアドレスを入力してください'
@@ -65,17 +65,17 @@ export default {
       if (!this.form.password) {
         this.errors.password = 'パスワードを入力してください'
       }
-      
+
       // エラーがある場合は送信しない
       if (Object.keys(this.errors).length > 0) {
         return
       }
-      
+
       try {
         // TODO: 実際のAPI呼び出しをここに実装
         console.log('ログイン処理:', this.form)
         // 例: await this.$auth.loginWith('local', { data: this.form })
-        
+
         // 一時的にダッシュボードページにリダイレクト
         // this.$router.push('/dashboard')
       } catch (error) {

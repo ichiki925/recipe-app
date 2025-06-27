@@ -1,3 +1,181 @@
 <template>
-  <div></div>
+  <div class="recipe-page">
+    <!-- 左サイドバー -->
+    <aside class="sidebar">
+      <form @submit.prevent="searchRecipes">
+        <div class="search-wrapper">
+          <i class="fa-solid fa-magnifying-glass"></i>
+          <input 
+            type="text" 
+            v-model="searchKeyword" 
+            placeholder="料理名・材料で検索"
+          >
+        </div>
+        <button type="submit">検索</button>
+      </form>
+      <button @click="goToCreate" class="create-button">＋ 新規レシピ作成</button>
+    </aside>
+    
+
+    <!-- メイン：レシピ一覧 -->
+    <section class="recipe-list">
+      <div class="recipe-grid">
+        <div 
+          v-for="recipe in recipes" 
+          :key="recipe.id" 
+          class="recipe-card"
+        >
+          <div class="no-image">No Image</div>
+          <div class="recipe-title">{{ recipe.title }}</div>
+          <div class="recipe-genre">{{ recipe.genre }}</div>
+          <div class="recipe-stats">
+            <button 
+              @click="toggleLike(recipe)"
+              class="like-button"
+              :class="{ liked: recipe.isLiked }"
+            >
+              <!-- いいね済みの場合は塗りつぶし、未いいねの場合は枠線のみ -->
+              <i 
+                v-if="recipe.isLiked"
+                class="fas fa-heart heart-icon-filled"
+              ></i>
+              <!-- 未いいねの場合は枠線のハート -->
+              <i 
+                v-else
+                class="far fa-heart heart-icon-outline"
+              ></i>
+              <span class="like-count">{{ recipe.likes }}</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ページネーション -->
+      <div class="pagination">
+        <button 
+          v-if="currentPage > 1"
+          @click="goToPage(currentPage - 1)"
+          class="pagination-btn"
+        >
+          前へ
+        </button>
+        
+        <span 
+          v-for="page in totalPages" 
+          :key="page"
+          :class="{ active: page === currentPage }"
+          @click="goToPage(page)"
+          class="pagination-number"
+        >
+          {{ page }}
+        </span>
+        
+        <button 
+          v-if="currentPage < totalPages"
+          @click="goToPage(currentPage + 1)"
+          class="pagination-btn"
+        >
+          次へ
+        </button>
+      </div>
+    </section>
+  </div>
 </template>
+
+<script setup>
+definePageMeta({
+  layout: 'admin'
+})
+import { ref, onMounted, watch } from 'vue'
+import { useRoute, useRouter, useHead } from '#app'
+
+useHead({
+  link: [
+    {
+      rel: 'stylesheet',
+      href: 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css'
+    },
+  ]
+})
+
+// データ定義
+const searchKeyword = ref('')
+const currentPage = ref(1)
+const totalPages = ref(1)
+const isAuthenticated = true // ログインユーザー向けページ
+
+const recipes = ref([
+  { id: 1, title: 'テストレシピ1', genre: 'ジャンル', likes: 24, isLiked: true },
+  { id: 2, title: 'テストレシピ2', genre: 'ジャンル', likes: 15, isLiked: false },
+  { id: 3, title: 'テストレシピ3', genre: 'ジャンル', likes: 8, isLiked: false },
+  { id: 4, title: 'テストレシピ4', genre: 'ジャンル', likes: 32, isLiked: false },
+  { id: 5, title: 'テストレシピ5', genre: 'ジャンル', likes: 5, isLiked: false },
+  { id: 6, title: 'テストレシピ6', genre: 'ジャンル', likes: 19, isLiked: false }
+])
+
+const route = useRoute()
+const router = useRouter()
+
+// いいねボタンの切り替え
+const toggleLike = (recipe) => {
+  recipe.isLiked = !recipe.isLiked
+  if (recipe.isLiked) {
+    recipe.likes++
+  } else {
+    recipe.likes--
+  }
+  
+  // 実際のAPIコール
+  // await likeRecipe(recipe.id, recipe.isLiked)
+  console.log(`レシピ${recipe.id}をいいね: ${recipe.isLiked}`)
+}
+
+const goToCreate = () => {
+  router.push('/admin/recipes/create')
+}
+
+onMounted(() => {
+  searchKeyword.value = route.query.keyword || ''
+  currentPage.value = parseInt(route.query.page) || 1
+  fetchRecipes()
+})
+
+const searchRecipes = () => {
+  currentPage.value = 1
+  updateUrl()
+  fetchRecipes()
+}
+
+const goToPage = (page) => {
+  currentPage.value = page
+  updateUrl()
+  fetchRecipes()
+}
+
+const updateUrl = () => {
+  const query = {}
+  if (searchKeyword.value) query.keyword = searchKeyword.value
+  if (currentPage.value > 1) query.page = currentPage.value
+  router.push({ path: '/user', query })
+}
+
+const fetchRecipes = async () => {
+  try {
+    console.log('検索:', searchKeyword.value, 'ページ:', currentPage.value)
+    // 実際のAPI接続時に書き換えてください
+  } catch (error) {
+    console.error('レシピ取得エラー:', error)
+  }
+}
+
+watch(() => route.query, (newQuery) => {
+  searchKeyword.value = newQuery.keyword || ''
+  currentPage.value = parseInt(newQuery.page) || 1
+  fetchRecipes()
+})
+</script>
+
+<style>
+@import "@/assets/css/common.css";
+@import "@/assets/css/admin/recipes/index.css";
+</style>

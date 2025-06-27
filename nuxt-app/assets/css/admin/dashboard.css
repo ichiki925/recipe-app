@@ -2,7 +2,6 @@
 .dashboard-container {
     padding: 30px;
     font-family: 'Arial', sans-serif;
-    background-color: #fdfdfd;
     color: #333;
 }
 
@@ -44,6 +43,28 @@
     margin-top: 5px;
 }
 
+.admin-menu {
+    display: flex;
+    gap: 15px;
+    margin: 20px 0;
+    flex-wrap: wrap;
+}
+
+.admin-button {
+    background-color: #eee;
+    border: 1px solid #ccc;
+    padding: 10px 16px;
+    border-radius: 6px;
+    text-decoration: none;
+    font-family: cursive;
+    color: #333;
+    transition: background 0.2s ease;
+}
+
+.admin-button:hover {
+    background-color: #ddd;
+}
+
 /* 最近削除の見出し */
 .recent-deleted h2 {
     font-family: serif;
@@ -64,4 +85,29 @@
     border-bottom: 1px solid #eee;
     display: flex;
     justify-content: space-between;
+}
+
+@media screen and (max-width: 768px) {
+    .dashboard-stats {
+        flex-direction: column;
+        gap: 15px;
+    }
+
+    .admin-menu {
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .dashboard-card {
+        width: 100%;
+    }
+
+    .admin-button {
+        width: 100%;
+        text-align: center;
+    }
+
+    .dashboard-container {
+        padding: 15px;
+    }
 }

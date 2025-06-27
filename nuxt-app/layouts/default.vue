@@ -15,19 +15,11 @@
         <nav>
           <ul>
             <li><NuxtLink to="/user">Recipes</NuxtLink></li>
-            
-            <!-- ログイン済みの場合 -->
-            <template v-if="isAuthenticated">
-              <li><NuxtLink to="/user/favorite">Favorite</NuxtLink></li>
-              <li><NuxtLink to="/user/profile">Profile</NuxtLink></li>
-              <li><a href="#" @click.prevent="logout">Logout</a></li>
-            </template>
-            
-            <!-- 未ログインの場合 -->
-            <template v-else>
-              <li><NuxtLink to="/login">Login</NuxtLink></li>
-              <li><NuxtLink to="/register">Sign Up</NuxtLink></li>
-            </template>
+            <li v-if="isAuthenticated"><NuxtLink to="/user/favorite">Favorite</NuxtLink></li>
+            <li v-if="isAuthenticated"><NuxtLink to="/user/profile">Profile</NuxtLink></li>
+            <li v-if="isAuthenticated"><a href="#" @click.prevent="logout">Logout</a></li>
+            <li v-else><NuxtLink to="/login">Login</NuxtLink></li>
+            <li v-else><NuxtLink to="/register">Sign Up</NuxtLink></li>
           </ul>
         </nav>
       </div>

@@ -154,3 +154,51 @@ textarea::-webkit-input-placeholder {
 .recipe-form button:hover {
     background-color: #ddd;
 }
+
+@media screen and (max-width: 768px) {
+    .recipe-create-container {
+        flex-direction: column;
+        align-items: center;
+        padding: 20px;
+        gap: 20px;
+    }
+
+    .image-preview {
+        width: 100%;
+        max-width: 280px;
+        height: 280px;
+        margin: 40px auto 0;
+    }
+
+    .recipe-form {
+        width: 100%;
+        max-width: 400px;
+    }
+
+    .ingredient-row {
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .ingredient-name,
+    .ingredient-qty {
+        border-radius: 6px;
+        border: 1px solid #ccc;
+    }
+
+    .ingredient-name {
+        border-right: 1px solid #ccc;
+    }
+
+    .ingredient-qty {
+        border-left: 1px solid #ccc;
+    }
+
+    .servings-input {
+        width: 100%;
+    }
+
+    .auto-resize {
+        min-height: 100px;
+    }
+}
