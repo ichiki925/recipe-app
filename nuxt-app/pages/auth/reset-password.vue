@@ -10,6 +10,7 @@
             type="email"
             v-model="form.email"
             class="form-input"
+            :class="{ 'error-input': errors.email }"
             required
           >
           <div v-if="errors.email" class="error">{{ errors.email }}</div>
@@ -21,6 +22,7 @@
             type="password"
             v-model="form.password"
             class="form-input"
+            :class="{ 'error-input': errors.password }"
             required
           >
           <div v-if="errors.password" class="error">{{ errors.password }}</div>
@@ -32,6 +34,7 @@
             type="password"
             v-model="form.passwordConfirmation"
             class="form-input"
+            :class="{ 'error-input': errors.passwordConfirmation }"
             required
           >
           <div v-if="errors.passwordConfirmation" class="error">{{ errors.passwordConfirmation }}</div>
@@ -55,11 +58,8 @@
 
 <script setup>
 definePageMeta({
-  layout: 'auth'
+  layout: false  // 修正: authレイアウトではなくfalseに
 })
-
-import { ref, onMounted } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
 
 const route = useRoute()
 const router = useRouter()
@@ -82,7 +82,7 @@ onMounted(() => {
 
   // トークンがない場合はリダイレクト（必要なら）
   // if (!token.value) {
-  //   router.push('/auth/login')
+  //   await navigateTo('/auth/login')
   // }
 })
 
@@ -104,7 +104,7 @@ const handleSubmit = async () => {
     await new Promise(resolve => setTimeout(resolve, 1000)) // 仮のAPI遅延
 
     alert('パスワードが正常に変更されました。')
-    router.push('/auth/login')
+    await navigateTo('/auth/login')  // 修正: router.push → navigateTo
 
   } catch (error) {
     console.error('エラー:', error)
@@ -146,6 +146,132 @@ const validateForm = () => {
 }
 </script>
 
-<style>
-@import "@/assets/css/auth/reset-password.css";
+<style scoped>
+.reset-password-page {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+
+    background-color: #f2f2f2;
+    font-family: 'Noto Sans JP', sans-serif;
+    color: #555;
+    font-weight: 300;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    margin: 0;
+    padding: 20px;
+}
+
+.form-container {
+    max-width: 360px;
+    width: 100%;
+    padding: 2rem;
+    background-color: #fff;
+    border-radius: 8px;
+    box-shadow: 0 3px 5px rgba(0, 0, 0, 0.1);
+}
+
+.title {
+    text-align: center;
+    font-size: 1.3rem;
+    font-family: sans-serif;
+    margin-bottom: 2rem;
+    font-weight: 300;
+    color: #555;
+}
+
+.form-group {
+    margin-bottom: 1.5rem;
+    text-align: left;
+}
+
+.form-label {
+    display: block;
+    margin-bottom: 0.4rem;
+    font-size: 0.9rem;
+    font-weight: 300;
+    color: #333;
+}
+
+.form-input {
+    width: 100%;
+    padding: 0.6rem 0.8rem;
+    border: none;
+    border-bottom: 1px solid #dcdcdc;
+    background-color: #fff;
+    font-size: 1rem;
+    font-weight: 300;
+    outline: none;
+    box-sizing: border-box;
+}
+
+.form-input:focus {
+    border-bottom-color: #555;
+}
+
+.form-input.error-input {
+    border-bottom-color: #d9534f;
+}
+
+.error {
+    font-size: 0.85rem;
+    color: #d9534f;
+    margin-top: 0.3rem;
+}
+
+.submit-button {
+    width: 100%;
+    margin-top: 2rem;
+    padding: 0.8rem;
+    background-color: #dcdcdc;
+    color: #555;
+    border: none;
+    font-size: 1rem;
+    font-weight: 300;
+    cursor: pointer;
+    border-radius: 4px;
+}
+
+.submit-button:hover {
+    background-color: #cfcfcf;
+}
+
+.submit-button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.login-link {
+    display: block;
+    text-align: center;
+    margin-top: 1.2rem;
+    font-size: 0.85rem;
+    color: #555;
+    text-decoration: underline;
+    font-weight: 300;
+}
+
+.login-link:hover {
+    color: #9f9b9b;
+}
+
+@media screen and (max-width: 480px) {
+    .reset-password-page {
+        background-color: #ffffff;
+        padding: 15px;
+    }
+
+    .form-container {
+        box-shadow: none;
+        border-radius: 0;
+        max-width: 100%;
+        padding: 1.5rem;
+    }
+}
 </style>
