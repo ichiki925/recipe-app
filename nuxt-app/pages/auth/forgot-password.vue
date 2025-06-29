@@ -42,60 +42,49 @@
   </div>
 </template>
 
-<script>
-export default {
-  layout: false, // レイアウトを使用しない
-  data() {
-    return {
-      form: {
-        email: ''
-      },
-      errors: {},
-      successMessage: false,
-      isSubmitting: false
-    }
-  },
-  methods: {
-    async handleSubmit() {
-      // バリデーションリセット
-      this.errors = {}
-      this.successMessage = false
+<script setup>
+definePageMeta({
+  layout: false
+})
 
-      // 簡単なバリデーション
-      if (!this.form.email) {
-        this.errors.email = 'メールアドレスを入力してください'
-        return
-      }
+import { ref } from 'vue'
 
-      // メールアドレスの形式チェック
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-      if (!emailRegex.test(this.form.email)) {
-        this.errors.email = '正しいメールアドレスを入力してください'
-        return
-      }
+const form = ref({ email: '' })
+const errors = ref({})
+const successMessage = ref(false)
+const isSubmitting = ref(false)
 
-      this.isSubmitting = true
+const handleSubmit = async () => {
+  errors.value = {}
+  successMessage.value = false
 
-      try {
-        // TODO: 実際のAPI呼び出しをここに実装
-        console.log('パスワード再設定リクエスト:', this.form.email)
+  if (!form.value.email) {
+    errors.value.email = 'メールアドレスを入力してください'
+    return
+  }
 
-        // 仮の成功処理（実際のAPIレスポンスに応じて修正）
-        await new Promise(resolve => setTimeout(resolve, 1000)) // 1秒待機（デモ用）
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  if (!emailRegex.test(form.value.email)) {
+    errors.value.email = '正しいメールアドレスを入力してください'
+    return
+  }
 
-        this.successMessage = true
-        this.form.email = '' // フォームをリセット
+  isSubmitting.value = true
 
-      } catch (error) {
-        console.error('パスワード再設定エラー:', error)
-        this.errors.email = 'エラーが発生しました。もう一度お試しください。'
-      } finally {
-        this.isSubmitting = false
-      }
-    }
+  try {
+    console.log('パスワード再設定リクエスト:', form.value.email)
+    await new Promise(resolve => setTimeout(resolve, 1000))
+    successMessage.value = true
+    form.value.email = ''
+  } catch (error) {
+    console.error('パスワード再設定エラー:', error)
+    errors.value.email = 'エラーが発生しました。もう一度お試しください。'
+  } finally {
+    isSubmitting.value = false
   }
 }
 </script>
+
 
 <style>
 @import "@/assets/css/auth/forgot-password.css";

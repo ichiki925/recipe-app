@@ -23,12 +23,12 @@
             >
               <i 
                 v-if="!comment.user.avatar_path"
-                class="fas fa-user avatar-icon"
+                class="fas fa-user comment-avatar-icon"
               ></i>
               <img 
                 v-else
                 :src="comment.user.avatar_path" 
-                class="avatar-img" 
+                class="comment-avatar" 
                 alt="avatar"
               >
               <span class="username">{{ comment.user.name }}</span>

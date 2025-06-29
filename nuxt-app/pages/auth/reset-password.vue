@@ -46,114 +46,103 @@
         </button>
       </form>
 
-      <nuxt-link to="/auth/login" class="login-link">
+      <NuxtLink to="/auth/login" class="login-link">
         ログイン画面に戻る
-      </nuxt-link>
+      </NuxtLink>
     </div>
   </div>
 </template>
 
-<script>
-export default {
-  layout: false, // レイアウトを使用しない
-  data() {
-    return {
-      form: {
-        email: '',
-        password: '',
-        passwordConfirmation: ''
-      },
-      errors: {},
-      isSubmitting: false,
-      token: null
-    }
-  },
-  mounted() {
-    // URLからトークンを取得
-    this.token = this.$route.query.token || this.$route.params.token
-    
-    // URLからメールアドレスを取得（あれば）
-    if (this.$route.query.email) {
-      this.form.email = this.$route.query.email
-    }
-    
-    // トークンがない場合はログインページにリダイレクト
-    /*if (!this.token) {
-      this.$router.push('/auth/login')
-    }*/
-  },
-  methods: {
-    async handleSubmit() {
-      // バリデーションリセット
-      this.errors = {}
-      
-      // バリデーション
-      if (!this.validateForm()) {
-        return
-      }
-      
-      this.isSubmitting = true
-      
-      try {
-        // TODO: 実際のAPI呼び出しをここに実装
-        console.log('パスワード再設定データ:', {
-          token: this.token,
-          email: this.form.email,
-          password: this.form.password,
-          passwordConfirmation: this.form.passwordConfirmation
-        })
-        
-        // 仮の成功処理（実際のAPIレスポンスに応じて修正）
-        await new Promise(resolve => setTimeout(resolve, 1000)) // 1秒待機（デモ用）
-        
-        // 成功時はログインページにリダイレクト
-        alert('パスワードが正常に変更されました。')
-        this.$router.push('/auth/login')
-        
-      } catch (error) {
-        console.error('パスワード再設定エラー:', error)
-        this.errors.general = 'エラーが発生しました。もう一度お試しください。'
-      } finally {
-        this.isSubmitting = false
-      }
-    },
-    
-    validateForm() {
-      let isValid = true
-      
-      // メールアドレスチェック
-      if (!this.form.email) {
-        this.errors.email = 'メールアドレスを入力してください'
-        isValid = false
-      } else {
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-        if (!emailRegex.test(this.form.email)) {
-          this.errors.email = '正しいメールアドレスを入力してください'
-          isValid = false
-        }
-      }
-      
-      // パスワードチェック
-      if (!this.form.password) {
-        this.errors.password = 'パスワードを入力してください'
-        isValid = false
-      } else if (this.form.password.length < 8) {
-        this.errors.password = 'パスワードは8文字以上で入力してください'
-        isValid = false
-      }
-      
-      // パスワード確認チェック
-      if (!this.form.passwordConfirmation) {
-        this.errors.passwordConfirmation = 'パスワード確認を入力してください'
-        isValid = false
-      } else if (this.form.password !== this.form.passwordConfirmation) {
-        this.errors.passwordConfirmation = 'パスワードが一致しません'
-        isValid = false
-      }
-      
-      return isValid
-    }
+<script setup>
+definePageMeta({
+  layout: 'auth'
+})
+
+import { ref, onMounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+
+const route = useRoute()
+const router = useRouter()
+
+const form = ref({
+  email: '',
+  password: '',
+  passwordConfirmation: ''
+})
+const errors = ref({})
+const isSubmitting = ref(false)
+const token = ref(null)
+
+onMounted(() => {
+  token.value = route.query.token || route.params.token || null
+
+  if (route.query.email) {
+    form.value.email = route.query.email
   }
+
+  // トークンがない場合はリダイレクト（必要なら）
+  // if (!token.value) {
+  //   router.push('/auth/login')
+  // }
+})
+
+const handleSubmit = async () => {
+  errors.value = {}
+
+  if (!validateForm()) return
+
+  isSubmitting.value = true
+
+  try {
+    console.log('パスワード再設定データ:', {
+      token: token.value,
+      email: form.value.email,
+      password: form.value.password,
+      passwordConfirmation: form.value.passwordConfirmation
+    })
+
+    await new Promise(resolve => setTimeout(resolve, 1000)) // 仮のAPI遅延
+
+    alert('パスワードが正常に変更されました。')
+    router.push('/auth/login')
+
+  } catch (error) {
+    console.error('エラー:', error)
+    errors.value.general = 'エラーが発生しました。'
+  } finally {
+    isSubmitting.value = false
+  }
+}
+
+const validateForm = () => {
+  let isValid = true
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+  if (!form.value.email) {
+    errors.value.email = 'メールアドレスを入力してください'
+    isValid = false
+  } else if (!emailRegex.test(form.value.email)) {
+    errors.value.email = '正しいメールアドレスを入力してください'
+    isValid = false
+  }
+
+  if (!form.value.password) {
+    errors.value.password = 'パスワードを入力してください'
+    isValid = false
+  } else if (form.value.password.length < 8) {
+    errors.value.password = 'パスワードは8文字以上で入力してください'
+    isValid = false
+  }
+
+  if (!form.value.passwordConfirmation) {
+    errors.value.passwordConfirmation = 'パスワード確認を入力してください'
+    isValid = false
+  } else if (form.value.password !== form.value.passwordConfirmation) {
+    errors.value.passwordConfirmation = 'パスワードが一致しません'
+    isValid = false
+  }
+
+  return isValid
 }
 </script>
 

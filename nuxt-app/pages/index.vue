@@ -66,9 +66,13 @@
     </template>
     
     <script setup>
+
     import { ref, onMounted, watch } from 'vue'
     import { useRoute, useRouter, useHead } from '#app'
-    
+
+    definePageMeta({
+        layout: 'guest'
+    })
     useHead({
         link: [
         {

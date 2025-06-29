@@ -100,15 +100,15 @@ body {
     margin-bottom: 10px;
 }
 
-.avatar-img {
+.comment-avatar {
     object-fit: cover;
 }
 
 /* Font Awesome アバターアイコン用 */
-.avatar-icon,
-.avatar-img {
-    width: 32px;
-    height: 32px;
+.comment-avatar-icon,
+.comment-avatar {
+    width: 28px;
+    height: 28px;
     border-radius: 50%;
     margin: 8px;
     font-size: 16px;
@@ -231,9 +231,7 @@ body {
 /* テキストエリア自動リサイズ */
 .auto-resize {
     overflow: hidden;
-    /* スクロールバーを出さない */
     resize: none;
-    /* ユーザーが手でサイズ変更できないようにする */
 }
 
 @media (max-width: 768px) {
@@ -304,8 +302,8 @@ body {
         margin-bottom: 8px;
     }
 
-    .avatar-icon,
-    .avatar-img {
+    .comment-avatar-icon,
+    .comment-avatar {
         width: 28px;
         height: 28px;
         font-size: 14px;
@@ -366,8 +364,8 @@ body {
         font-size: 11px;
     }
 
-    .avatar-icon,
-    .avatar-img {
+    .comment-avatar-icon,
+    .comment-avatar {
         width: 24px;
         height: 24px;
         font-size: 12px;

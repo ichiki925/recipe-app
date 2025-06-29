@@ -76,5 +76,106 @@ const deleteComment = async (id) => {
 </script>
 
 <style scoped>
-@import '~/assets/css/admin/comments/index.css';
+
+body {
+    background-color: #fff;
+}
+
+h1 {
+    font-family: cursive;
+    text-align: center;
+    margin-top: 30px;
+}
+
+table {
+    width: 90%;
+    margin: 20px auto;
+    border-collapse: collapse;
+    background-color: #fff;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+thead {
+    background-color: #f0f0f0;
+}
+
+thead th {
+    padding: 12px;
+    text-align: left;
+    font-size: 14px;
+    color: #555;
+    border-bottom: 1px solid #ccc;
+}
+
+tbody td {
+    padding: 12px;
+    font-size: 14px;
+    border-bottom: 1px solid #eee;
+    vertical-align: top;
+}
+
+tbody tr:hover {
+    background-color: #f9f9f9;
+}
+
+button {
+    background-color: #ff6b6b;
+    color: white;
+    padding: 6px 12px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+}
+
+button:hover {
+    background-color: #e63946;
+}
+
+@media screen and (max-width: 768px) {
+
+    table,
+    thead,
+    tbody,
+    th,
+    td,
+    tr {
+        display: block;
+    }
+
+    thead {
+        display: none;
+        /* ヘッダーは非表示に */
+    }
+
+    tbody tr {
+        background-color: #fff;
+        margin: 10px;
+        padding: 10px;
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+    }
+
+    tbody td {
+        padding: 8px 0;
+        font-size: 14px;
+        border-bottom: none;
+    }
+
+    tbody td::before {
+        content: attr(data-label);
+        font-weight: bold;
+        display: inline-block;
+        width: 80px;
+    }
+
+    button {
+        font-size: 13px;
+        padding: 4px 8px;
+    }
+
+
+}
 </style>

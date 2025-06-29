@@ -18,8 +18,6 @@
             <li v-if="isAuthenticated"><NuxtLink to="/user/favorite">Favorite</NuxtLink></li>
             <li v-if="isAuthenticated"><NuxtLink to="/user/profile">Profile</NuxtLink></li>
             <li v-if="isAuthenticated"><a href="#" @click.prevent="logout">Logout</a></li>
-            <li v-else><NuxtLink to="/login">Login</NuxtLink></li>
-            <li v-else><NuxtLink to="/register">Sign Up</NuxtLink></li>
           </ul>
         </nav>
       </div>

@@ -61,6 +61,10 @@
 </template>
 
 <script setup>
+definePageMeta({
+    title: 'サインアップ',
+    layout: false  // ← ここを必ず false に！
+})
 // リアクティブなフォームデータ
 const form = reactive({
     name: '',
@@ -101,11 +105,6 @@ const handleSubmit = async () => {
     }
 }
 
-// ページメタデータ
-definePageMeta({
-    title: 'サインアップ',
-    layout: 'auth' // 認証用レイアウトを使用する場合
-})
 </script>
 
 <style>
