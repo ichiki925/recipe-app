@@ -42,7 +42,6 @@
 </template>
 
 <script setup>
-// Nuxt3の書き方
 definePageMeta({
   layout: false
 })
@@ -85,57 +84,26 @@ const handleLogin = async () => {
 }
 </script>
 
-
 <style scoped>
-/* Reset all default styles first */
-* {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-}
-
-html,
-body {
-    margin: 0;
-    padding: 0;
-    height: 100%;
-}
-
-/* Override Nuxt default styles */
-#__nuxt,
-#__layout {
-    height: 100vh !important;
-    margin: 0 !important;
-    padding: 0 !important;
-}
-
-:root {
-    --main-bg: #f2f2f2;
-    --button-bg: #dcdcdc;
-    --button-text: #555;
-    --text-color: #555;
-    --border-color: #ccc;
-    --input-bg: #fff;
-    --error-color: #d9534f;
-}
-
 .login-page {
-    background-color: var(--main-bg) !important;
-    font-family: 'Noto Sans JP', sans-serif !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    color: var(--text-color) !important;
-    font-weight: 300 !important;
-    min-height: 100vh !important;
-    height: 100vh !important;
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    position: fixed !important;
-    top: 0 !important;
-    left: 0 !important;
-    right: 0 !important;
-    bottom: 0 !important;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+    
+    background-color: #f2f2f2;
+    font-family: 'Noto Sans JP', sans-serif;
+    color: #555;
+    font-weight: 300;
+    
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    
+    margin: 0;
+    padding: 0;
 }
 
 .form-container {
@@ -145,7 +113,6 @@ body {
     background-color: white;
     border-radius: 12px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-    z-index: 9999;
 }
 
 .login-form {
@@ -167,7 +134,7 @@ body {
 }
 
 .login-title {
-    color: var(--text-color);
+    color: #555;
     font-size: 1.8rem;
     font-family: cursive;
     margin-bottom: 2rem;
@@ -194,10 +161,11 @@ body {
     padding: 0.75rem;
     border: none;
     border-bottom: 1px solid #dcdcdc;
-    /* background-color: var(--button-bg); */
+    background-color: #fff;
     font-size: 1rem;
     font-weight: 400;
-    color: var(--text-color);
+    color: #555;
+    box-sizing: border-box;
 }
 
 .form-input:focus {
@@ -206,9 +174,13 @@ body {
     border-color: #999;
 }
 
+.form-input.error-input {
+    border-bottom-color: #d9534f;
+}
+
 .error {
     font-size: 0.85rem;
-    color: var(--error-color);
+    color: #d9534f;
     margin-top: 0.3rem;
 }
 
@@ -216,8 +188,8 @@ body {
     width: 100%;
     margin-top: 2rem;
     padding: 0.75rem;
-    background-color: var(--button-bg);
-    color: var(--button-text);
+    background-color: #dcdcdc;
+    color: #555;
     border: none;
     font-size: 1rem;
     font-weight: 400;
@@ -246,7 +218,7 @@ body {
 
 @media screen and (max-width: 768px) {
     .login-page {
-        background-color: #ffffff !important;
+        background-color: #ffffff;
     }
 
     .form-container {
