@@ -78,33 +78,34 @@ const errors = ref({})
 const loading = ref(false)
 
 // フォーム送信処理
+
 const handleSubmit = async () => {
     loading.value = true
     errors.value = {}
 
     try {
-        // APIエンドポイントに送信
-        const { data } = await $fetch('/api/register', {
-        method: 'POST',
-        body: form
-        })
-
-        // 成功時の処理（例：ダッシュボードへリダイレクト）
-        await navigateTo('/dashboard')
+        // useAuth の register 関数を使用
+        const { register } = useAuth()
+        
+        // パスワード確認チェック
+        if (form.password !== form.password_confirmation) {
+            errors.value.password_confirmation = 'パスワードが一致しません'
+            return
+        }
+        
+        await register(form.email, form.password, form.name)
+        
+        // 成功時の処理
+        console.log('Registration successful!')
+        // await navigateTo('/dashboard')  // 一時的にコメントアウト
 
     } catch (error) {
-        // バリデーションエラーの処理
-        if (error.data && error.data.errors) {
-        errors.value = error.data.errors
-        } else {
-        // その他のエラー
         console.error('Registration error:', error)
-        }
+        errors.value.general = error.message
     } finally {
         loading.value = false
     }
 }
-
 </script>
 
 <style scoped>
