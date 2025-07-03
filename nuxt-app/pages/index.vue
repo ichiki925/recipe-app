@@ -190,7 +190,7 @@
     width: 100%;
     padding: 10px 10px 10px 40px;
     font-size: 16px;
-    border: 1px solid #ccc;
+    border: 1px solid #adadad;
     border-radius: 6px;
     box-sizing: border-box;
 }
@@ -212,7 +212,7 @@
 
 .sidebar button {
     width: 100%;
-    background-color: #eee;
+    background-color: #ddd;
     border: none;
     color: #000;
     padding: 10px;

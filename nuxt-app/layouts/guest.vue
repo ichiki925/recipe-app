@@ -6,7 +6,7 @@
             <Meta charset="UTF-8" />
             <Meta name="viewport" content="width=device-width, initial-scale=1.0" />
         </Head>
-    
+
         <header>
             <div class="container">
             <div class="logo">
@@ -15,20 +15,19 @@
             </div>
             <nav>
                 <ul>
-                <li><NuxtLink to="/login">Login</NuxtLink></li>
-                <li><NuxtLink to="/register">Sign Up</NuxtLink></li>
+                <li><NuxtLink to="/auth/login">Login</NuxtLink></li>
+                <li><NuxtLink to="/auth/register">Sign Up</NuxtLink></li>
                 </ul>
             </nav>
             </div>
         </header>
-    
+
         <main>
             <NuxtPage />
         </main>
     </div>
 </template>
-    
+
 <style>
     @import "@/assets/css/common.css";
 </style>
-    

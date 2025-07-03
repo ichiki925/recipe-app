@@ -8,9 +8,12 @@ import {
     sendPasswordResetEmail
 } from 'firebase/auth'
 
+// グローバルな状態管理（全てのコンポーネントで共有）
+const user = ref(null)
+const loading = ref(false)
+const authInitialized = ref(false)
+
 export const useAuth = () => {
-    const user = ref(null)
-    const loading = ref(false)
 
     // ログイン機能
     const login = async (email, password) => {
@@ -147,12 +150,36 @@ export const useAuth = () => {
         }
     }
 
-    // 認証状態の監視
+    // 認証状態の監視（自動初期化）
     const initAuth = () => {
+        if (authInitialized.value) return
+
+        console.log('🔧 認証状態の監視を開始...')
+
         const { $auth } = useNuxtApp()
 
         onAuthStateChanged($auth, (firebaseUser) => {
+            console.log('🔄 認証状態変更:', firebaseUser ? firebaseUser.email : 'null')
             user.value = firebaseUser
+        })
+
+        authInitialized.value = true
+    }
+
+    // 認証状態の確立を待機
+    const waitForAuth = () => {
+        return new Promise((resolve) => {
+            if (authInitialized.value && user.value !== undefined) {
+                resolve(user.value)
+                return
+            }
+
+            const { $auth } = useNuxtApp()
+            const unsubscribe = onAuthStateChanged($auth, (firebaseUser) => {
+                unsubscribe()
+                user.value = firebaseUser
+                resolve(firebaseUser)
+            })
         })
     }
 
@@ -187,6 +214,11 @@ export const useAuth = () => {
         return errorMessages[errorCode] || '認証エラーが発生しました'
     }
 
+    // 自動的に認証状態の監視を開始
+    if (process.client) {
+        initAuth()
+    }
+
     return {
         user: readonly(user),
         loading: readonly(loading),
@@ -196,6 +228,7 @@ export const useAuth = () => {
         resetPassword,
         logout,
         initAuth,
+        waitForAuth,
         getCurrentUser,
         isAdmin,
         isLoggedIn

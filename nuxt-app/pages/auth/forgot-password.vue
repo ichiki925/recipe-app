@@ -13,7 +13,13 @@
         ご確認ください。
       </div>
 
-      <form @submit.prevent="handleSubmit" class="form">
+      <!-- エラーメッセージ -->
+      <div v-if="errors.general" class="error-message">
+        {{ errors.general }}
+      </div>
+
+      <!-- フォーム（成功時は非表示） -->
+      <form v-if="!successMessage" @submit.prevent="handleSubmit" class="form">
         <div class="form-group">
           <label class="form-label">メールアドレス</label>
           <input
@@ -35,6 +41,13 @@
         </button>
       </form>
 
+      <!-- 成功時のみ表示される再送信ボタン -->
+      <div v-if="successMessage" class="success-actions">
+        <button @click="resetForm" class="resend-button">
+          別のメールアドレスで再送信
+        </button>
+      </div>
+
       <nuxt-link to="/auth/login" class="login-link">
         ログイン画面に戻る
       </nuxt-link>
@@ -52,34 +65,84 @@ const errors = ref({})
 const successMessage = ref(false)
 const isSubmitting = ref(false)
 
+// useAuth composableを使用
+const { resetPassword } = useAuth()
+
 const handleSubmit = async () => {
   errors.value = {}
   successMessage.value = false
 
-  if (!form.value.email) {
-    errors.value.email = 'メールアドレスを入力してください'
-    return
-  }
-
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-  if (!emailRegex.test(form.value.email)) {
-    errors.value.email = '正しいメールアドレスを入力してください'
-    return
-  }
-
-  isSubmitting.value = true
-
   try {
-    console.log('パスワード再設定リクエスト:', form.value.email)
-    await new Promise(resolve => setTimeout(resolve, 1000))
+    // バリデーション
+    if (!validateForm()) {
+      return
+    }
+
+    isSubmitting.value = true
+
+    console.log('🔄 パスワード再設定リクエスト:', form.value.email)
+
+    // Firebase パスワードリセット機能を使用
+    await resetPassword(form.value.email)
+
+    console.log('✅ パスワード再設定メール送信成功')
     successMessage.value = true
     form.value.email = ''
+
   } catch (error) {
-    console.error('パスワード再設定エラー:', error)
-    errors.value.email = 'エラーが発生しました。もう一度お試しください。'
+    console.error('❌ パスワード再設定エラー:', error)
+
+    // Firebaseエラーコードの日本語化
+    let errorMessage = 'エラーが発生しました。もう一度お試しください。'
+
+    if (error.message) {
+      switch (error.message) {
+        case 'auth/user-not-found':
+          errorMessage = 'このメールアドレスは登録されていません'
+          break
+        case 'auth/invalid-email':
+          errorMessage = 'メールアドレスの形式が正しくありません'
+          break
+        case 'auth/network-request-failed':
+          errorMessage = 'ネットワークエラーが発生しました'
+          break
+        case 'auth/too-many-requests':
+          errorMessage = 'リクエストが多すぎます。しばらく待ってから再試行してください'
+          break
+        default:
+          errorMessage = error.message || 'エラーが発生しました'
+      }
+    }
+
+    errors.value.general = errorMessage
+
   } finally {
     isSubmitting.value = false
   }
+}
+
+// バリデーション関数
+const validateForm = () => {
+  let isValid = true
+
+  // メールアドレスチェック
+  if (!form.value.email.trim()) {
+    errors.value.email = 'メールアドレスを入力してください'
+    isValid = false
+  } else if (!/\S+@\S+\.\S+/.test(form.value.email)) {
+    errors.value.email = '正しいメールアドレスを入力してください'
+    isValid = false
+  }
+
+  return isValid
+}
+
+// フォームリセット関数
+const resetForm = () => {
+  form.value.email = ''
+  errors.value = {}
+  successMessage.value = false
+  console.log('🔄 フォームをリセットしました')
 }
 </script>
 
@@ -90,18 +153,18 @@ const handleSubmit = async () => {
     left: 0;
     width: 100vw;
     height: 100vh;
-    overflow: hidden;
-    
+
     background-color: #f2f2f2;
     font-family: 'Noto Sans JP', sans-serif;
     color: #555;
     font-weight: 300;
-    
+
     display: flex;
     align-items: center;
     justify-content: center;
-    
+
     margin: 0;
+    padding-top: 50px;
     padding: 20px;
 }
 
@@ -120,7 +183,7 @@ const handleSubmit = async () => {
     font-family: sans-serif;
     margin-bottom: 2rem;
     font-weight: 300;
-    color: #555;
+    color: #222;
 }
 
 .description {
@@ -140,6 +203,18 @@ const handleSubmit = async () => {
     margin-bottom: 1rem;
     text-align: center;
     font-size: 0.9rem;
+    border: 1px solid #c3e6cb;
+}
+
+.error-message {
+    background-color: #f8d7da;
+    color: #721c24;
+    padding: 0.75rem;
+    border-radius: 4px;
+    margin-bottom: 1rem;
+    text-align: center;
+    font-size: 0.9rem;
+    border: 1px solid #f5c6cb;
 }
 
 .form-group {
@@ -165,10 +240,11 @@ const handleSubmit = async () => {
     font-weight: 300;
     outline: none;
     box-sizing: border-box;
+    transition: border-bottom-color 0.3s ease;
 }
 
 .form-input:focus {
-    border-bottom-color: #555;
+    border-bottom-color: #333;
 }
 
 .form-input.error-input {
@@ -185,22 +261,45 @@ const handleSubmit = async () => {
     width: 100%;
     margin-top: 2rem;
     padding: 0.8rem;
-    background-color: #dcdcdc;
-    color: #555;
+    background-color: #ddd;
+    color: #333;
     border: none;
     font-size: 1rem;
     font-weight: 300;
     cursor: pointer;
     border-radius: 4px;
+    transition: background-color 0.3s ease;
 }
 
-.submit-button:hover {
-    background-color: #cfcfcf;
+.submit-button:hover:not(:disabled) {
+    background-color: #bbb;
 }
 
 .submit-button:disabled {
     opacity: 0.6;
     cursor: not-allowed;
+}
+
+.success-actions {
+    text-align: center;
+    margin-top: 1.5rem;
+}
+
+.resend-button {
+    background-color: transparent;
+    color: #333;
+    border: 1px solid #ddd;
+    padding: 0.6rem 1.2rem;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: all 0.3s ease;
+}
+
+.resend-button:hover {
+    background-color: #f8f8f8;
+    color: #888;
+    border-color: #bbb;
 }
 
 .login-link {
@@ -211,6 +310,7 @@ const handleSubmit = async () => {
     color: #555;
     text-decoration: underline;
     font-weight: 300;
+    transition: color 0.3s ease;
 }
 
 .login-link:hover {
@@ -221,6 +321,7 @@ const handleSubmit = async () => {
     .forgot-password-page {
         background-color: #ffffff;
         padding: 15px;
+        align-items: flex-start;
     }
 
     .form-container {

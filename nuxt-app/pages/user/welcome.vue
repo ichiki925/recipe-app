@@ -66,7 +66,7 @@ definePageMeta({
 }
 
 .subtitle {
-    color: #777;
+    color: #444;
     font-size: 0.95rem;
     margin-bottom: 2rem;
 }
@@ -78,7 +78,7 @@ definePageMeta({
 }
 
 .btn {
-    background-color: #dcdcdc;
+    background-color: #ddd;
     color: #555;
     padding: 0.75rem;
     border: none;
@@ -102,7 +102,7 @@ definePageMeta({
 }
 
 .btn.ghost:hover {
-    color: #666;
+    color: #555;
     background-color: transparent;
 }
 

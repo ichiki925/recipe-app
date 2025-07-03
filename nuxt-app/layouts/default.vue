@@ -14,14 +14,31 @@
         </div>
         <nav>
           <ul>
-            <li><NuxtLink to="/user">Recipes</NuxtLink></li>
-            <li v-if="isAuthenticated"><NuxtLink to="/user/favorite">Favorite</NuxtLink></li>
-            <li v-if="isAuthenticated"><NuxtLink to="/user/profile">Profile</NuxtLink></li>
-            <li v-if="isAuthenticated"><a href="#" @click.prevent="logout">Logout</a></li>
+            <li>
+              <NuxtLink to="/user" :class="{ active: $route.path === '/user' }">
+                Recipes
+              </NuxtLink>
+            </li>
+            <li v-if="isAuthenticated">
+              <NuxtLink to="/user/favorite" :class="{ active: $route.path === '/user/favorite' }">
+                Favorite
+              </NuxtLink>
+            </li>
+            <li v-if="isAuthenticated">
+              <NuxtLink to="/user/profile" :class="{ active: $route.path === '/user/profile' }">
+                Profile
+              </NuxtLink>
+            </li>
+            <li v-if="isAuthenticated">
+              <a href="#" @click.prevent="handleLogout" class="logout-link">
+                Logout
+              </a>
+            </li>
           </ul>
         </nav>
       </div>
     </header>
+
 
     <main>
       <NuxtPage />
@@ -30,43 +47,63 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 
-const isAuthenticated = ref(false) // 初期値をfalseに
+const isAuthenticated = ref(false)
 
-// 認証状態の確認
-const checkAuthStatus = async () => {
-  try {
-    // 実際のAPIコール例（Cookie/JWTベースの認証の場合）
-    const user = await $fetch('/api/auth/me')
-    isAuthenticated.value = !!user
-  } catch (error) {
-    // 認証エラーの場合は未ログイン扱い
-    isAuthenticated.value = false
-  }
-}
+// Firebase認証の使用
+const { logout, getCurrentUser } = useAuth()
 
-// ログアウト処理
-const logout = async () => {
-  try {
-    await $fetch('/api/logout', { method: 'POST' })
-    isAuthenticated.value = false
-    await navigateTo('/login')
-  } catch (error) {
-    console.error('Logout failed:', error)
-  }
-}
+// お気に入り状態管理用のグローバルストア
+const favoriteStore = useState('favorites', () => new Set())
 
-// 初期化時に認証状態をチェック（クライアントサイドのみ）
-onMounted(() => {
-  // 一時的にログイン状態にする場合
-  isAuthenticated.value = true
-  
-  // 実際のAPIを使う場合は以下をコメントアウト解除
-  // checkAuthStatus()
+// お気に入り件数の計算
+const favoriteCount = computed(() => {
+  return favoriteStore.value.size
 })
 
-// ルート変更時にも認証状態をチェック（必要に応じて）
+// 認証状態の確認
+const checkAuthStatus = () => {
+  try {
+    const currentUser = getCurrentUser()
+    if (currentUser) {
+      isAuthenticated.value = true
+      console.log('🔐 Layout: ユーザー認証済み', currentUser.email)
+    } else {
+      isAuthenticated.value = false
+      console.log('⚠️ Layout: 未認証ユーザー')
+    }
+  } catch (error) {
+    console.error('❌ Layout: 認証確認エラー:', error)
+    isAuthenticated.value = false
+  }
+}
+
+// Firebase認証対応ログアウト処理
+const handleLogout = async () => {
+  try {
+    console.log('🚪 Layout: ログアウト開始')
+    await logout()
+    isAuthenticated.value = false
+    
+    // お気に入り情報もクリア
+    favoriteStore.value.clear()
+    
+    console.log('✅ Layout: ログアウト成功')
+
+    // ログインページにリダイレクト
+    await navigateTo('/auth/login')
+  } catch (error) {
+    console.error('❌ Layout: ログアウト失敗:', error)
+  }
+}
+
+// 初期化時に認証状態をチェック
+onMounted(() => {
+  checkAuthStatus()
+})
+
+// ルート変更時にも認証状態をチェック
 watch(() => useRoute().path, () => {
   if (process.client) {
     checkAuthStatus()
