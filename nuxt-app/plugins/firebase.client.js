@@ -22,11 +22,11 @@ export default defineNuxtPlugin(() => {
 
         const app = initializeApp(firebaseConfig)
         const auth = getAuth(app)
-        
+
         console.log('✅ NEW Firebase project initialized successfully!')
         console.log('🔥 New App name:', app.name)
         console.log('🔐 New Auth instance:', !!auth)
-        
+
         return {
             provide: {
                 firebase: app,

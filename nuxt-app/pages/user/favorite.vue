@@ -41,13 +41,14 @@
           :key="recipe.id" 
           class="recipe-card"
           :data-recipe-id="recipe.id"
+          @click="goToRecipeDetail(recipe.id)"
         >
           <div class="no-image">No Image</div>
           <div class="recipe-title">{{ recipe.title }}</div>
           <div class="recipe-genre">{{ recipe.genre }}</div>
           <div class="recipe-stats">
             <button 
-              @click="removeFavorite(recipe)"
+              @click.stop="removeFavorite(recipe)"
               class="like-button liked"
               title="お気に入りから削除"
             >
@@ -158,6 +159,12 @@ const paginatedRecipes = computed(() => {
   const end = start + recipesPerPage
   return filteredRecipes.value.slice(start, end)
 })
+
+// 詳細ページへの遷移
+const goToRecipeDetail = (recipeId) => {
+  console.log('📖 お気に入りページから詳細ページへ遷移:', recipeId)
+  navigateTo(`/user/show/${recipeId}`)
+}
 
 // コンポーネント初期化
 onMounted(async () => {
@@ -406,11 +413,13 @@ watch(searchKeyword, () => {
     text-align: center;
     background: white;
     box-sizing: border-box;
-    transition: opacity 0.3s ease, transform 0.3s ease;
+    cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.3s ease;
 }
 
 .recipe-card:hover {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    transform: translateY(-2px);
+    box-shadow: 2px 4px 12px rgba(0, 0, 0, 0.15);
 }
 
 .no-image {
