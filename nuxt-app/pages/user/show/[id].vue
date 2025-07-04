@@ -60,16 +60,34 @@
             ref="commentTextarea"
             id="comment-box"
             class="auto-resize"
+            :class="{ 'error': commentError }"
             placeholder="コメントを記入..."
-            @input="autoResize"
+            @input="handleCommentInput"
+            :disabled="isSubmitting"
+            maxlength="500"
           ></textarea>
+
+          <div class="comment-counter">
+            <span :class="{ 'warning': commentLength > 450, 'error': commentLength > 500 }">
+              {{ commentLength }}/500
+            </span>
+          </div>
+          
+          <!-- エラーメッセージ -->
+          <div v-if="commentError" class="error-message">
+            {{ commentError }}
+          </div>
+
           <button
             type="button"
             class="send-button"
+            :class="{ 'disabled': !!commentError || !newComment.trim() || isSubmitting }"
+            :disabled="!!commentError || !newComment.trim() || isSubmitting"
             title="送信"
             @click="submitComment"
           >
-            <i class="far fa-paper-plane"></i>
+            <i v-if="isSubmitting" class="fas fa-spinner fa-spin"></i>
+            <i v-else class="far fa-paper-plane"></i>
           </button>
         </div>
 
@@ -137,6 +155,11 @@ const recipeId = parseInt(route.params.id)
 const newComment = ref('')
 const commentTextarea = ref(null)
 const showAllComments = ref(false)
+
+// ⭐ バリデーション関連のリアクティブ変数を追加
+const commentError = ref('')
+const isSubmitting = ref(false)
+
 
 // モックレシピデータ（実際はAPIから取得）
 const recipeDatabase = {
@@ -284,11 +307,52 @@ const hasMoreComments = computed(() => {
   return comments.value.length > 3
 })
 
+// ⭐ 文字数計算を追加
+const commentLength = computed(() => {
+  return newComment.value.length
+})
+
 // ユーザー名の省略処理
 const truncateUsername = (username) => {
   if (!username) return 'ユーザー'
   return username.length > 10 ? username.substring(0, 10) + '...' : username
 }
+
+// ⭐ バリデーション関数を追加
+const validateComment = (comment) => {
+  const trimmed = comment.trim()
+  
+  if (!trimmed) {
+    return 'コメントを入力してください'
+  }
+  
+  if (trimmed.length < 1) {
+    return 'コメントは1文字以上で入力してください'
+  }
+  
+  if (trimmed.length > 500) {
+    return 'コメントは500文字以内で入力してください'
+  }
+  
+  // 連続する同じ文字のチェック（例：「あああああああああああ」）
+  if (/(.)\1{9,}/.test(trimmed)) {
+    return '同じ文字の連続は10文字までにしてください'
+  }
+  
+  return null // バリデーション通過
+}
+
+// ⭐ リアルタイムバリデーション関数を追加
+const handleCommentInput = () => {
+  commentError.value = ''
+  autoResize()
+  
+  // 文字数チェック（リアルタイム）
+  if (newComment.value.length > 500) {
+    commentError.value = 'コメントは500文字以内で入力してください'
+  }
+}
+
 
 // いいねボタンの切り替え
 const toggleLike = () => {
@@ -316,41 +380,63 @@ const toggleLike = () => {
   // await $fetch(`/api/recipes/${recipe.value.id}/like`, { method: 'POST' })
 }
 
-// コメント送信
-const submitComment = () => {
+// ⭐ コメント送信関数を修正（バリデーション付き）
+const submitComment = async () => {
   if (!user.value) {
     console.log('⚠️ ログインが必要です')
     return
   }
 
-  if (!newComment.value.trim()) return
-
-  // 現在のレシピのコメント一覧を取得
-  const currentComments = commentsStore.value.get(recipeId) || []
-  
-  const comment = {
-    id: Date.now(), // ユニークなIDを生成
-    user: { 
-      name: user.value.displayName || user.value.email.split('@')[0] || '匿名ユーザー',
-      avatar_path: null 
-    },
-    body: newComment.value,
-    createdAt: new Date().toISOString()
+  // バリデーション実行
+  const validationError = validateComment(newComment.value)
+  if (validationError) {
+    commentError.value = validationError
+    return
   }
 
-  // 新しいコメントを追加
-  const updatedComments = [...currentComments, comment]
-  commentsStore.value.set(recipeId, updatedComments)
-  
-  newComment.value = ''
+  // 送信中の重複防止
+  if (isSubmitting.value) return
+  isSubmitting.value = true
 
-  // 新しいコメントが追加されたらすべて表示する
-  if (updatedComments.length > 3) {
-    showAllComments.value = true
+  try {
+    // 現在のレシピのコメント一覧を取得
+    const currentComments = commentsStore.value.get(recipeId) || []
+    
+    const comment = {
+      id: Date.now(),
+      user: { 
+        name: user.value.displayName || user.value.email.split('@')[0] || '匿名ユーザー',
+        avatar_path: null 
+      },
+      body: newComment.value.trim(), // trimした値を使用
+      createdAt: new Date().toISOString()
+    }
+
+    // 新しいコメントを追加
+    const updatedComments = [...currentComments, comment]
+    commentsStore.value.set(recipeId, updatedComments)
+    
+    newComment.value = ''
+    commentError.value = ''
+
+
+    // 新しいコメントが追加されたらすべて表示する
+    if (updatedComments.length > 3) {
+      showAllComments.value = true
+    }
+
+    console.log('💬 コメント送信:', comment.body)
+    console.log('📝 現在のコメント数:', updatedComments.length)
+
+    // textareaをリセット
+    autoResize()
+      
+  } catch (error) {
+    console.error('コメント送信エラー:', error)
+    commentError.value = 'コメントの送信に失敗しました'
+  } finally {
+    isSubmitting.value = false
   }
-
-  console.log('💬 コメント送信:', comment.body)
-  console.log('📝 現在のコメント数:', updatedComments.length)
   
   // 実際のAPI呼び出し
   // await $fetch(`/api/recipes/${recipe.value.id}/comments`, {
@@ -507,7 +593,6 @@ onMounted(async () => {
     display: flex;
     align-items: center;
     justify-content: center;
-    cursor: pointer;
     overflow: hidden;
     position: relative;
     height: 300px;
@@ -610,6 +695,72 @@ onMounted(async () => {
     background-color: #f5f5f5;
     color: #333;
     border-color: #bbb;
+}
+
+/* エラー状態のテキストエリア */
+#comment-box.error {
+    border-color: #dc3545;
+    box-shadow: 0 0 0 2px rgba(220, 53, 69, 0.1);
+}
+
+/* 文字数カウンター */
+.comment-counter {
+    position: absolute;
+    right: 50px;
+    bottom: 12px;
+    font-size: 10px;
+    color: #666;
+    pointer-events: none;
+}
+
+.comment-counter .warning {
+    color: #ffc107;
+}
+
+.comment-counter .error {
+    color: #dc3545;
+    font-weight: bold;
+}
+
+/* エラーメッセージ */
+.error-message {
+    position: absolute;
+    bottom: -20px;
+    left: 0;
+    font-size: 11px;
+    color: #dc3545;
+    background-color: #fff;
+    padding: 2px 4px;
+    border-radius: 3px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    z-index: 10;
+    white-space: nowrap;
+}
+
+/* 送信ボタンの無効状態 */
+.send-button.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.send-button.disabled:hover {
+    color: inherit;
+}
+
+/* テキストエリアの無効状態 */
+#comment-box:disabled {
+    background-color: #f8f9fa;
+    cursor: not-allowed;
+}
+
+/* スピナーアニメーション */
+.fa-spin {
+    animation: fa-spin 1s infinite linear;
+}
+
+@keyframes fa-spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
 }
 
 /* いいねボタン */
