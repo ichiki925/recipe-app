@@ -27,6 +27,9 @@
             v-model="form.email"
             class="form-input"
             :class="{ 'error-input': errors.email }"
+            @input="handleEmailInput"
+            @blur="handleEmailBlur"
+            :disabled="isSubmitting"
             required
           >
           <div v-if="errors.email" class="error">{{ errors.email }}</div>
@@ -35,8 +38,10 @@
         <button
           type="submit"
           class="submit-button"
-          :disabled="isSubmitting"
+          :class="{ 'disabled': !isFormValid || isSubmitting }"
+          :disabled="!isFormValid || isSubmitting"
         >
+          <i v-if="isSubmitting" class="fas fa-spinner fa-spin" style="margin-right: 5px;"></i>
           {{ isSubmitting ? '送信中...' : '再設定リンクを送信' }}
         </button>
       </form>
@@ -56,6 +61,8 @@
 </template>
 
 <script setup>
+import { ref, computed } from 'vue'
+
 definePageMeta({
   layout: false
 })
@@ -68,25 +75,68 @@ const isSubmitting = ref(false)
 // useAuth composableを使用
 const { resetPassword } = useAuth()
 
+// ⭐ フォーム全体のバリデーション状態
+const isFormValid = computed(() => {
+  return !errors.value.email && 
+         form.value.email.trim().length > 0
+})
+
+// ⭐ メールバリデーション関数
+const validateEmail = (email) => {
+  const trimmed = email.trim()
+  
+  if (!trimmed) {
+    return 'メールアドレスを入力してください'
+  }
+  
+  const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  if (!emailPattern.test(trimmed)) {
+    return '正しいメールアドレスを入力してください'
+  }
+  
+  return null
+}
+
+// ⭐ リアルタイムバリデーション
+const handleEmailInput = () => {
+  errors.value.email = ''
+}
+
+const handleEmailBlur = () => {
+  const validationError = validateEmail(form.value.email)
+  if (validationError) {
+    errors.value.email = validationError
+  }
+}
+
 const handleSubmit = async () => {
+  // 最終バリデーション
+  const emailError = validateEmail(form.value.email)
+  
+  if (emailError) {
+    errors.value.email = emailError
+    return
+  }
+
+  // 送信中の重複防止
+  if (isSubmitting.value) return
+  isSubmitting.value = true
   errors.value = {}
   successMessage.value = false
 
   try {
-    // バリデーション
-    if (!validateForm()) {
-      return
-    }
-
-    isSubmitting.value = true
-
     console.log('🔄 パスワード再設定リクエスト:', form.value.email)
 
     // Firebase パスワードリセット機能を使用
-    await resetPassword(form.value.email)
+    await resetPassword(form.value.email.trim())
 
     console.log('✅ パスワード再設定メール送信成功')
     successMessage.value = true
+    
+    // エラーをクリア
+    errors.value = {}
+    
+    // フォームをクリア
     form.value.email = ''
 
   } catch (error) {
@@ -95,8 +145,8 @@ const handleSubmit = async () => {
     // Firebaseエラーコードの日本語化
     let errorMessage = 'エラーが発生しました。もう一度お試しください。'
 
-    if (error.message) {
-      switch (error.message) {
+    if (error.code) {
+      switch (error.code) {
         case 'auth/user-not-found':
           errorMessage = 'このメールアドレスは登録されていません'
           break
@@ -112,6 +162,8 @@ const handleSubmit = async () => {
         default:
           errorMessage = error.message || 'エラーが発生しました'
       }
+    } else {
+      errorMessage = error.message || 'システムエラーが発生しました'
     }
 
     errors.value.general = errorMessage
@@ -119,22 +171,6 @@ const handleSubmit = async () => {
   } finally {
     isSubmitting.value = false
   }
-}
-
-// バリデーション関数
-const validateForm = () => {
-  let isValid = true
-
-  // メールアドレスチェック
-  if (!form.value.email.trim()) {
-    errors.value.email = 'メールアドレスを入力してください'
-    isValid = false
-  } else if (!/\S+@\S+\.\S+/.test(form.value.email)) {
-    errors.value.email = '正しいメールアドレスを入力してください'
-    isValid = false
-  }
-
-  return isValid
 }
 
 // フォームリセット関数
@@ -147,6 +183,8 @@ const resetForm = () => {
 </script>
 
 <style scoped>
+@import url('https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css');
+
 .forgot-password-page {
     position: fixed;
     top: 0;
@@ -251,6 +289,11 @@ const resetForm = () => {
     border-bottom-color: #d9534f;
 }
 
+.form-input:disabled {
+    background-color: #f8f9fa;
+    cursor: not-allowed;
+}
+
 .error {
     font-size: 0.85rem;
     color: #d9534f;
@@ -275,9 +318,13 @@ const resetForm = () => {
     background-color: #bbb;
 }
 
-.submit-button:disabled {
-    opacity: 0.6;
+.submit-button.disabled {
+    opacity: 0.5;
     cursor: not-allowed;
+}
+
+.submit-button.disabled:hover {
+    background-color: #ddd;
 }
 
 .success-actions {
@@ -315,6 +362,16 @@ const resetForm = () => {
 
 .login-link:hover {
     color: #9f9b9b;
+}
+
+/* スピナーアニメーション */
+.fa-spin {
+    animation: fa-spin 1s infinite linear;
+}
+
+@keyframes fa-spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
 }
 
 @media screen and (max-width: 480px) {

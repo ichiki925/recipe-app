@@ -29,6 +29,9 @@
             class="form-input"
             v-model="form.email"
             :class="{ 'error-input': errors.email }"
+            @input="handleEmailInput"
+            @blur="handleEmailBlur"
+            :disabled="loading"
             required
             autocomplete="email"
           >
@@ -42,13 +45,22 @@
             class="form-input"
             v-model="form.password"
             :class="{ 'error-input': errors.password }"
+            @input="handlePasswordInput"
+            @blur="handlePasswordBlur"
+            :disabled="loading"
             required
             autocomplete="current-password"
           >
           <div v-if="errors.password" class="error">{{ errors.password }}</div>
         </div>
 
-        <button type="submit" class="submit-button" :disabled="loading">
+        <button 
+          type="submit" 
+          class="submit-button" 
+          :class="{ 'disabled': !isFormValid || loading }"
+          :disabled="!isFormValid || loading"
+        >
+          <i v-if="loading" class="fas fa-spinner fa-spin" style="margin-right: 5px;"></i>
           {{ loading ? 'ログイン中...' : 'ログイン' }}
         </button>
 
@@ -67,6 +79,8 @@
 </template>
 
 <script setup>
+import { ref, reactive, computed } from 'vue'
+
 definePageMeta({
   layout: false
 })
@@ -88,6 +102,62 @@ const { login } = useAuth()
 // URLクエリパラメータをチェック
 const route = useRoute()
 
+// ⭐ フォーム全体のバリデーション状態
+const isFormValid = computed(() => {
+  return !errors.value.email && 
+         !errors.value.password &&
+         form.email.trim().length > 0 &&
+         form.password.length > 0
+})
+
+// ⭐ メールバリデーション関数
+const validateEmail = (email) => {
+  const trimmed = email.trim()
+  
+  if (!trimmed) {
+    return 'メールアドレスを入力してください'
+  }
+  
+  const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  if (!emailPattern.test(trimmed)) {
+    return '正しいメールアドレスを入力してください'
+  }
+  
+  return null
+}
+
+// ⭐ パスワードバリデーション関数
+const validatePassword = (password) => {
+  if (!password) {
+    return 'パスワードを入力してください'
+  }
+  
+  return null
+}
+
+// ⭐ リアルタイムバリデーション
+const handleEmailInput = () => {
+  errors.value.email = ''
+}
+
+const handleEmailBlur = () => {
+  const validationError = validateEmail(form.email)
+  if (validationError) {
+    errors.value.email = validationError
+  }
+}
+
+const handlePasswordInput = () => {
+  errors.value.password = ''
+}
+
+const handlePasswordBlur = () => {
+  const validationError = validatePassword(form.password)
+  if (validationError) {
+    errors.value.password = validationError
+  }
+}
+
 // コンポーネントマウント時の処理
 onMounted(() => {
   // 登録完了時のメッセージ表示
@@ -102,18 +172,26 @@ onMounted(() => {
 })
 
 const handleLogin = async () => {
+  // 最終バリデーション
+  const emailError = validateEmail(form.email)
+  const passwordError = validatePassword(form.password)
+  
+  if (emailError) errors.value.email = emailError
+  if (passwordError) errors.value.password = passwordError
+  
+  if (emailError || passwordError) {
+    console.log('❌ バリデーションエラー')
+    return
+  }
+
+  // 送信中の重複防止
+  if (loading.value) return
+  loading.value = true
+  errors.value = {}
+  successMessage.value = ''
+
   try {
-    loading.value = true
-    errors.value = {}
-    successMessage.value = ''
-
     console.log('🚀 ログイン開始:', form.email)
-
-    // バリデーション
-    if (!validateForm()) {
-      console.log('❌ バリデーションエラー')
-      return
-    }
 
     // useAuth が利用可能かチェック
     if (!login) {
@@ -124,7 +202,7 @@ const handleLogin = async () => {
 
     // Firebase認証でログイン
     console.log('🔐 Firebase認証実行中...')
-    const result = await login(form.email, form.password)
+    const result = await login(form.email.trim(), form.password)
 
     if (!result || !result.user) {
       console.error('❌ ログイン結果が無効です:', result)
@@ -140,6 +218,9 @@ const handleLogin = async () => {
     })
 
     successMessage.value = 'ログインに成功しました！'
+
+    // エラーをクリア
+    errors.value = {}
 
     // Firebase認証状態の確立を待機
     console.log('⏳ 認証状態の確立を待機中...')
@@ -204,31 +285,11 @@ const handleLogin = async () => {
     loading.value = false
   }
 }
-
-// バリデーション関数
-const validateForm = () => {
-  let isValid = true
-
-  // メールアドレスチェック
-  if (!form.email.trim()) {
-    errors.value.email = 'メールアドレスを入力してください'
-    isValid = false
-  } else if (!/\S+@\S+\.\S+/.test(form.email)) {
-    errors.value.email = '正しいメールアドレスを入力してください'
-    isValid = false
-  }
-
-  // パスワードチェック
-  if (!form.password) {
-    errors.value.password = 'パスワードを入力してください'
-    isValid = false
-  }
-
-  return isValid
-}
 </script>
 
 <style scoped>
+@import url('https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css');
+
 .login-page {
     position: fixed;
     top: 0;
@@ -322,6 +383,11 @@ const validateForm = () => {
     border-bottom-color: #d9534f;
 }
 
+.form-input:disabled {
+    background-color: #f8f9fa;
+    cursor: not-allowed;
+}
+
 .error {
     font-size: 0.85rem;
     color: #d9534f;
@@ -366,9 +432,13 @@ const validateForm = () => {
     background-color: #bbb;
 }
 
-.submit-button:disabled {
-    opacity: 0.6;
+.submit-button.disabled {
+    opacity: 0.5;
     cursor: not-allowed;
+}
+
+.submit-button.disabled:hover {
+    background-color: #ddd;
 }
 
 .form-footer {
@@ -387,17 +457,23 @@ const validateForm = () => {
     color: #666;
 }
 
+/* スピナーアニメーション */
+.fa-spin {
+    animation: fa-spin 1s infinite linear;
+}
+
+@keyframes fa-spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
 @media screen and (max-width: 480px) {
     .login-page {
         background-color: #ffffff;
-        /* スクロール可能にするため height を min-height に変更 */
         height: auto;
         min-height: 100vh;
-        /* コンテンツがはみ出した時にスクロールできるように */
         overflow-y: auto;
-        /* コンテンツを上寄せに */
         align-items: flex-start;
-        /* 上部に少し余白を追加 */
         padding-top: 20px;
         box-sizing: border-box;
     }
@@ -408,10 +484,7 @@ const validateForm = () => {
         margin: 10px;
         max-width: 100%;
         padding: 1rem;
-        /* 下部に余白を追加してスクロール余地を確保 */
         margin-bottom: 30px;
     }
 }
-
-
 </style>

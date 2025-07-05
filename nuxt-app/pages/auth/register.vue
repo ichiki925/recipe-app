@@ -10,6 +10,7 @@
                 <!-- 全般エラーメッセージ -->
                 <div v-if="errors.general" class="error general-error">{{ errors.general }}</div>
                 
+                <!-- ユーザーネーム -->
                 <div class="form-group">
                     <label class="form-label">ユーザーネーム</label>
                     <input
@@ -17,11 +18,16 @@
                         class="form-input"
                         v-model="form.name"
                         :class="{ 'error-input': errors.name }"
+                        @input="handleNameInput"
+                        @blur="handleNameBlur"
+                        :disabled="loading"
+                        maxlength="20"
                         required
                     >
                     <div v-if="errors.name" class="error">{{ errors.name }}</div>
                 </div>
 
+                <!-- メールアドレス -->
                 <div class="form-group">
                     <label class="form-label">メールアドレス</label>
                     <input
@@ -29,11 +35,15 @@
                         class="form-input"
                         v-model="form.email"
                         :class="{ 'error-input': errors.email }"
+                        @input="handleEmailInput"
+                        @blur="handleEmailBlur"
+                        :disabled="loading"
                         required
                     >
                     <div v-if="errors.email" class="error">{{ errors.email }}</div>
                 </div>
 
+                <!-- パスワード -->
                 <div class="form-group">
                     <label class="form-label">パスワード</label>
                     <input
@@ -41,12 +51,16 @@
                         class="form-input"
                         v-model="form.password"
                         :class="{ 'error-input': errors.password }"
+                        @input="handlePasswordInput"
+                        @blur="handlePasswordBlur"
+                        :disabled="loading"
                         required
                         minlength="6"
                     >
                     <div v-if="errors.password" class="error">{{ errors.password }}</div>
                 </div>
 
+                <!-- パスワード確認 -->
                 <div class="form-group">
                     <label class="form-label">パスワード確認</label>
                     <input
@@ -54,12 +68,21 @@
                         class="form-input"
                         v-model="form.password_confirmation"
                         :class="{ 'error-input': errors.password_confirmation }"
+                        @input="handlePasswordConfirmInput"
+                        @blur="handlePasswordConfirmBlur"
+                        :disabled="loading"
                         required
                     >
                     <div v-if="errors.password_confirmation" class="error">{{ errors.password_confirmation }}</div>
                 </div>
 
-                <button type="submit" class="submit-btn" :disabled="loading">
+                <button 
+                    type="submit" 
+                    class="submit-btn" 
+                    :class="{ 'disabled': !isFormValid || loading }"
+                    :disabled="!isFormValid || loading"
+                >
+                    <i v-if="loading" class="fas fa-spinner fa-spin" style="margin-right: 5px;"></i>
                     {{ loading ? '登録中...' : '登録' }}
                 </button>
             </form>
@@ -70,6 +93,8 @@
 </template>
 
 <script setup>
+import { ref, reactive, computed } from 'vue'
+
 definePageMeta({
     title: 'サインアップ',
     layout: false
@@ -87,26 +112,189 @@ const form = reactive({
 const errors = ref({})
 const loading = ref(false)
 
-// フォーム送信処理
+// ⭐ パスワード一致チェック
+const passwordsMatch = computed(() => {
+    return form.password && form.password_confirmation && form.password === form.password_confirmation
+})
+
+// ⭐ フォーム全体のバリデーション状態
+const isFormValid = computed(() => {
+    return !errors.value.name && 
+           !errors.value.email && 
+           !errors.value.password && 
+           !errors.value.password_confirmation &&
+           form.name.trim().length > 0 &&
+           form.email.trim().length > 0 &&
+           form.password.length > 0 &&
+           form.password_confirmation.length > 0 &&
+           passwordsMatch.value
+})
+
+// ⭐ ユーザーネームバリデーション関数
+const validateUserName = (name) => {
+    const trimmed = name.trim()
+    
+    if (!trimmed) {
+        return 'ユーザーネームを入力してください'
+    }
+    
+    if (trimmed.length < 2) {
+        return 'ユーザーネームは2文字以上で入力してください'
+    }
+    
+    if (trimmed.length > 20) {
+        return 'ユーザーネームは20文字以内で入力してください'
+    }
+    
+    // 使用可能文字のチェック（日本語、英数字、一部記号）
+    const allowedPattern = /^[a-zA-Z0-9\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF_\-\s]+$/
+    if (!allowedPattern.test(trimmed)) {
+        return '使用できない文字が含まれています'
+    }
+    
+    // 連続するスペースのチェック
+    if (/\s{2,}/.test(trimmed)) {
+        return '連続するスペースは使用できません'
+    }
+    
+    return null // バリデーション通過
+}
+
+// ⭐ メールバリデーション関数
+const validateEmail = (email) => {
+    const trimmed = email.trim()
+    
+    if (!trimmed) {
+        return 'メールアドレスを入力してください'
+    }
+    
+    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailPattern.test(trimmed)) {
+        return '正しいメールアドレスを入力してください'
+    }
+    
+    return null
+}
+
+// ⭐ パスワードバリデーション関数
+const validatePassword = (password) => {
+    if (!password) {
+        return 'パスワードを入力してください'
+    }
+    
+    if (password.length < 6) {
+        return 'パスワードは6文字以上で入力してください'
+    }
+    
+    if (password.length > 100) {
+        return 'パスワードは100文字以内で入力してください'
+    }
+    
+    return null
+}
+
+// ⭐ パスワード確認バリデーション関数
+const validatePasswordConfirmation = (passwordConfirm, password) => {
+    if (!passwordConfirm) {
+        return 'パスワード確認を入力してください'
+    }
+    
+    if (passwordConfirm !== password) {
+        return 'パスワードが一致しません'
+    }
+    
+    return null
+}
+
+// ⭐ リアルタイムバリデーション
+const handleNameInput = () => {
+    errors.value.name = ''
+}
+
+const handleNameBlur = () => {
+    const validationError = validateUserName(form.name)
+    if (validationError) {
+        errors.value.name = validationError
+    }
+}
+
+const handleEmailInput = () => {
+    errors.value.email = ''
+}
+
+const handleEmailBlur = () => {
+    const validationError = validateEmail(form.email)
+    if (validationError) {
+        errors.value.email = validationError
+    }
+}
+
+const handlePasswordInput = () => {
+    errors.value.password = ''
+    // パスワード変更時にパスワード確認も再チェック
+    if (form.password_confirmation) {
+        const confirmError = validatePasswordConfirmation(form.password_confirmation, form.password)
+        if (confirmError) {
+            errors.value.password_confirmation = confirmError
+        } else {
+            errors.value.password_confirmation = ''
+        }
+    }
+}
+
+const handlePasswordBlur = () => {
+    const validationError = validatePassword(form.password)
+    if (validationError) {
+        errors.value.password = validationError
+    }
+}
+
+const handlePasswordConfirmInput = () => {
+    errors.value.password_confirmation = ''
+}
+
+const handlePasswordConfirmBlur = () => {
+    const validationError = validatePasswordConfirmation(form.password_confirmation, form.password)
+    if (validationError) {
+        errors.value.password_confirmation = validationError
+    }
+}
+
+// フォーム送信処理（バリデーション強化）
 const handleSubmit = async () => {
+    // 最終バリデーション
+    const nameError = validateUserName(form.name)
+    const emailError = validateEmail(form.email)
+    const passwordError = validatePassword(form.password)
+    const passwordConfirmError = validatePasswordConfirmation(form.password_confirmation, form.password)
+    
+    if (nameError) errors.value.name = nameError
+    if (emailError) errors.value.email = emailError
+    if (passwordError) errors.value.password = passwordError
+    if (passwordConfirmError) errors.value.password_confirmation = passwordConfirmError
+    
+    if (nameError || emailError || passwordError || passwordConfirmError) {
+        return
+    }
+    
+    // 送信中の重複防止
+    if (loading.value) return
     loading.value = true
     errors.value = {}
 
     try {
-        // バリデーション
-        if (!validateForm()) {
-            return
-        }
-
         // useAuth の register 関数を使用
         const { register } = useAuth()
         
         console.log('🚀 登録処理開始:', form.email)
         
-        await register(form.email, form.password, form.name)
+        await register(form.email, form.password, form.name.trim())
         
         // 成功時の処理
         console.log('✅ 登録成功！ログイン画面に遷移します')
+        
+        // エラーをクリア
+        errors.value = {}
         
         // ログイン画面にリダイレクト
         await navigateTo('/auth/login?registered=true')
@@ -141,49 +329,11 @@ const handleSubmit = async () => {
         loading.value = false
     }
 }
-
-// バリデーション関数
-const validateForm = () => {
-    let isValid = true
-    
-    // ユーザーネームチェック
-    if (!form.name.trim()) {
-        errors.value.name = 'ユーザーネームを入力してください'
-        isValid = false
-    }
-    
-    // メールアドレスチェック
-    if (!form.email.trim()) {
-        errors.value.email = 'メールアドレスを入力してください'
-        isValid = false
-    } else if (!/\S+@\S+\.\S+/.test(form.email)) {
-        errors.value.email = '正しいメールアドレスを入力してください'
-        isValid = false
-    }
-    
-    // パスワードチェック
-    if (!form.password) {
-        errors.value.password = 'パスワードを入力してください'
-        isValid = false
-    } else if (form.password.length < 6) {
-        errors.value.password = 'パスワードは6文字以上で入力してください'
-        isValid = false
-    }
-    
-    // パスワード確認チェック
-    if (!form.password_confirmation) {
-        errors.value.password_confirmation = 'パスワード確認を入力してください'
-        isValid = false
-    } else if (form.password !== form.password_confirmation) {
-        errors.value.password_confirmation = 'パスワードが一致しません'
-        isValid = false
-    }
-    
-    return isValid
-}
 </script>
 
 <style scoped>
+@import url('https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css');
+
 .register-page {
     position: fixed;
     top: 0;
@@ -276,6 +426,11 @@ const validateForm = () => {
     border-bottom-color: #d9534f;
 }
 
+.form-input:disabled {
+    background-color: #f8f9fa;
+    cursor: not-allowed;
+}
+
 .error {
     font-size: 0.85rem;
     color: #d9534f;
@@ -306,13 +461,17 @@ const validateForm = () => {
     transition: background-color 0.3s ease;
 }
 
-.submit-btn:hover {
+.submit-btn:hover:not(:disabled) {
     background-color: #bbb;
 }
 
-.submit-btn:disabled {
-    opacity: 0.6;
+.submit-btn.disabled {
+    opacity: 0.5;
     cursor: not-allowed;
+}
+
+.submit-btn.disabled:hover {
+    background-color: #ddd;
 }
 
 .login-link {
@@ -330,19 +489,25 @@ const validateForm = () => {
     color: #9f9b9b;
 }
 
+/* スピナーアニメーション */
+.fa-spin {
+    animation: fa-spin 1s infinite linear;
+}
+
+@keyframes fa-spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
 @media screen and (max-width: 480px) {
     .register-page {
         background-color: #ffffff;
-        /* スクロール可能にするため height を min-height に変更 */
         height: auto;
-        min-height: 120vh; /* 画面より高くしてスクロール余地を確保 */
-        /* コンテンツがはみ出した時にスクロールできるように */
+        min-height: 120vh;
         overflow-y: auto;
-        /* コンテンツを上寄せに */
         align-items: flex-start;
-        /* 上部の余白をほぼなくす */
         padding-top: 5px;
-        padding-bottom: 50px; /* 下部に余白を追加 */
+        padding-bottom: 50px;
         box-sizing: border-box;
     }
 
@@ -352,7 +517,6 @@ const validateForm = () => {
         margin: 3px;
         max-width: 100%;
         padding: 0.8rem;
-        /* 下部に余白を追加してスクロール余地を確保 */
         margin-bottom: 60px;
     }
     
@@ -372,7 +536,13 @@ const validateForm = () => {
     
     .login-link {
         margin-top: 1rem;
-        margin-bottom: 2rem; /* リンクの下にも余白を追加 */
+        margin-bottom: 2rem;
+    }
+}
+
+@media screen and (max-width: 360px) {
+    .form-container {
+        padding: 15px;
     }
 }
 </style>
