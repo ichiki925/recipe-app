@@ -15,7 +15,10 @@ export default defineNuxtConfig({
     '@nuxt/ui'
   ],
 
-  
+  // プラグイン設定を追加
+  plugins: [
+    '~/plugins/firebase.client.js'
+  ],
 
   // サーバー設定（Docker用）
   devServer: {

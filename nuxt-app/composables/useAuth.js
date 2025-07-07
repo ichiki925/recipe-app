@@ -24,6 +24,12 @@ export const useAuth = () => {
             const userCredential = await signInWithEmailAndPassword($auth, email, password)
             user.value = userCredential.user
 
+            // ログイン成功時にIDトークンを取得してコンソールに表示
+            const token = await userCredential.user.getIdToken()
+            console.log('🔥 ログイン成功! ID Token:', token)
+            console.log('📋 curlコマンド:')
+            console.log(`curl -H "Authorization: Bearer ${token}" http://nginx/api/auth/user`)
+
             return { success: true, user: userCredential.user }
         } catch (error) {
             console.error('Login error:', error)
@@ -150,6 +156,55 @@ export const useAuth = () => {
         }
     }
 
+    // IDトークン取得機能
+    const getIdToken = async () => {
+        try {
+            if (user.value) {
+                const token = await user.value.getIdToken()
+                console.log('🔥 Firebase ID Token取得成功:', token)
+                console.log('📋 curlコマンド:')
+                console.log(`curl -H "Authorization: Bearer ${token}" http://nginx/api/auth/user`)
+                return token
+            } else {
+                console.log('❌ ユーザーがログインしていません')
+                return null
+            }
+        } catch (error) {
+            console.error('🚨 Token取得エラー:', error)
+            return null
+        }
+    }
+
+    // Laravel APIテスト機能
+    const testLaravelAPI = async () => {
+        try {
+            const token = await getIdToken()
+            if (!token) {
+                console.log('❌ トークンが取得できません')
+                return
+            }
+
+            console.log('📤 Laravel APIテスト開始...')
+            console.log('🔑 使用するトークン:', token)
+            
+            // 実際のAPIリクエスト
+            const config = useRuntimeConfig()
+            const response = await $fetch('/auth/user', {
+                baseURL: config.public.apiBaseUrl,
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            })
+            
+            console.log('✅ Laravel API Response:', response)
+            return response
+            
+        } catch (error) {
+            console.error('🚨 Laravel API エラー:', error)
+            throw error
+        }
+    }
+
     // 認証状態の監視（自動初期化）
     const initAuth = () => {
         if (authInitialized.value) return
@@ -230,6 +285,8 @@ export const useAuth = () => {
         initAuth,
         waitForAuth,
         getCurrentUser,
+        getIdToken,
+        testLaravelAPI,
         isAdmin,
         isLoggedIn
     }
