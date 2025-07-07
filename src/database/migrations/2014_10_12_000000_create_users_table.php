@@ -6,29 +6,26 @@ use Illuminate\Support\Facades\Schema;
 
 class CreateUsersTable extends Migration
 {
-    /**
-     * Run the migrations.
-     *
-     * @return void
-     */
+
     public function up()
     {
         Schema::create('users', function (Blueprint $table) {
             $table->id();
+            $table->string('firebase_uid', 128)->unique();
             $table->string('name');
             $table->string('email')->unique();
+            $table->string('username', 50)->unique()->nullable(); // プロフィール用ユーザーネーム
+            $table->string('avatar_url', 500)->nullable(); // URL形式に変更
+            $table->enum('role', ['admin', 'user'])->default('user');
             $table->timestamp('email_verified_at')->nullable();
-            $table->string('password');
-            $table->rememberToken();
             $table->timestamps();
+
+            // インデックス追加
+            $table->index('firebase_uid');
+            $table->index('role');
         });
     }
 
-    /**
-     * Reverse the migrations.
-     *
-     * @return void
-     */
     public function down()
     {
         Schema::dropIfExists('users');
