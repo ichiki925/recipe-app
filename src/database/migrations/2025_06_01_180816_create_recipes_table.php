@@ -12,7 +12,7 @@ class CreateRecipesTable extends Migration
         Schema::create('recipes', function (Blueprint $table) {
             $table->id();
             $table->string('title');
-            $table->string('genre');
+            $table->string('genre')->nullable();
             $table->enum('servings', ['1人分', '2人分', '3人分', '4人分', '5人分以上']);
             $table->text('ingredients');
             $table->text('instructions');
