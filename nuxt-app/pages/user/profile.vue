@@ -85,6 +85,9 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useHead } from '#app'
 
+// 認証関連
+const { getCurrentUser, waitForAuth, user: authUser, getIdToken } = useAuth()
+
 // Head設定
 useHead({
   title: 'プロフィール編集',
@@ -206,7 +209,7 @@ const handleAvatarChange = (event) => {
     user.avatar = e.target.result
   }
   reader.readAsDataURL(file)
-  
+
   console.log('選択されたファイル:', file.name, `(${(file.size / 1024).toFixed(1)}KB)`)
 }
 
@@ -218,38 +221,66 @@ const saveProfile = async () => {
     nameError.value = nameValidationError
     return
   }
-  
-  // 送信中の重複防止
+
   if (isSubmitting.value) return
   isSubmitting.value = true
   isLoading.value = true
-  
+
   try {
     console.log('プロフィール保存:', {
       name: user.name.trim(),
       avatar: user.avatar ? '画像あり' : '画像なし'
     })
+
+    // FormDataを作成（画像アップロード対応）
+    const formData = new FormData()
+    formData.append('name', user.name.trim())
+
+    // アバター画像が選択されている場合
+    const avatarInput = document.getElementById('avatar-upload')
+    if (avatarInput && avatarInput.files[0]) {
+      formData.append('avatar', avatarInput.files[0])
+    }
     
-    // 実際のAPI呼び出し
-    // const response = await $fetch('/api/profile', {
-    //   method: 'PUT',
-    //   body: {
-    //     name: user.name.trim(),
-    //     avatar: avatarFile
-    //   }
-    // })
+    const config = useRuntimeConfig()
+    const token = await getIdToken() // 認証トークン取得
     
-    // 保存成功の処理
-    await new Promise(resolve => setTimeout(resolve, 1000)) // デモ用の遅延
+    const response = await $fetch('/user/profile', {
+      baseURL: config.public.apiBaseUrl,
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        // Content-Typeはブラウザが自動設定（FormData使用時）
+      },
+      body: formData
+    })
+    
+    console.log('✅ プロフィール更新成功:', response)
     alert('プロフィールを保存しました！')
+    
+    // レスポンスでユーザー情報を更新
+    if (response.data) {
+      Object.assign(user, response.data)
+    }
     
     // エラーをクリア
     nameError.value = ''
     fileError.value = ''
     
   } catch (error) {
-    console.error('保存エラー:', error)
-    alert('保存に失敗しました')
+    console.error('❌ 保存エラー:', error)
+    
+    // APIエラーレスポンスの処理
+    if (error.data && error.data.errors) {
+      if (error.data.errors.name) {
+        nameError.value = error.data.errors.name[0]
+      }
+      if (error.data.errors.avatar) {
+        fileError.value = error.data.errors.avatar[0]
+      }
+    } else {
+      alert('保存に失敗しました')
+    }
   } finally {
     isLoading.value = false
     isSubmitting.value = false
@@ -258,10 +289,40 @@ const saveProfile = async () => {
 
 // ページ読み込み時にユーザーデータを取得
 onMounted(async () => {
-  console.log('プロフィールページ読み込み')
-  // 実際のAPI呼び出し
-  // const userData = await $fetch('/api/user/profile')
-  // Object.assign(user, userData)
+  console.log('🔍 プロフィールページ読み込み')
+  
+  // Firebase認証の状態確立を待機
+  const currentUser = await waitForAuth()
+  
+  if (!currentUser) {
+    console.log('⚠️ 認証失敗 - ログインページにリダイレクト')
+    await navigateTo('/auth/login')
+    return
+  }
+  
+  try {
+    const config = useRuntimeConfig()
+    const token = await getIdToken()
+    
+    const response = await $fetch('/user/profile', {
+      baseURL: config.public.apiBaseUrl,
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    })
+    
+    console.log('📦 プロフィールデータ取得:', response)
+
+    // ユーザーデータを更新
+    if (response.data) {
+      Object.assign(user, response.data)
+    }
+    
+  } catch (error) {
+    console.error('❌ プロフィール取得エラー:', error)
+    // エラー時はデフォルト値のまま
+  }
 })
 </script>
 

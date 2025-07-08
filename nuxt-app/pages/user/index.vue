@@ -173,47 +173,67 @@ const toggleFavorite = async (recipe) => {
     return
   }
 
-  // お気に入り状態を切り替え
+  // 元の状態を保存（エラー時のロールバック用）
+  const originalState = recipe.isFavorited
+  const originalLikes = recipe.likes
+  
+  // UI を先に更新（楽観的更新）
   recipe.isFavorited = !recipe.isFavorited
   
   if (recipe.isFavorited) {
-    // お気に入りに追加
     favoriteStore.value.add(recipe.id)
     recipe.likes++
     console.log(`💖 ${user.value.email} がレシピ${recipe.id}「${recipe.title}」をお気に入りに追加`)
   } else {
-    // お気に入りから削除
     favoriteStore.value.delete(recipe.id)
-    recipe.likes = Math.max(0, recipe.likes - 1) // マイナスにならないように
+    recipe.likes = Math.max(0, recipe.likes - 1)
     console.log(`💔 ${user.value.email} がレシピ${recipe.id}「${recipe.title}」をお気に入りから削除`)
   }
 
-  // 実際のAPIコール（将来実装）
-  // try {
-  //   if (recipe.isFavorited) {
-  //     await $fetch('/api/favorites', {
-  //       method: 'POST',
-  //       body: {
-  //         recipeId: recipe.id,
-  //         userId: user.value.uid
-  //       }
-  //     })
-  //   } else {
-  //     await $fetch(`/api/favorites/${recipe.id}`, {
-  //       method: 'DELETE',
-  //       body: { userId: user.value.uid }
-  //     })
-  //   }
-  // } catch (error) {
-  //   console.error('❌ お気に入り更新エラー:', error)
-  //   // エラー時は状態を元に戻す
-  //   recipe.isFavorited = !recipe.isFavorited
-  //   if (recipe.isFavorited) {
-  //     favoriteStore.value.add(recipe.id)
-  //   } else {
-  //     favoriteStore.value.delete(recipe.id)
-  //   }
-  // }
+  // Laravel API へのリクエスト
+  try {
+    const { getIdToken } = useAuth()
+    const token = await getIdToken()
+    const config = useRuntimeConfig()
+
+    const response = await $fetch(`/recipes/${recipe.id}/toggle-like`, {
+      baseURL: config.public.apiBaseUrl,
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    })
+
+    console.log('✅ API応答:', response)
+    
+    // サーバーからの正確な値で更新
+    recipe.isFavorited = response.is_liked
+    recipe.likes = response.likes_count
+    
+    // お気に入りストアも更新
+    if (response.is_liked) {
+      favoriteStore.value.add(recipe.id)
+    } else {
+      favoriteStore.value.delete(recipe.id)
+    }
+
+  } catch (error) {
+    console.error('❌ いいね更新エラー:', error)
+    
+    // エラー時は状態を元に戻す（ロールバック）
+    recipe.isFavorited = originalState
+    recipe.likes = originalLikes
+    
+    if (originalState) {
+      favoriteStore.value.add(recipe.id)
+    } else {
+      favoriteStore.value.delete(recipe.id)
+    }
+    
+    // ユーザーにエラーを通知
+    alert('いいねの更新に失敗しました。もう一度お試しください。')
+  }
 }
 
 const searchRecipes = () => {
@@ -239,23 +259,57 @@ const fetchRecipes = async () => {
   try {
     console.log('🔍 検索:', searchKeyword.value, 'ページ:', currentPage.value)
 
-    // お気に入り状態を再同期
-    syncFavoriteStatus()
+    const config = useRuntimeConfig()
+    let headers = {}
+    
+    // ログイン済みの場合はトークンを追加
+    if (user.value) {
+      const { getIdToken } = useAuth()
+      const token = await getIdToken()
+      headers.Authorization = `Bearer ${token}`
+    }
 
-    // 実際のAPI接続時に書き換えてください
-    // const response = await $fetch('/api/recipes', {
-    //   query: {
-    //     keyword: searchKeyword.value,
-    //     page: currentPage.value,
-    //     userId: user.value?.uid
-    //   }
-    // })
-    // recipes.value = response.data.map(recipe => ({
-    //   ...recipe,
-    //   isFavorited: favoriteStore.value.has(recipe.id)
-    // }))
+    const response = await $fetch('/recipes', {
+      baseURL: config.public.apiBaseUrl,
+      headers,
+      query: {
+        keyword: searchKeyword.value,
+        page: currentPage.value,
+        sort: 'latest'
+      }
+    })
+
+    console.log('📦 API応答:', response)
+    
+    // レシピデータを更新
+    recipes.value = response.data.map(recipe => ({
+      id: recipe.id,
+      title: recipe.title,
+      genre: recipe.genre,
+      likes: recipe.likes_count,
+      isFavorited: recipe.is_liked || false,
+      image_url: recipe.image_url,
+      admin: recipe.admin
+    }))
+    
+    // ページネーション情報更新
+    currentPage.value = response.current_page
+    totalPages.value = response.last_page
+    
+    // お気に入りストアを同期
+    favoriteStore.value.clear()
+    recipes.value.forEach(recipe => {
+      if (recipe.isFavorited) {
+        favoriteStore.value.add(recipe.id)
+      }
+    })
+
   } catch (error) {
     console.error('❌ レシピ取得エラー:', error)
+    
+    // エラー時はモックデータを使用
+    console.log('📋 モックデータを使用します')
+    syncFavoriteStatus()
   }
 }
 
@@ -270,6 +324,42 @@ watch(() => route.query, (newQuery) => {
 watch(favoriteStore, () => {
   syncFavoriteStatus()
 }, { deep: true })
+
+const fetchUserFavorites = async () => {
+  try {
+    const { getIdToken } = useAuth()
+    const token = await getIdToken()
+    const config = useRuntimeConfig()
+
+    const response = await $fetch('/user/liked-recipes', {
+      baseURL: config.public.apiBaseUrl,
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      query: {
+        page: currentPage.value
+      }
+    })
+
+    console.log('💖 お気に入りレシピ取得:', response)
+    
+    return response.data.map(recipe => ({
+      id: recipe.id,
+      title: recipe.title,
+      genre: recipe.genre,
+      likes: recipe.likes_count,
+      isFavorited: true,
+      image_url: recipe.image_url,
+      admin: recipe.admin
+    }))
+
+  } catch (error) {
+    console.error('❌ お気に入り取得エラー:', error)
+    return []
+  }
+}
+
 </script>
 
 

@@ -2,11 +2,9 @@
 export default defineNuxtConfig({
   compatibilityDate: '2025-05-15',
 
-
   css: [
     '@/assets/css/sanitize.css',
   ],
-
 
   modules: [
     '@nuxt/eslint',
@@ -26,10 +24,13 @@ export default defineNuxtConfig({
     port: 3000
   },
 
-  // API設定（Laravel連携用）
+  // API設定（Laravel連携用とFirebase設定を統合）
   runtimeConfig: {
     public: {
+      // Laravel API設定
       apiBaseUrl: process.env.API_BASE_URL || 'http://localhost:8080/api',
+      
+      // Firebase設定
       firebaseApiKey: process.env.FIREBASE_API_KEY,
       firebaseAuthDomain: process.env.FIREBASE_AUTH_DOMAIN,
       firebaseProjectId: process.env.FIREBASE_PROJECT_ID,

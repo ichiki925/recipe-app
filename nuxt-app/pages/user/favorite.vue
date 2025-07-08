@@ -6,9 +6,9 @@
       <form @submit.prevent="searchRecipes">
         <div class="search-wrapper">
           <i class="fa-solid fa-magnifying-glass"></i>
-          <input 
-            type="text" 
-            v-model="searchKeyword" 
+          <input
+            type="text"
+            v-model="searchKeyword"
             placeholder="お気に入りレシピを検索"
           >
         </div>
@@ -36,9 +36,9 @@
       </div>
 
       <div v-else class="recipe-grid">
-        <div 
-          v-for="recipe in paginatedRecipes" 
-          :key="recipe.id" 
+        <div
+          v-for="recipe in paginatedRecipes"
+          :key="recipe.id"
           class="recipe-card"
           :data-recipe-id="recipe.id"
           @click="goToRecipeDetail(recipe.id)"
@@ -47,7 +47,7 @@
           <div class="recipe-title">{{ recipe.title }}</div>
           <div class="recipe-genre">{{ recipe.genre }}</div>
           <div class="recipe-stats">
-            <button 
+            <button
               @click.stop="removeFavorite(recipe)"
               class="like-button liked"
               title="お気に入りから削除"
@@ -61,16 +61,16 @@
 
       <!-- ページネーション -->
       <div class="pagination" v-if="filteredRecipes.length > recipesPerPage">
-        <button 
+        <button
           v-if="currentPage > 1"
           @click="goToPage(currentPage - 1)"
           class="pagination-btn"
         >
           ＜
         </button>
-        
-        <span 
-          v-for="page in totalPages" 
+
+        <span
+          v-for="page in totalPages"
           :key="page"
           :class="{ active: page === currentPage }"
           @click="goToPage(page)"
@@ -78,8 +78,8 @@
         >
           {{ page }}
         </span>
-        
-        <button 
+
+        <button
           v-if="currentPage < totalPages"
           @click="goToPage(currentPage + 1)"
           class="pagination-btn"
@@ -92,7 +92,6 @@
 </template>
 
 <script setup>
-// ページメタデータ
 definePageMeta({
   // layout: 'default' が自動適用
 })
@@ -107,23 +106,16 @@ useHead({
 })
 
 // 認証関連
-const { getCurrentUser, waitForAuth } = useAuth()
-const user = ref(null)
+const { getCurrentUser, waitForAuth, user, getIdToken } = useAuth()
 
 // データ定義
 const searchKeyword = ref('')
 const currentPage = ref(1)
 const recipesPerPage = 6
+const isLoading = ref(false)
 
-// 全レシピデータ（本来はAPIから取得）
-const allRecipes = ref([
-  { id: 1, title: 'チキンカレー', genre: '和食', likes: 24 },
-  { id: 2, title: 'パスタボロネーゼ', genre: 'イタリアン', likes: 15 },
-  { id: 3, title: '麻婆豆腐', genre: '中華', likes: 8 },
-  { id: 4, title: 'ハンバーグ', genre: '洋食', likes: 32 },
-  { id: 5, title: '親子丼', genre: '和食', likes: 5 },
-  { id: 6, title: 'グラタン', genre: '洋食', likes: 19 }
-])
+// お気に入りレシピデータ
+const favoriteRecipes = ref([])
 
 const route = useRoute()
 const router = useRouter()
@@ -131,19 +123,14 @@ const router = useRouter()
 // お気に入り状態管理用のグローバルストア
 const favoriteStore = useState('favorites', () => new Set())
 
-// お気に入りレシピのみをフィルタリング
-const favoriteRecipes = computed(() => {
-  return allRecipes.value.filter(recipe => favoriteStore.value.has(recipe.id))
-})
-
 // 検索でフィルタリング
 const filteredRecipes = computed(() => {
   if (!searchKeyword.value) {
     return favoriteRecipes.value
   }
-  
+
   const keyword = searchKeyword.value.toLowerCase()
-  return favoriteRecipes.value.filter(recipe => 
+  return favoriteRecipes.value.filter(recipe =>
     recipe.title.toLowerCase().includes(keyword) ||
     recipe.genre.toLowerCase().includes(keyword)
   )
@@ -160,6 +147,67 @@ const paginatedRecipes = computed(() => {
   return filteredRecipes.value.slice(start, end)
 })
 
+// お気に入りレシピをAPIから取得
+const fetchFavoriteRecipes = async () => {
+  if (!user.value) return
+
+  try {
+    isLoading.value = true
+    console.log('💖 お気に入りレシピを取得中...')
+
+    const config = useRuntimeConfig()
+    const token = await getIdToken()
+
+    const response = await $fetch('/user/liked-recipes', {
+      baseURL: config.public.apiBaseUrl,
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      query: {
+        keyword: searchKeyword.value,
+        page: 1, // お気に入りページでは全件取得してフロントでページング
+        per_page: 100 // 大きめの値で全件取得
+      }
+    })
+
+    console.log('📦 お気に入りAPI応答:', response)
+
+    // レシピデータを更新
+    favoriteRecipes.value = response.data.map(recipe => ({
+      id: recipe.id,
+      title: recipe.title,
+      genre: recipe.genre,
+      likes: recipe.likes_count,
+      isFavorited: true, // お気に入り一覧なので全てtrue
+      image_url: recipe.image_url,
+      admin: recipe.admin
+    }))
+
+    // お気に入りストアを同期
+    favoriteStore.value.clear()
+    favoriteRecipes.value.forEach(recipe => {
+      favoriteStore.value.add(recipe.id)
+    })
+
+    console.log(`💖 お気に入りレシピ ${favoriteRecipes.value.length}件を取得しました`)
+
+  } catch (error) {
+    console.error('❌ お気に入りレシピ取得エラー:', error)
+
+    // エラー時はモックデータを使用
+    console.log('📋 モックデータを使用します')
+    const mockFavorites = [
+      { id: 1, title: 'チキンカレー', genre: '和食', likes: 24, isFavorited: true },
+      { id: 6, title: 'グラタン', genre: '洋食', likes: 19, isFavorited: true }
+    ].filter(recipe => favoriteStore.value.has(recipe.id))
+
+    favoriteRecipes.value = mockFavorites
+  } finally {
+    isLoading.value = false
+  }
+}
+
 // 詳細ページへの遷移
 const goToRecipeDetail = (recipeId) => {
   console.log('📖 お気に入りページから詳細ページへ遷移:', recipeId)
@@ -169,31 +217,35 @@ const goToRecipeDetail = (recipeId) => {
 // コンポーネント初期化
 onMounted(async () => {
   console.log('🔍 お気に入りページの認証チェック開始...')
-  
+
   // Firebase認証の状態確立を待機
   const currentUser = await waitForAuth()
-  
+
   console.log('👤 認証チェック結果:', currentUser ? currentUser.email : 'null')
-  
+
   if (!currentUser) {
     console.log('⚠️ 認証失敗 - ログインページにリダイレクト')
     await navigateTo('/auth/login')
     return
   }
-  
+
   console.log('✅ 認証成功:', currentUser.email, 'お気に入りページを表示')
-  user.value = currentUser
-  
+
   // 初期データ読み込み
   searchKeyword.value = route.query.keyword || ''
   currentPage.value = parseInt(route.query.page) || 1
-  
-  console.log('💖 お気に入り件数:', favoriteRecipes.value.length)
+
+  // お気に入りレシピを取得
+  await fetchFavoriteRecipes()
 })
 
-// お気に入りから削除する機能
+// お気に入りから削除する機能（API連携版）
 const removeFavorite = async (recipe) => {
+  if (!user.value) return
+
   try {
+    console.log(`💔 レシピ${recipe.id}「${recipe.title}」をお気に入りから削除中...`)
+
     // アニメーション効果
     const recipeElement = document.querySelector(`[data-recipe-id="${recipe.id}"]`)
     if (recipeElement) {
@@ -201,29 +253,50 @@ const removeFavorite = async (recipe) => {
       recipeElement.style.opacity = '0'
       recipeElement.style.transform = 'scale(0.8)'
     }
-    
-    // 少し遅延してからお気に入りストアから削除
+
+    // Laravel API へのリクエスト
+    const config = useRuntimeConfig()
+    const token = await getIdToken()
+
+    const response = await $fetch(`/recipes/${recipe.id}/toggle-like`, {
+      baseURL: config.public.apiBaseUrl,
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    })
+
+    console.log('✅ お気に入り削除API応答:', response)
+
+    // 少し遅延してからUI更新
     setTimeout(() => {
+      // レシピリストから削除
+      favoriteRecipes.value = favoriteRecipes.value.filter(r => r.id !== recipe.id)
+
+      // お気に入りストアからも削除
       favoriteStore.value.delete(recipe.id)
+
       console.log(`💔 レシピ${recipe.id}「${recipe.title}」をお気に入りから削除しました`)
-      
+
       // ページが空になった場合は前のページに戻る
       if (paginatedRecipes.value.length === 0 && currentPage.value > 1) {
         currentPage.value = currentPage.value - 1
         updateUrl()
       }
     }, 300)
-    
-    // 実際のAPIコール（将来実装）
-    // await $fetch(`/api/favorites/${recipe.id}`, { 
-    //   method: 'DELETE',
-    //   body: { userId: user.value.uid }
-    // })
-    
+
   } catch (error) {
     console.error('❌ お気に入り削除エラー:', error)
-    // エラーの場合は元に戻す処理
-    favoriteStore.value.add(recipe.id)
+
+    // エラーの場合はアニメーションを元に戻す
+    const recipeElement = document.querySelector(`[data-recipe-id="${recipe.id}"]`)
+    if (recipeElement) {
+      recipeElement.style.opacity = '1'
+      recipeElement.style.transform = 'scale(1)'
+    }
+
+    alert('お気に入りの削除に失敗しました。もう一度お試しください。')
   }
 }
 
@@ -231,6 +304,7 @@ const searchRecipes = () => {
   currentPage.value = 1
   updateUrl()
   console.log('🔍 お気に入りレシピ検索:', searchKeyword.value)
+  // 検索はクライアントサイドで実行（filteredRecipesが自動更新）
 }
 
 const goToPage = (page) => {
@@ -255,6 +329,11 @@ watch(() => route.query, (newQuery) => {
 watch(searchKeyword, () => {
   currentPage.value = 1
 })
+
+// お気に入りストアの変更を監視してデータを再取得
+watch(favoriteStore, () => {
+  fetchFavoriteRecipes()
+}, { deep: true })
 </script>
 
 <style scoped>

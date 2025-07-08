@@ -9,7 +9,7 @@
                 <input
                 type="text"
                 v-model="searchKeyword"
-                placeholder="料理名・材料で検索"
+                placeholder="料理名・食材で検索"
                 >
             </div>
             <button type="submit">検索</button>
@@ -19,16 +19,22 @@
         <!-- メイン：レシピ一覧 -->
         <section class="recipe-list">
             <div class="recipe-grid">
-            <div
-                v-for="recipe in recipes"
-                :key="recipe.id"
-                class="recipe-card"
-            >
-                <div class="no-image">No Image</div>
-                <div class="recipe-title">{{ recipe.title }}</div>
-                <div class="recipe-genre">{{ recipe.genre }}</div>
-
-            </div>
+                <div
+                    v-for="recipe in recipes"
+                    :key="recipe.id"
+                    class="recipe-card guest-card"
+                    @click="handleRecipeClick(recipe)"
+                >
+                    <div class="recipe-image">
+                        <div v-if="!recipe.image_url" class="no-image">No Image</div>
+                        <img v-else :src="recipe.image_url" :alt="recipe.title">
+                    </div>
+                    <div class="recipe-title">{{ recipe.title }}</div>
+                    <div class="login-overlay">
+                        <i class="fas fa-lock"></i>
+                        <span>ログインして詳細を見る</span>
+                    </div>
+                </div>
             </div>
 
             <!-- ページネーション -->
@@ -38,7 +44,7 @@
                 @click="goToPage(currentPage - 1)"
                 class="pagination-btn"
             >
-                前へ
+                ＜
             </button>
 
             <span
@@ -56,7 +62,7 @@
                 @click="goToPage(currentPage + 1)"
                 class="pagination-btn"
             >
-                次へ
+                ＞
             </button>
             </div>
         </section>
@@ -64,78 +70,154 @@
     </template>
 
     <script setup>
-
     import { ref, onMounted, watch } from 'vue'
-    import { useRoute, useRouter, useHead } from '#app'
+import { useRoute, useRouter, useHead } from '#app'
 
-    definePageMeta({
-        layout: 'guest'
-    })
-    useHead({
-        link: [
+definePageMeta({
+    layout: 'guest'
+})
+
+useHead({
+    link: [
         {
             rel: 'stylesheet',
             href: 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css'
         },
+    ]
+})
+
+// データ定義
+const searchKeyword = ref('')
+const currentPage = ref(1)
+const totalPages = ref(1)
+const isLoading = ref(false)
+
+// レシピデータ
+const recipes = ref([
+    { id: 1, title: 'テストレシピ1', likes: 24 },
+    { id: 2, title: 'テストレシピ2', likes: 15 },
+    { id: 3, title: 'テストレシピ3', likes: 8 },
+    { id: 4, title: 'テストレシピ4', likes: 32 },
+    { id: 5, title: 'テストレシピ5', likes: 5 },
+    { id: 6, title: 'テストレシピ6', likes: 19 },
+    { id: 7, title: 'テストレシピ7', likes: 12 },
+    { id: 8, title: 'テストレシピ8', likes: 9 },
+    { id: 9, title: 'テストレシピ9', likes: 7 }
+])
+
+const route = useRoute()
+const router = useRouter()
+
+// 初期化
+onMounted(() => {
+    searchKeyword.value = route.query.keyword || ''
+    currentPage.value = parseInt(route.query.page) || 1
+    totalPages.value = 1 // モックデータでは1ページのみ
+    fetchRecipes()
+})
+
+// API経由でレシピを検索取得
+const fetchRecipes = async () => {
+    try {
+        isLoading.value = true
+        console.log('🔍 ゲスト検索:', searchKeyword.value, 'ページ:', currentPage.value)
+
+        const config = useRuntimeConfig()
+
+        const response = await $fetch('/recipes/search', {
+            baseURL: config.public.apiBaseUrl,
+            query: {
+                keyword: searchKeyword.value,
+                page: currentPage.value,
+                per_page: 9 // 1ページあたり9件表示
+            }
+        })
+
+        console.log('📦 ゲスト検索API応答:', response)
+        
+        // レシピデータを更新（ジャンル情報は除外）
+        recipes.value = response.data.map(recipe => ({
+            id: recipe.id,
+            title: recipe.title,
+            likes: recipe.likes_count,
+            image_url: recipe.image_url,
+            admin: recipe.admin
+        }))
+        
+        // ページネーション情報更新
+        currentPage.value = response.current_page
+        totalPages.value = response.last_page
+        
+        console.log(`✅ ${recipes.value.length}件のレシピを取得しました`)
+
+    } catch (error) {
+        console.error('❌ レシピ検索エラー:', error)
+        
+        // エラー時はモックデータを使用（ジャンル情報なし）
+        console.log('📋 モックデータを使用します')
+        const mockRecipes = [
+            { id: 1, title: 'テストレシピ1', likes: 24 },
+            { id: 2, title: 'テストレシピ2', likes: 15 },
+            { id: 3, title: 'テストレシピ3', likes: 8 },
+            { id: 4, title: 'テストレシピ4', likes: 32 },
+            { id: 5, title: 'テストレシピ5', likes: 5 },
+            { id: 6, title: 'テストレシピ6', likes: 19 },
+            { id: 7, title: 'テストレシピ7', likes: 12 },
+            { id: 8, title: 'テストレシピ8', likes: 9 },
+            { id: 9, title: 'テストレシピ9', likes: 7 }
         ]
-    })
-
-    // データ定義
-    const searchKeyword = ref('')
-    const currentPage = ref(1)
-    const totalPages = ref(1)
-    const isAuthenticated = true // 仮にログインしていると仮定
-    const recipes = ref([
-        { id: 1, title: 'テストレシピ1', genre: 'ジャンル', likes: 24, saved: true },
-        { id: 2, title: 'テストレシピ2', genre: 'ジャンル' },
-        { id: 3, title: 'テストレシピ3', genre: 'ジャンル' },
-        { id: 4, title: 'テストレシピ4', genre: 'ジャンル' },
-        { id: 5, title: 'テストレシピ5', genre: 'ジャンル' },
-        { id: 6, title: 'テストレシピ6', genre: 'ジャンル' }
-    ])
-
-    const route = useRoute()
-    const router = useRouter()
-
-    onMounted(() => {
-        searchKeyword.value = route.query.keyword || ''
-        currentPage.value = parseInt(route.query.page) || 1
-        fetchRecipes()
-    })
-
-    const searchRecipes = () => {
-        currentPage.value = 1
-        updateUrl()
-        fetchRecipes()
-    }
-
-    const goToPage = (page) => {
-        currentPage.value = page
-        updateUrl()
-        fetchRecipes()
-    }
-
-    const updateUrl = () => {
-        const query = {}
-        if (searchKeyword.value) query.keyword = searchKeyword.value
-        if (currentPage.value > 1) query.page = currentPage.value
-        router.push({ path: '/user', query })
-    }
-
-    const fetchRecipes = async () => {
-        try {
-        console.log('検索:', searchKeyword.value, 'ページ:', currentPage.value)
-        // 実際のAPI接続時に書き換えてください
-        } catch (error) {
-        console.error('レシピ取得エラー:', error)
+        
+        if (searchKeyword.value) {
+            // 検索キーワードがある場合はフィルタリング
+            recipes.value = mockRecipes.filter(recipe => 
+                recipe.title.toLowerCase().includes(searchKeyword.value.toLowerCase())
+            )
+        } else {
+            recipes.value = mockRecipes
         }
+        
+        totalPages.value = Math.ceil(recipes.value.length / 9)
+    } finally {
+        isLoading.value = false
     }
+}
 
-    watch(() => route.query, (newQuery) => {
-        searchKeyword.value = newQuery.keyword || ''
-        currentPage.value = parseInt(newQuery.page) || 1
-        fetchRecipes()
-    })
+// 検索実行
+const searchRecipes = () => {
+    currentPage.value = 1
+    updateUrl()
+    fetchRecipes()
+}
+
+// ページ遷移
+const goToPage = (page) => {
+    currentPage.value = page
+    updateUrl()
+    fetchRecipes()
+}
+
+// URL更新
+const updateUrl = () => {
+    const query = {}
+    if (searchKeyword.value) query.keyword = searchKeyword.value
+    if (currentPage.value > 1) query.page = currentPage.value
+    router.push({ path: '/', query })
+}
+
+// レシピカードクリック時の処理（ログインページへリダイレクト）
+const handleRecipeClick = (recipe) => {
+    console.log('🔒 未ログインのため詳細表示不可:', recipe.title)
+    
+    // 現在のページ情報を保持してログインページへ
+    navigateTo(`/auth/login?redirect=${encodeURIComponent(route.fullPath)}`)
+}
+
+// URLクエリの監視
+watch(() => route.query, (newQuery) => {
+    searchKeyword.value = newQuery.keyword || ''
+    currentPage.value = parseInt(newQuery.page) || 1
+    fetchRecipes()
+})
     </script>
 
     <style scoped>
@@ -326,6 +408,52 @@
 .pagination-number.active {
     background-color: #ff770053;
     color: white;
+}
+
+.guest-card {
+    position: relative;
+    cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.guest-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 2px 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.guest-card:hover .login-overlay {
+    opacity: 1;
+}
+
+.recipe-image {
+    position: relative;
+}
+
+.login-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.8);
+    color: white;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    border-radius: 6px;
+}
+
+.login-overlay i {
+    font-size: 24px;
+    margin-bottom: 8px;
+}
+
+.login-overlay span {
+    font-size: 14px;
+    font-weight: bold;
 }
 
 /* レスポンシブ対応 */
