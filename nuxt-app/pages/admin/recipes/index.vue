@@ -19,49 +19,50 @@
 
     <!-- メイン：レシピ一覧 -->
     <section class="recipe-list">
-      <div class="recipe-grid">
+      <div v-if="loading" class="loading">
+        レシピを読み込み中...
+      </div>
+      
+      <div v-else-if="recipes.length === 0" class="no-recipes">
+        レシピが見つかりませんでした。
+      </div>
+      
+      <div v-else class="recipe-grid">
         <div 
           v-for="recipe in recipes" 
           :key="recipe.id" 
           class="recipe-card"
+          @click="goToRecipeDetail(recipe.id)"
         >
-          <div class="no-image">No Image</div>
+          <div v-if="recipe.image_url" class="recipe-image">
+            <img :src="recipe.image_url" :alt="recipe.title" />
+          </div>
+          <div v-else class="no-image">No Image</div>
+          
           <div class="recipe-title">{{ recipe.title }}</div>
-          <div class="recipe-genre">{{ recipe.genre }}</div>
+          
           <div class="recipe-stats">
-            <button 
-              @click="toggleLike(recipe)"
-              class="like-button"
-              :class="{ liked: recipe.isLiked }"
-            >
-              <!-- いいね済みの場合は塗りつぶし、未いいねの場合は枠線のみ -->
-              <i 
-                v-if="recipe.isLiked"
-                class="fas fa-heart heart-icon-filled"
-              ></i>
-              <!-- 未いいねの場合は枠線のハート -->
-              <i 
-                v-else
-                class="far fa-heart heart-icon-outline"
-              ></i>
-              <span class="like-count">{{ recipe.likes }}</span>
-            </button>
+            <!-- 管理者は見るだけ、クリック不可 -->
+            <div class="like-display">
+              <i class="far fa-heart heart-icon"></i>
+              <span class="like-count">{{ recipe.likes_count || 0 }}</span>
+            </div>
           </div>
         </div>
       </div>
 
       <!-- ページネーション -->
-      <div class="pagination">
+      <div v-if="totalPages > 1" class="pagination">
         <button 
           v-if="currentPage > 1"
           @click="goToPage(currentPage - 1)"
           class="pagination-btn"
         >
-          前へ
+          ＜
         </button>
         
         <span 
-          v-for="page in totalPages" 
+          v-for="page in displayPages" 
           :key="page"
           :class="{ active: page === currentPage }"
           @click="goToPage(page)"
@@ -75,7 +76,7 @@
           @click="goToPage(currentPage + 1)"
           class="pagination-btn"
         >
-          次へ
+          ＞
         </button>
       </div>
     </section>
@@ -86,7 +87,7 @@
 definePageMeta({
   layout: 'admin'
 })
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted, watch, computed } from 'vue'
 import { useRoute, useRouter, useHead } from '#app'
 
 useHead({
@@ -102,72 +103,112 @@ useHead({
 const searchKeyword = ref('')
 const currentPage = ref(1)
 const totalPages = ref(1)
-const isAuthenticated = true // ログインユーザー向けページ
-
-const recipes = ref([
-  { id: 1, title: 'テストレシピ1', genre: 'ジャンル', likes: 24, isLiked: true },
-  { id: 2, title: 'テストレシピ2', genre: 'ジャンル', likes: 15, isLiked: false },
-  { id: 3, title: 'テストレシピ3', genre: 'ジャンル', likes: 8, isLiked: false },
-  { id: 4, title: 'テストレシピ4', genre: 'ジャンル', likes: 32, isLiked: false },
-  { id: 5, title: 'テストレシピ5', genre: 'ジャンル', likes: 5, isLiked: false },
-  { id: 6, title: 'テストレシピ6', genre: 'ジャンル', likes: 19, isLiked: false }
-])
+const recipes = ref([])
+const loading = ref(false)
+const error = ref('')
 
 const route = useRoute()
 const router = useRouter()
 
-// いいねボタンの切り替え
-const toggleLike = (recipe) => {
-  recipe.isLiked = !recipe.isLiked
-  if (recipe.isLiked) {
-    recipe.likes++
-  } else {
-    recipe.likes--
+// ページネーション表示用
+const displayPages = computed(() => {
+  const pages = []
+  const maxDisplay = 5
+  const half = Math.floor(maxDisplay / 2)
+  
+  let start = Math.max(1, currentPage.value - half)
+  let end = Math.min(totalPages.value, start + maxDisplay - 1)
+  
+  if (end - start + 1 < maxDisplay) {
+    start = Math.max(1, end - maxDisplay + 1)
   }
   
-  // 実際のAPIコール
-  // await likeRecipe(recipe.id, recipe.isLiked)
-  console.log(`レシピ${recipe.id}をいいね: ${recipe.isLiked}`)
+  for (let i = start; i <= end; i++) {
+    pages.push(i)
+  }
+  
+  return pages
+})
+
+// レシピ詳細画面へ遷移
+const goToRecipeDetail = (recipeId) => {
+  router.push(`/admin/recipes/show/${recipeId}`)
 }
 
+// 新規作成画面へ遷移
 const goToCreate = () => {
   router.push('/admin/recipes/create')
 }
 
+// 初期化
 onMounted(() => {
   searchKeyword.value = route.query.keyword || ''
   currentPage.value = parseInt(route.query.page) || 1
   fetchRecipes()
 })
 
+// 検索実行
 const searchRecipes = () => {
   currentPage.value = 1
   updateUrl()
   fetchRecipes()
 }
 
+// ページ移動
 const goToPage = (page) => {
   currentPage.value = page
   updateUrl()
   fetchRecipes()
 }
 
+// URL更新
 const updateUrl = () => {
   const query = {}
   if (searchKeyword.value) query.keyword = searchKeyword.value
   if (currentPage.value > 1) query.page = currentPage.value
-  router.push({ path: '/user', query })
+  router.push({ path: '/admin/recipes', query })
 }
 
+// レシピデータ取得
 const fetchRecipes = async () => {
+  loading.value = true
+  error.value = ''
+  
   try {
-    console.log('検索:', searchKeyword.value, 'ページ:', currentPage.value)
-    // 実際のAPI接続時に書き換えてください
-  } catch (error) {
-    console.error('レシピ取得エラー:', error)
+    const params = new URLSearchParams()
+    if (searchKeyword.value) params.append('keyword', searchKeyword.value)
+    if (currentPage.value > 1) params.append('page', currentPage.value)
+    
+    const queryString = params.toString()
+    const url = `/api/admin/recipes${queryString ? '?' + queryString : ''}`
+    
+    const response = await $fetch(url)
+    
+    recipes.value = response.data
+    currentPage.value = response.current_page
+    totalPages.value = response.last_page
+    
+  } catch (err) {
+    console.error('レシピ取得エラー:', err)
+    error.value = 'レシピの取得に失敗しました。'
+    
+    // 一時的にダミーデータを表示
+    recipes.value = [
+      { id: 1, title: 'テストレシピ1', likes_count: 24 },
+      { id: 2, title: 'テストレシピ2', likes_count: 15 },
+      { id: 3, title: 'テストレシピ3', likes_count: 8 },
+      { id: 4, title: 'テストレシピ4', likes_count: 32 },
+      { id: 5, title: 'テストレシピ5', likes_count: 5 },
+      { id: 6, title: 'テストレシピ6', likes_count: 19 }
+    ]
+    currentPage.value = 1
+    totalPages.value = 1
+  } finally {
+    loading.value = false
   }
 }
 
+// URLクエリ変更の監視
 watch(() => route.query, (newQuery) => {
   searchKeyword.value = newQuery.keyword || ''
   currentPage.value = parseInt(newQuery.page) || 1
@@ -177,11 +218,11 @@ watch(() => route.query, (newQuery) => {
 
 <style scoped>
 @import "@/assets/css/common.css";
+
 .recipe-page {
     display: flex;
     padding: 20px;
     gap: 30px;
-    /* サイドバーとメインコンテンツの間隔 */
     max-width: 1400px;
     margin: 0 auto;
 }
@@ -192,23 +233,7 @@ watch(() => route.query, (newQuery) => {
     padding: 20px;
     border-radius: 8px;
     height: fit-content;
-    /* 高さを内容に合わせる */
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-    /* 影を追加 */
-}
-
-.sidebar h2 {
-    font-size: 18px;
-    font-weight: bold;
-    margin-bottom: 15px;
-}
-
-.sidebar label {
-    font-size: 14px;
-    font-weight: bold;
-    display: block;
-    margin-top: 20px;
-    margin-bottom: 8px;
 }
 
 .search-wrapper {
@@ -229,18 +254,8 @@ watch(() => route.query, (newQuery) => {
     width: 100%;
     padding: 10px 10px 10px 40px;
     font-size: 16px;
-    border: 1px solid #ccc;
+    border: 1px solid #adadad;
     border-radius: 6px;
-    box-sizing: border-box;
-}
-
-.sidebar input,
-.sidebar select {
-    width: 100%;
-    padding: 12px;
-    font-size: 14px;
-    border: 1px solid #999;
-    border-radius: 4px;
     box-sizing: border-box;
 }
 
@@ -251,7 +266,7 @@ watch(() => route.query, (newQuery) => {
 
 .sidebar button {
     width: 100%;
-    background-color: #eee;
+    background-color: #ddd;
     border: none;
     color: #000;
     padding: 10px;
@@ -270,12 +285,18 @@ watch(() => route.query, (newQuery) => {
     min-height: 300px;
 }
 
-/* グリッドレイアウトを修正 */
+.loading,
+.no-recipes {
+    text-align: center;
+    padding: 40px;
+    color: #666;
+    font-size: 16px;
+}
+
 .recipe-grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: 20px;
-    /* margin-left を削除 */
 }
 
 @media (max-width: 1024px) {
@@ -292,7 +313,6 @@ watch(() => route.query, (newQuery) => {
 
 .recipe-card {
     width: 100%;
-    /* 固定幅を削除してグリッドに合わせる */
     height: 400px;
     border: 1px solid #eee;
     border-radius: 6px;
@@ -301,6 +321,26 @@ watch(() => route.query, (newQuery) => {
     text-align: center;
     background: white;
     box-sizing: border-box;
+    cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.recipe-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 2px 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.recipe-image {
+    width: 100%;
+    height: 300px;
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.recipe-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
 }
 
 .no-image {
@@ -315,28 +355,38 @@ watch(() => route.query, (newQuery) => {
     border-radius: 6px;
 }
 
-.recipe-card img {
-    width: 100%;
-    height: 300px;
-    object-fit: cover;
-    border-radius: 6px;
-}
-
 .recipe-title {
     margin-top: 10px;
     font-weight: bold;
     color: #333;
+    font-size: 16px;
 }
 
-.recipe-genre {
-    color: #555;
-    margin-bottom: 5px;
+.recipe-stats {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-top: 8px;
+    font-size: 12px;
 }
 
+.like-display {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    color: #333;
+}
 
+.heart-icon {
+    font-size: 16px;
+    color: #dc3545;
+}
 
-
-
+.like-count {
+    font-size: 12px;
+    color: #333;
+    font-family: cursive;
+}
 
 .pagination {
     display: flex;
@@ -371,7 +421,7 @@ watch(() => route.query, (newQuery) => {
 }
 
 .pagination-number.active {
-    background-color: #ff770053;
+    background-color: #ffb300c7;
     color: white;
 }
 

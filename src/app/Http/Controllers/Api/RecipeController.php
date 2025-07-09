@@ -54,20 +54,22 @@ class RecipeController extends Controller
     public function search(Request $request)
     {
         $keyword = $request->get('keyword', '');
-        
+
+        // 🔍 空キーワードなら全件を返す
         if (empty($keyword)) {
-            return response()->json([
-                'data' => [],
-                'message' => '検索キーワードを入力してください'
-            ]);
+            return Recipe::published()
+                ->with('admin')
+                ->latest()
+                ->paginate(6);
         }
-        
+
+        // 🔍 キーワードありの場合は検索して返す
         $recipes = Recipe::published()
             ->with('admin')
             ->search($keyword)
             ->latest()
             ->paginate(6);
-            
+
         return response()->json($recipes);
     }
 

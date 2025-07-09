@@ -136,7 +136,7 @@ onMounted(async () => {
   // URLクエリからページ番号を取得
   currentPage.value = parseInt(route.query.page) || 1
   searchFilters.value.keyword = route.query.keyword || ''
-  
+
   await loadComments()
 })
 
@@ -144,59 +144,67 @@ onMounted(async () => {
 const loadComments = async () => {
   loading.value = true
   try {
-    // TODO: API実装時に有効化
-    /*
-    const token = await getIdToken()
-    const config = useRuntimeConfig()
-    
-    const response = await $fetch('/admin/comments', {
-      baseURL: config.public.apiBaseUrl,
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      query: {
-        page: currentPage.value,
-        per_page: perPage,
-        keyword: searchFilters.value.keyword
+    //  Option 1: API使用（本番環境）
+    try {
+      const token = await getIdToken()
+      const config = useRuntimeConfig()
+
+      const response = await $fetch('/admin/comments', {
+        baseURL: config.public.apiBaseUrl,
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        query: {
+          page: currentPage.value,
+          per_page: perPage,
+          keyword: searchFilters.value.keyword
+        }
+      })
+
+      // APIデータを使用
+      comments.value = response.data
+      totalPages.value = response.last_page
+      currentPage.value = response.current_page
+
+      console.log(`✅ API経由でコメント一覧を読み込みました: ${comments.value.length}件`)
+
+    } catch (apiError) {
+      console.warn('⚠️ API接続失敗、モックデータを使用します:', apiError)
+
+      //  Option 2: モックデータ使用（開発・デバッグ環境）
+      let filteredData = allCommentsData
+
+      // 検索フィルタリング
+      if (searchFilters.value.keyword) {
+        const keyword = searchFilters.value.keyword.toLowerCase()
+        filteredData = allCommentsData.filter(comment => 
+          comment.user.name.toLowerCase().includes(keyword) ||
+          comment.recipe.title.toLowerCase().includes(keyword) ||
+          comment.content.toLowerCase().includes(keyword)
+        )
       }
-    })
-    
-    comments.value = response.data
-    totalPages.value = response.last_page
-    currentPage.value = response.current_page
-    */
-    
-    // モックデータでページネーション機能をシミュレート
-    let filteredData = allCommentsData
-    
-    // 検索フィルタリング
-    if (searchFilters.value.keyword) {
-      const keyword = searchFilters.value.keyword.toLowerCase()
-      filteredData = allCommentsData.filter(comment => 
-        comment.user.name.toLowerCase().includes(keyword) ||
-        comment.recipe.title.toLowerCase().includes(keyword) ||
-        comment.content.toLowerCase().includes(keyword)
-      )
+
+      // ページネーション計算
+      totalPages.value = Math.ceil(filteredData.length / perPage)
+
+      // 現在ページのデータを取得
+      const start = (currentPage.value - 1) * perPage
+      const end = start + perPage
+      comments.value = filteredData.slice(start, end)
+
+      console.log(`📋 モックデータでコメント一覧を読み込みました: ${comments.value.length}件`)
     }
-    
-    // ページネーション計算
-    totalPages.value = Math.ceil(filteredData.length / perPage)
-    
-    // 現在ページのデータを取得
-    const start = (currentPage.value - 1) * perPage
-    const end = start + perPage
-    comments.value = filteredData.slice(start, end)
-    
-    console.log(`コメント一覧を読み込みました: ${comments.value.length}件`)
-    
+
   } catch (error) {
-    console.error('コメント取得エラー:', error)
+    console.error('❌ コメント取得エラー:', error)
+    // エラー時は空配列
+    comments.value = []
+    totalPages.value = 1
   } finally {
     loading.value = false
   }
 }
-
 // 検索実行
 const searchComments = async () => {
   currentPage.value = 1 // 検索時は1ページ目に戻る
@@ -252,39 +260,42 @@ const deleteComment = async (id) => {
   if (!confirm('本当に削除しますか？')) return
 
   try {
-    // TODO: API実装時に有効化
-    /*
-    const token = await getIdToken()
-    const config = useRuntimeConfig()
-    
-    await $fetch(`/admin/comments/${id}`, {
-      baseURL: config.public.apiBaseUrl,
-      method: 'DELETE',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      }
-    })
-    */
+    // 🔥 API使用を試行
+    try {
+      const token = await getIdToken()
+      const config = useRuntimeConfig()
 
-    // 削除後にリスト更新
-    const index = allCommentsData.findIndex(comment => comment.id === id)
-    if (index !== -1) {
-      allCommentsData.splice(index, 1)
+      await $fetch(`/admin/comments/${id}`, {
+        baseURL: config.public.apiBaseUrl,
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      })
+
+      console.log(`✅ API経由でコメント${id}を削除しました`)
+
+    } catch (apiError) {
+      console.warn('⚠️ API削除失敗、モックデータから削除します:', apiError)
+
+      // モックデータから削除
+      const index = allCommentsData.findIndex(comment => comment.id === id)
+      if (index !== -1) {
+        allCommentsData.splice(index, 1)
+      }
     }
-    
-    // 現在ページが空になった場合は前ページに移動
+
+    // どちらの場合も一覧を再読み込み
     await loadComments()
     if (comments.value.length === 0 && currentPage.value > 1) {
       currentPage.value = currentPage.value - 1
       updateUrl()
       await loadComments()
     }
-    
-    console.log(`コメント${id}を削除しました`)
-    
+
   } catch (error) {
-    console.error('削除エラー:', error)
+    console.error('❌ 削除エラー:', error)
     alert('削除に失敗しました')
   }
 }
@@ -431,7 +442,7 @@ button:hover {
         flex-direction: column;
         gap: 8px;
     }
-    
+
     .search-input {
         width: 100%;
     }

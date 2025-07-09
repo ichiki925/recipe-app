@@ -38,7 +38,7 @@
         <option value="2人分">2人分</option>
         <option value="3人分">3人分</option>
         <option value="4人分">4人分</option>
-        <option value="5人以上">5人以上</option>
+        <option value="5人以上">5人分以上</option>
       </select>
 
       <label>材料</label>
@@ -71,7 +71,9 @@
         @input="autoResize"
       ></textarea>
 
-      <button type="submit">投稿する</button>
+      <button type="submit" :disabled="isLoading">
+        {{ isLoading ? '更新中...' : '投稿する' }}
+      </button>
     </form>
   </div>
 </template>
@@ -80,25 +82,53 @@
 definePageMeta({
   layout: 'admin'
 })
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 const route = useRoute()
 const router = useRouter()
 
-// 初期値のモック（API連携前提）
+// 初期値
 const form = reactive({
-  title: 'サンプルレシピ',
-  genre: '和食',
-  servings: '2人分',
+  title: '',
+  genre: '',
+  servings: '',
   ingredients: [
-    { name: '玉ねぎ', qty: '1個' },
-    { name: '', qty: '' }, // 空欄を最初から1行用意
+    { name: '', qty: '' },
+
   ],
-  body: 'ここに作り方を記入してください。',
+  instructions: '',
 })
 
-const previewUrl = ref('/storage/sample.jpg') // 画像ありの場合、ここに初期URL
+// ローディング状態を管理
+const isLoading = ref(true)
+const previewUrl = ref(null) 
+
+// レシピデータを取得
+onMounted(async () => {
+  try {
+    const response = await $fetch(`/api/admin/recipes/${route.params.id}`)
+    const recipe = response.data
+
+    // フォームにデータを設定
+    form.title = recipe.title
+    form.genre = recipe.genre || ''
+    form.servings = recipe.servings
+    form.instructions = recipe.instructions
+
+    // 材料を配列形式に変換（バックエンドの形式による）
+    form.ingredients = recipe.ingredients_array || [{ name: '', qty: '' }]
+
+    // 画像URLを設定
+    previewUrl.value = recipe.image_url
+
+    isLoading.value = false
+  } catch (error) {
+    console.error('レシピ取得エラー:', error)
+    isLoading.value = false
+  }
+})
+
 const imageInput = ref(null)
 const textarea = ref(null)
 
@@ -143,9 +173,45 @@ onMounted(() => {
 })
 
 // フォーム送信（仮処理）
-const submit = () => {
-  console.log('送信内容:', form)
-  alert('送信処理（API接続予定）')
+const submit = async () => {
+  try {
+    isLoading.value = true
+
+    // FormDataを作成（画像アップロード対応）
+    const formData = new FormData()
+    formData.append('title', form.title)
+    formData.append('genre', form.genre)
+    formData.append('servings', form.servings)
+    formData.append('instructions', form.instructions)
+
+    // 材料を文字列形式に変換
+    const ingredientsText = form.ingredients
+      .filter(item => item.name.trim() || item.qty.trim())
+      .map(item => `${item.name}:${item.qty}`)
+      .join('\n')
+    formData.append('ingredients', ingredientsText)
+
+    // 画像ファイルがある場合
+    const imageFile = imageInput.value?.files[0]
+    if (imageFile) {
+      formData.append('image', imageFile)
+    }
+
+    const response = await $fetch(`/api/admin/recipes/${route.params.id}`, {
+      method: 'PUT',
+      body: formData
+    })
+
+    alert('レシピが更新されました')
+    // 必要に応じてリダイレクト
+    // router.push('/admin/recipes')
+
+  } catch (error) {
+    console.error('更新エラー:', error)
+    alert('更新に失敗しました')
+  } finally {
+    isLoading.value = false
+  }
 }
 </script>
 

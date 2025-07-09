@@ -19,10 +19,9 @@
 
     <div class="admin-menu">
       <NuxtLink to="/admin/recipes" class="admin-button">📋 レシピ一覧</NuxtLink>
-      <NuxtLink to="/admin/recipes/create" class="admin-button">➕ 新規作成</NuxtLink>
-      <NuxtLink to="/admin/recipes/edit" class="admin-button">✏️ 編集</NuxtLink>
+      <NuxtLink to="/admin/recipes/create" class="admin-button">➕ レシピ新規作成</NuxtLink>
+      <NuxtLink to="/admin/recipes/edit" class="admin-button">✏️ レシピ編集</NuxtLink>
       <NuxtLink to="/admin/comments" class="admin-button">💬 コメント管理</NuxtLink>
-      <NuxtLink to="/admin/profile" class="admin-button">👤 プロフィール</NuxtLink>
     </div>
 
     <div class="recent-deleted">
@@ -41,12 +40,52 @@
 definePageMeta({
   layout: 'admin'
 })
-const props = defineProps({
-  totalRecipes: Number,
-  recentUpdatedRecipes: Number,
-  totalUsers: Number,
-  deletedRecipes: Array
+
+// 認証とデータ取得
+const { getIdToken, waitForAuth } = useAuth()
+const config = useRuntimeConfig()
+
+// リアクティブデータ
+const dashboardData = ref({
+  stats: {},
+  deleted_recipes: [],
+  recent_activities: [],
+  popular_recipes: []
 })
+
+const isLoading = ref(true)
+
+// API呼び出し
+onMounted(async () => {
+  const currentUser = await waitForAuth()
+  if (!currentUser) {
+    await navigateTo('/auth/login')
+    return
+  }
+
+  try {
+    const token = await getIdToken()
+    const response = await $fetch('/admin/dashboard', {
+      baseURL: config.public.apiBaseUrl,
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    })
+    
+    dashboardData.value = response.data
+  } catch (error) {
+    console.error('ダッシュボードデータ取得エラー:', error)
+  } finally {
+    isLoading.value = false
+  }
+})
+
+// computed プロパティ
+const totalRecipes = computed(() => dashboardData.value.stats.total_recipes || 0)
+const recentUpdatedRecipes = computed(() => dashboardData.value.stats.recent_updated_recipes || 0)
+const totalUsers = computed(() => dashboardData.value.stats.total_users || 0)
+const deletedRecipes = computed(() => dashboardData.value.deleted_recipes || [])
 </script>
 
 <style scoped>

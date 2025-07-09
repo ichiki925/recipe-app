@@ -8,7 +8,6 @@ use App\Http\Controllers\Api\RecipeController;
 use App\Http\Controllers\Api\LikeController;
 use App\Http\Controllers\Api\CommentController;
 use App\Http\Controllers\User\ProfileController;
-use App\Http\Controllers\User\FavoriteController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\CommentController as AdminCommentController;
 
@@ -145,10 +144,12 @@ Route::middleware('firebase.auth')->group(function () {
 // ========================================
 
 Route::middleware(['firebase.auth', 'admin'])->prefix('admin')->group(function () {
-    
+
     // ダッシュボード
     Route::get('/dashboard', [DashboardController::class, 'index']);
-    
+    // Route::get('/dashboard/system-info', [DashboardController::class, 'systemInfo']);
+    // Route::get('/dashboard/monthly-report', [DashboardController::class, 'monthlyReport']);
+
     // レシピ管理（CRUD）
     Route::prefix('recipes')->group(function () {
         Route::get('/', [RecipeController::class, 'adminIndex']);
@@ -157,14 +158,18 @@ Route::middleware(['firebase.auth', 'admin'])->prefix('admin')->group(function (
         Route::put('/{recipe}', [RecipeController::class, 'update']);
         Route::delete('/{recipe}', [RecipeController::class, 'destroy']);
     });
-    
+
     // コメント管理
     Route::prefix('comments')->group(function () {
-        Route::get('/', [AdminCommentController::class, 'index']);
-        Route::delete('/{comment}', [AdminCommentController::class, 'destroy']);
-        Route::get('/search', [CommentController::class, 'search']);
+        Route::get('/', [Admin\CommentController::class, 'index']);
+        Route::get('/stats', [Admin\CommentController::class, 'stats']);
+        Route::get('/flagged', [Admin\CommentController::class, 'flagged']);
+        Route::get('/user/{user}', [Admin\CommentController::class, 'userComments']);
+        Route::get('/{comment}', [Admin\CommentController::class, 'show']);
+        Route::delete('/{comment}', [Admin\CommentController::class, 'destroy']);
+        Route::delete('/bulk', [Admin\CommentController::class, 'bulkDestroy']);
     });
-    
+
     // いいね統計（追加）
     Route::get('/like-stats', [LikeController::class, 'stats']);
     Route::get('/comment-stats', [CommentController::class, 'stats']);

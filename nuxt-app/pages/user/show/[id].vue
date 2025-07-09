@@ -889,8 +889,8 @@ onMounted(async () => {
     }
 
     .image-preview {
-        max-width: 250px;
-        max-height: 250px;
+        max-width: 280px;
+        max-height: 280px;
     }
 
     .recipe-title-heading {
