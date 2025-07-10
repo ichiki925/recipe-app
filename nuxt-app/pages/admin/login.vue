@@ -13,6 +13,7 @@
             class="form-input"
             v-model="form.email"
             :class="{ 'error-input': errors.email }"
+            :disabled="loading"
           >
           <div v-if="errors.email" class="error">{{ errors.email }}</div>
         </div>
@@ -23,10 +24,14 @@
             class="form-input"
             v-model="form.password"
             :class="{ 'error-input': errors.password }"
+            :disabled="loading"
           >
           <div v-if="errors.password" class="error">{{ errors.password }}</div>
         </div>
-        <button type="submit" class="submit-button">ログイン</button>
+        <div v-if="errors.general" class="error general-error">{{ errors.general }}</div>
+        <button type="submit" class="submit-button" :disabled="loading">
+          {{ loading ? 'ログイン中...' : 'ログイン' }}
+        </button>
         <div class="form-footer">
           <NuxtLink to="/auth/forgot-password" class="forgot-link">パスワードを忘れた場合はこちら</NuxtLink>
         </div>
@@ -36,9 +41,14 @@
 </template>
 
 <script setup>
+import { signInWithEmailAndPassword } from 'firebase/auth'
+
 definePageMeta({
   layout: false
 })
+
+const { $auth, $firestore } = useNuxtApp()
+const { setAdmin } = useAuth()
 
 const form = ref({
   email: '',
@@ -46,11 +56,14 @@ const form = ref({
 })
 
 const errors = ref({})
+const loading = ref(false)
+
 
 // ログイン処理メソッド
 const handleLogin = async () => {
   // バリデーションリセット
   errors.value = {}
+  loading.value = true
 
   // 簡単なバリデーション
   if (!form.value.email) {
@@ -62,156 +75,244 @@ const handleLogin = async () => {
 
   // エラーがある場合は送信しない
   if (Object.keys(errors.value).length > 0) {
+    loading.value = false
     return
   }
 
   try {
-    // TODO: 実際のAPI呼び出しをここに実装
-    console.log('ログイン処理:', form.value)
-    // 例: await $fetch('/api/auth/login', { method: 'POST', body: form.value })
+    // Firebase認証でログイン
+    const userCredential = await signInWithEmailAndPassword(
+      $auth, 
+      form.value.email, 
+      form.value.password
+    )
+    
+    const user = userCredential.user
+    
+    // Firestoreから管理者権限を確認
+    const adminDoc = await $firestore.collection('admins').doc(user.uid).get()
+    
+    if (!adminDoc.exists) {
+      // 管理者として登録されていない場合
+      await $auth.signOut()
+      errors.value.general = '管理者権限がありません'
+      loading.value = false
+      return
+    }
 
-    // 一時的にダッシュボードページにリダイレクト
-    // await navigateTo('/dashboard')
+    const adminData = adminDoc.data()
+    
+    // 管理者情報をセット
+    setAdmin({
+      uid: user.uid,
+      email: user.email,
+      displayName: adminData.displayName || user.displayName,
+      createdAt: adminData.createdAt
+    })
+
+    // ダッシュボードにリダイレクト
+    await navigateTo('/admin/dashboard')
+    
   } catch (error) {
     console.error('ログインエラー:', error)
-    errors.value.general = 'ログインに失敗しました'
+    
+    // Firebase認証エラーの日本語化
+    let errorMessage = 'ログインに失敗しました'
+    
+    switch (error.code) {
+      case 'auth/user-not-found':
+        errorMessage = 'ユーザーが見つかりません'
+        break
+      case 'auth/wrong-password':
+        errorMessage = 'パスワードが正しくありません'
+        break
+      case 'auth/invalid-email':
+        errorMessage = 'メールアドレスの形式が正しくありません'
+        break
+      case 'auth/user-disabled':
+        errorMessage = 'このアカウントは無効になっています'
+        break
+      case 'auth/too-many-requests':
+        errorMessage = 'ログイン試行回数が多すぎます。しばらく待ってからお試しください'
+        break
+      case 'auth/network-request-failed':
+        errorMessage = 'ネットワークエラーが発生しました'
+        break
+      default:
+        errorMessage = 'ログインに失敗しました'
+    }
+
+    errors.value.general = errorMessage
+    loading.value = false
   }
 }
-</script>
-<style scoped>
-/* 完全に独立したCSS - グローバルCSSの影響を受けない */
 
+// ページ離脱時のクリーンアップ
+onUnmounted(() => {
+  loading.value = false
+})
+
+</script>
+
+<style scoped>
+.admin-login-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f5f5f5;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
 
 .form-container {
-  width: 100% !important;
-  max-width: 400px !important;
-  padding: 20px !important;
-  box-sizing: border-box !important;
+  width: 100%;
+  max-width: 400px;
+  padding: 20px;
+  box-sizing: border-box;
 }
 
 .login-form {
-  background: white !important;
-  padding: 40px !important;
-  border-radius: 8px !important;
-  text-align: center !important;
-  box-sizing: border-box !important;
+  background: white;
+  padding: 40px;
+  border-radius: 8px;
+  text-align: center;
+  box-sizing: border-box;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
 }
 
 .logo {
-  margin-bottom: 20px !important;
+  margin-bottom: 20px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 
 .logo-image {
-  width: 60px !important;
-  height: 60px !important;
-  object-fit: contain !important;
+  width: 60px;
+  height: 60px;
+  object-fit: contain;
 }
 
 .login-title {
-  font-size: 24px !important;
-  font-weight: normal !important;
-  color: #333 !important;
-  margin: 0 0 30px 0 !important;
-  font-family: cursive !important;
-  font-style: italic !important;
+  font-size: 24px;
+  font-weight: normal;
+  color: #333;
+  margin: 0 0 30px 0;
+  font-family: cursive;
+  font-style: italic;
 }
 
 .form-group {
-  margin-bottom: 20px !important;
-  text-align: left !important;
+  margin-bottom: 20px;
+  text-align: left;
 }
 
 .form-label {
-  display: block !important;
-  font-size: 14px !important;
-  font-weight: normal !important;
-  color: #333 !important;
-  margin-bottom: 8px !important;
+  display: block;
+  font-size: 14px;
+  font-weight: normal;
+  color: #333;
+  margin-bottom: 8px;
 }
 
 .form-input {
-  width: 100% !important;
-  padding: 12px 16px !important;
-  font-size: 16px !important;
+  width: 100%;
+  padding: 12px 16px;
+  font-size: 16px;
   border: none;
-  border-bottom: 1px solid #ddd !important;
-  box-sizing: border-box !important;
-  background: white !important;
-  color: #333 !important;
+  border-bottom: 1px solid #ddd;
+  box-sizing: border-box;
+  background: white;
+  color: #333;
+  transition: all 0.3s ease;
 }
 
 .form-input:focus {
-  outline: none !important;
-  background-color: #d0d0d0;
+  outline: none;
+  background-color: #f8f8f8;
   border-color: #999;
 }
 
+.form-input:disabled {
+  background-color: #f5f5f5;
+  color: #999;
+  cursor: not-allowed;
+}
+
 .error-input {
-  border-color: #dc3545 !important;
+  border-color: #dc3545;
 }
 
 .error {
-  color: #dc3545 !important;
-  font-size: 12px !important;
-  margin-top: 4px !important;
+  color: #dc3545;
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+.general-error {
+  text-align: center;
+  margin-bottom: 15px;
+  font-size: 14px;
 }
 
 .submit-button {
-  width: 100% !important;
-  padding: 12px !important;
-  background: #ddd !important;
-  color: #333 !important;
-  border: none !important;
-  border-radius: 4px !important;
-  font-size: 16px !important;
-  font-weight: normal !important;
-  cursor: pointer !important;
-  margin-bottom: 20px !important;
-  box-sizing: border-box !important;
+  width: 100%;
+  padding: 12px;
+  background: #ddd;
+  color: #333;
+  border: none;
+  border-radius: 4px;
+  font-size: 16px;
+  font-weight: normal;
+  cursor: pointer;
+  margin-bottom: 20px;
+  box-sizing: border-box;
+  transition: all 0.3s ease;
 }
 
-.submit-button:hover {
-  background: #ccc !important;
+.submit-button:hover:not(:disabled) {
+  background: #ccc;
+}
+
+.submit-button:disabled {
+  background: #e0e0e0;
+  color: #999;
+  cursor: not-allowed;
 }
 
 .form-footer {
-  text-align: center !important;
+  text-align: center;
 }
 
 .form-footer a {
-  display: block !important;
-  color: #888 !important;
-  text-decoration: underline !important;
-  font-size: 14px !important;
-  margin-bottom: 10px !important;
+  display: block;
+  color: #888;
+  text-decoration: underline;
+  font-size: 14px;
+  margin-bottom: 10px;
+  transition: color 0.3s ease;
 }
 
 .form-footer a:hover {
-  color: #666 !important;
+  color: #666;
 }
 
 .form-footer a:last-child {
-  margin-bottom: 0 !important;
+  margin-bottom: 0;
 }
 
 /* レスポンシブ対応 */
 @media (max-width: 768px) {
-    .recipe-page {
-        flex-direction: column;
-        padding: 15px;
-    }
-
-    .sidebar {
-        width: 100%;
-        order: 2;
-    }
-
-    .recipe-list {
-        order: 1;
-    }
-
-    .recipe-grid {
-        grid-template-columns: 1fr;
-    }
+  .admin-login-page {
+    padding: 20px;
+  }
+  
+  .form-container {
+    max-width: 100%;
+  }
+  
+  .login-form {
+    padding: 30px 20px;
+  }
 }
 </style>

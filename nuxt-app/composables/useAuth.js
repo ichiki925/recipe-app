@@ -10,30 +10,95 @@ import {
 
 // グローバルな状態管理（全てのコンポーネントで共有）
 const user = ref(null)
+const admin = ref(null)
 const loading = ref(false)
 const authInitialized = ref(false)
 
 export const useAuth = () => {
 
-    // ログイン機能
+    // ログイン機能（一般ユーザー）
     const login = async (email, password) => {
         try {
             loading.value = true
             const { $auth } = useNuxtApp()
 
             const userCredential = await signInWithEmailAndPassword($auth, email, password)
-            user.value = userCredential.user
-
-            // ログイン成功時にIDトークンを取得してコンソールに表示
             const token = await userCredential.user.getIdToken()
-            console.log('🔥 ログイン成功! ID Token:', token)
-            console.log('📋 curlコマンド:')
-            console.log(`curl -H "Authorization: Bearer ${token}" http://nginx/api/auth/user`)
 
-            return { success: true, user: userCredential.user }
+            // Laravel APIでユーザー情報を取得・確認
+            const config = useRuntimeConfig()
+            const response = await $fetch('/auth/user', {
+                baseURL: config.public.apiBaseUrl,
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            })
+
+            user.value = {
+                ...userCredential.user,
+                profile: response.user
+            }
+
+            console.log('🔥 ログイン成功! ID Token:', token)
+            return { success: true, user: userCredential.user, profile: response.user }
         } catch (error) {
             console.error('Login error:', error)
-            throw new Error(getAuthErrorMessage(error.code))
+            // Firebase認証失敗時はサインアウト
+            const { $auth } = useNuxtApp()
+            await signOut($auth)
+            throw new Error(getAuthErrorMessage(error.code) || error.message)
+        } finally {
+            loading.value = false
+        }
+    }
+
+    // 管理者ログイン機能
+    const adminLogin = async (email, password) => {
+        try {
+            loading.value = true
+            const { $auth } = useNuxtApp()
+
+            // 1. Firebase認証でログイン
+            const userCredential = await signInWithEmailAndPassword($auth, email, password)
+            const token = await userCredential.user.getIdToken()
+            
+            // 2. Laravel APIで管理者権限を確認
+            const config = useRuntimeConfig()
+            const response = await $fetch('/admin', {
+                baseURL: config.public.apiBaseUrl,
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            })
+
+            if (!response.admin || response.admin.role !== 'admin') {
+                // 管理者権限がない場合
+                await signOut($auth)
+                throw new Error('管理者権限がありません')
+            }
+
+            // 3. 管理者情報をセット
+            admin.value = {
+                uid: userCredential.user.uid,
+                email: userCredential.user.email,
+                displayName: response.admin.name || userCredential.user.displayName,
+                role: response.admin.role,
+                createdAt: response.admin.created_at
+            }
+
+            user.value = {
+                ...userCredential.user,
+                profile: response.admin
+            }
+
+            console.log('🔥 管理者ログイン成功!', response.admin)
+            return { success: true, user: userCredential.user, admin: admin.value }
+        } catch (error) {
+            console.error('管理者ログインエラー:', error)
+            // エラー時はサインアウト
+            const { $auth } = useNuxtApp()
+            await signOut($auth)
+            throw new Error(error.message || getAuthErrorMessage(error.code))
         } finally {
             loading.value = false
         }
@@ -45,27 +110,40 @@ export const useAuth = () => {
             loading.value = true
             const { $auth } = useNuxtApp()
 
+            // 1. Firebase Authentication
             const userCredential = await createUserWithEmailAndPassword($auth, email, password)
+            const token = await userCredential.user.getIdToken()
 
-            // メール認証送信
+            // 2. Laravel APIにユーザー情報を保存
+            const config = useRuntimeConfig()
+            const response = await $fetch('/auth/register', {
+                method: 'POST',
+                baseURL: config.public.apiBaseUrl,
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: {
+                    firebase_uid: userCredential.user.uid,
+                    name,
+                    email,
+                    role: 'user'
+                }
+            })
+
+            // 3. メール認証送信
             await sendEmailVerification(userCredential.user)
 
-            // Laravel側にユーザー情報保存
-            // await $fetch('/api/users', {
-            // method: 'POST',
-            // body: {
-            //     firebase_uid: userCredential.user.uid,
-            //     name,
-            //     email,
-            //     role: 'user'
-            // }
-            // })
+            user.value = {
+                ...userCredential.user,
+                profile: response.user
+            }
 
-            user.value = userCredential.user
-            return { success: true, user: userCredential.user }
+            return { success: true, user: userCredential.user, profile: response.user }
         } catch (error) {
             console.error('Registration error:', error)
-            throw new Error(getAuthErrorMessage(error.code))
+            // エラー時はFirebaseユーザーを削除
+            throw new Error(error.message || getAuthErrorMessage(error.code))
         } finally {
             loading.value = false
         }
@@ -75,42 +153,56 @@ export const useAuth = () => {
     const registerAdmin = async (formData) => {
         try {
             loading.value = true
-
-            // 1. 管理者コード検証
-            // const codeVerification = await $fetch('/api/admin/verify-code', {
-            // method: 'POST',
-            // body: { code: formData.adminCode }
-            // })
-
-            // if (!codeVerification.valid) {
-            // throw new Error('無効な管理者コードです')
-            // }
-
             const { $auth } = useNuxtApp()
 
-            // 2. Firebase Authentication
+            // 1. Firebase Authentication
             const userCredential = await createUserWithEmailAndPassword(
-            $auth,
-            formData.email,
-            formData.password
+                $auth,
+                formData.email,
+                formData.password
             )
+            const token = await userCredential.user.getIdToken()
+
+            // 2. Laravel APIで管理者登録（管理者コード検証含む）
+            const config = useRuntimeConfig()
+            const response = await $fetch('/admin/register', {
+                method: 'POST',
+                baseURL: config.public.apiBaseUrl,
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: {
+                    firebase_uid: userCredential.user.uid,
+                    name: formData.name,
+                    email: formData.email,
+                    admin_code: formData.adminCode,
+                    role: 'admin'
+                }
+            })
+
+            if (!response.admin) {
+                throw new Error('管理者登録に失敗しました')
+            }
 
             // 3. メール認証送信
             await sendEmailVerification(userCredential.user)
 
-            // 4. Laravel側にユーザー情報保存
-            // await $fetch('/api/admin/register', {
-            // method: 'POST',
-            // body: {
-            //     firebase_uid: userCredential.user.uid,
-            //     name: formData.name,
-            //     email: formData.email,
-            //     role: 'admin'
-            // }
-            // })
+            // 4. 管理者情報をセット
+            admin.value = {
+                uid: userCredential.user.uid,
+                email: userCredential.user.email,
+                displayName: response.admin.name,
+                role: response.admin.role,
+                createdAt: response.admin.created_at
+            }
 
-            user.value = userCredential.user
-            return { success: true, user: userCredential.user }
+            user.value = {
+                ...userCredential.user,
+                profile: response.admin
+            }
+
+            return { success: true, user: userCredential.user, admin: admin.value }
         } catch (error) {
             console.error('Admin registration error:', error)
             throw new Error(error.message || '管理者登録に失敗しました')
@@ -135,7 +227,7 @@ export const useAuth = () => {
         }
     }
 
-    // ログアウト機能
+    // 一般ユーザーログアウト
     const logout = async () => {
         try {
             loading.value = true
@@ -143,8 +235,7 @@ export const useAuth = () => {
 
             await signOut($auth)
             user.value = null
-
-            // ログイン画面にリダイレクト
+            admin.value = null
             await navigateTo('/auth/login')
 
             return { success: true }
@@ -156,14 +247,37 @@ export const useAuth = () => {
         }
     }
 
+    // 管理者ログアウト
+    const adminLogout = async () => {
+        try {
+            loading.value = true
+            const { $auth } = useNuxtApp()
+
+            await signOut($auth)
+            user.value = null
+            admin.value = null
+            await navigateTo('/admin/login')
+
+            return { success: true }
+        } catch (error) {
+            console.error('管理者ログアウトエラー:', error)
+            throw new Error('管理者ログアウトに失敗しました')
+        } finally {
+            loading.value = false
+        }
+    }
+
+    // 管理者情報をセット（ログイン時に使用）
+    const setAdmin = (adminData) => {
+        admin.value = adminData
+    }
+
     // IDトークン取得機能
     const getIdToken = async () => {
         try {
             if (user.value) {
                 const token = await user.value.getIdToken()
                 console.log('🔥 Firebase ID Token取得成功:', token)
-                console.log('📋 curlコマンド:')
-                console.log(`curl -H "Authorization: Bearer ${token}" http://nginx/api/auth/user`)
                 return token
             } else {
                 console.log('❌ ユーザーがログインしていません')
@@ -213,9 +327,49 @@ export const useAuth = () => {
 
         const { $auth } = useNuxtApp()
 
-        onAuthStateChanged($auth, (firebaseUser) => {
+        onAuthStateChanged($auth, async (firebaseUser) => {
             console.log('🔄 認証状態変更:', firebaseUser ? firebaseUser.email : 'null')
-            user.value = firebaseUser
+            
+            if (firebaseUser) {
+                try {
+                    const token = await firebaseUser.getIdToken()
+                    
+                    // Laravel APIでユーザー情報と権限を確認
+                    const config = useRuntimeConfig()
+                    const response = await $fetch('/auth/user', {
+                        baseURL: config.public.apiBaseUrl,
+                        headers: {
+                            'Authorization': `Bearer ${token}`
+                        }
+                    })
+
+                    user.value = {
+                        ...firebaseUser,
+                        profile: response.user
+                    }
+
+                    // 管理者権限チェック
+                    if (response.user && response.user.role === 'admin') {
+                        admin.value = {
+                            uid: firebaseUser.uid,
+                            email: firebaseUser.email,
+                            displayName: response.user.name || firebaseUser.displayName,
+                            role: response.user.role,
+                            createdAt: response.user.created_at
+                        }
+                    } else {
+                        admin.value = null
+                    }
+                } catch (error) {
+                    console.error('Laravel API エラー:', error)
+                    // APIエラーの場合はFirebase認証のみ保持
+                    user.value = firebaseUser
+                    admin.value = null
+                }
+            } else {
+                user.value = null
+                admin.value = null
+            }
         })
 
         authInitialized.value = true
@@ -238,15 +392,37 @@ export const useAuth = () => {
         })
     }
 
+    // 管理者権限チェック
+    const requireAdmin = async () => {
+        if (!admin.value) {
+            await navigateTo('/admin/login')
+            return false
+        }
+        return true
+    }
+
+    // 認証チェック
+    const requireAuth = async () => {
+        if (!user.value) {
+            await navigateTo('/auth/login')
+            return false
+        }
+        return true
+    }
+
     // ユーザー情報取得
     const getCurrentUser = () => {
         return user.value
     }
 
+    // 管理者情報取得
+    const getCurrentAdmin = () => {
+        return admin.value
+    }
+
     // 管理者判定
     const isAdmin = computed(() => {
-      // TODO: Laravel APIでroleを確認
-        return false
+        return !!admin.value && admin.value.role === 'admin'
     })
 
     // ログイン状態判定
@@ -275,19 +451,35 @@ export const useAuth = () => {
     }
 
     return {
+        // 状態
         user: readonly(user),
+        admin: readonly(admin),
         loading: readonly(loading),
+        
+        // 計算プロパティ
+        isAdmin,
+        isLoggedIn,
+        
+        // 一般ユーザー機能
         login,
         register,
-        registerAdmin,
-        resetPassword,
         logout,
+        requireAuth,
+        
+        // 管理者機能
+        adminLogin,
+        registerAdmin,
+        adminLogout,
+        setAdmin,
+        requireAdmin,
+        getCurrentAdmin,
+        
+        // 共通機能
+        resetPassword,
         initAuth,
         waitForAuth,
         getCurrentUser,
         getIdToken,
-        testLaravelAPI,
-        isAdmin,
-        isLoggedIn
+        testLaravelAPI
     }
 }

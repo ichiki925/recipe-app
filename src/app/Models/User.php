@@ -1,6 +1,5 @@
 <?php
 
-// app/Models/User.php
 namespace App\Models;
 
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -66,6 +65,24 @@ class User extends Authenticatable
         return $this->hasMany(RecipeComment::class);
     }
 
+    // ==================== Role Methods ====================
+
+    /**
+     * 管理者判定
+     */
+    public function isAdmin()
+    {
+        return $this->role === 'admin';
+    }
+
+    /**
+     * 一般ユーザー判定
+     */
+    public function isUser()
+    {
+        return $this->role === 'user';
+    }
+
     // ==================== Accessors & Mutators ====================
 
     /**
@@ -73,7 +90,15 @@ class User extends Authenticatable
      */
     public function getIsAdminAttribute()
     {
-        return $this->role === 'admin';
+        return $this->isAdmin();
+    }
+
+    /**
+     * ユーザー判定（Accessor版 - 後方互換性のため）
+     */
+    public function getIsUserAttribute()
+    {
+        return $this->isUser();
     }
 
     /**
@@ -109,4 +134,6 @@ class User extends Authenticatable
     {
         return $query->where('firebase_uid', $firebaseUid);
     }
+
+
 }
