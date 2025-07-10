@@ -1,25 +1,61 @@
 <template>
   <div class="recipe-create-container">
-    <!-- プレビューエリア -->
-    <div class="image-preview" @click="triggerImageInput">
-      <span v-if="!imagePreview" id="preview-text">No Image</span>
-      <img
-        v-if="imagePreview"
-        :src="imagePreview"
-        alt="プレビュー"
-        id="preview-image"
-      />
-    </div>
-    <input
-      type="file"
-      ref="imageInput"
-      style="display: none"
-      accept="image/*"
-      @change="previewImage"
-    />
+    <!-- 左サイドバー：保存中のレシピ一覧 -->
+    <aside class="saved-recipes-sidebar">
+      <h3>保存中のレシピ</h3>
+      <div class="saved-recipes-list">
+        <div
+          v-for="savedRecipe in savedRecipes"
+          :key="savedRecipe.id"
+          class="saved-recipe-tag"
+          @click="loadSavedRecipe(savedRecipe)"
+        >
+          <div class="saved-recipe-title">{{ savedRecipe.title || '無題のレシピ' }}</div>
+          <div class="saved-recipe-date">{{ formatDate(savedRecipe.savedAt) }}</div>
+          <button 
+            class="delete-saved-recipe"
+            @click.stop="deleteSavedRecipe(savedRecipe.id)"
+          >
+            ×
+          </button>
+        </div>
+        <div v-if="savedRecipes.length === 0" class="no-saved-recipes">
+          保存中のレシピはありません
+        </div>
+      </div>
+    </aside>
 
-    <form class="recipe-form" @submit.prevent="submitRecipe">
+    <!-- メインコンテンツエリア -->
+    <div class="main-content">
+      <!-- 左側：画像プレビューエリア -->
+      <div class="image-preview" @click="triggerImageInput">
+        <span v-if="!imagePreview" id="preview-text">No Image</span>
+        <img
+          v-if="imagePreview"
+          :src="imagePreview"
+          alt="プレビュー"
+          id="preview-image"
+        />
+      </div>
+      <input
+        type="file"
+        ref="imageInput"
+        style="display: none"
+        accept="image/*"
+        @change="previewImage"
+      />
+
+      <!-- 右側：入力フォーム -->
+      <form class="recipe-form" @submit.prevent="submitRecipe">
       <h2>New Recipe</h2>
+
+      <!-- 現在編集中のレシピ表示 -->
+      <div v-if="currentEditingRecipe" class="editing-recipe-info">
+        <span>編集中: {{ currentEditingRecipe.title || '無題のレシピ' }}</span>
+        <button type="button" @click="clearCurrentRecipe" class="clear-editing">
+          新規作成
+        </button>
+      </div>
 
       <!-- エラーメッセージ表示 -->
       <div v-if="errors.length > 0" class="error-messages">
@@ -80,10 +116,26 @@
         required
       ></textarea>
 
-      <button type="submit" :disabled="isSubmitting">
-        {{ isSubmitting ? '投稿中...' : '投稿する' }}
-      </button>
+      <!-- 保存と投稿のボタン -->
+      <div class="button-container">
+        <button 
+          type="button" 
+          class="save-button"
+          @click="saveRecipe"
+          :disabled="isSaving"
+        >
+          {{ isSaving ? '保存中...' : '保存' }}
+        </button>
+        <button 
+          type="submit" 
+          class="submit-button"
+          :disabled="isSubmitting"
+        >
+          {{ isSubmitting ? '投稿中...' : '投稿する' }}
+        </button>
+      </div>
     </form>
+    </div>
   </div>
 </template>
 
@@ -91,7 +143,7 @@
 definePageMeta({
   layout: 'admin'
 })
-import { ref, reactive, watch } from 'vue'
+import { ref, reactive, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
@@ -101,7 +153,7 @@ const form = reactive({
   genre: '',
   servings: '',
   ingredients: [{ name: '', qty: '' }],
-  instructions: '' // bodyからinstructionsに変更
+  instructions: ''
 })
 
 const imageInput = ref(null)
@@ -110,6 +162,122 @@ const selectedFile = ref(null)
 const errors = ref([])
 const successMessage = ref('')
 const isSubmitting = ref(false)
+const isSaving = ref(false)
+const savedRecipes = ref([])
+const currentEditingRecipe = ref(null)
+
+// 保存中のレシピを読み込み
+const loadSavedRecipes = () => {
+  const saved = localStorage.getItem('savedRecipes')
+  if (saved) {
+    savedRecipes.value = JSON.parse(saved)
+  }
+}
+
+// 保存中のレシピを更新
+const updateSavedRecipes = () => {
+  localStorage.setItem('savedRecipes', JSON.stringify(savedRecipes.value))
+}
+
+// 日付フォーマット
+const formatDate = (dateString) => {
+  const date = new Date(dateString)
+  return date.toLocaleDateString('ja-JP', {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+}
+
+// 保存機能
+const saveRecipe = () => {
+  isSaving.value = true
+  
+  const recipeData = {
+    id: currentEditingRecipe.value?.id || Date.now().toString(),
+    title: form.title,
+    genre: form.genre,
+    servings: form.servings,
+    ingredients: [...form.ingredients],
+    instructions: form.instructions,
+    imagePreview: imagePreview.value,
+    savedAt: new Date().toISOString()
+  }
+
+  // 既存のレシピを更新または新規追加
+  const existingIndex = savedRecipes.value.findIndex(r => r.id === recipeData.id)
+  if (existingIndex !== -1) {
+    savedRecipes.value[existingIndex] = recipeData
+  } else {
+    savedRecipes.value.unshift(recipeData)
+  }
+
+  // 最大10件まで保存
+  if (savedRecipes.value.length > 10) {
+    savedRecipes.value = savedRecipes.value.slice(0, 10)
+  }
+
+  updateSavedRecipes()
+  currentEditingRecipe.value = recipeData
+  
+  successMessage.value = 'レシピを保存しました'
+  setTimeout(() => {
+    successMessage.value = ''
+  }, 3000)
+  
+  isSaving.value = false
+}
+
+// 保存済みレシピを読み込み
+const loadSavedRecipe = (savedRecipe) => {
+  Object.assign(form, {
+    title: savedRecipe.title,
+    genre: savedRecipe.genre,
+    servings: savedRecipe.servings,
+    ingredients: savedRecipe.ingredients.length > 0 ? savedRecipe.ingredients : [{ name: '', qty: '' }],
+    instructions: savedRecipe.instructions
+  })
+  
+  imagePreview.value = savedRecipe.imagePreview || ''
+  currentEditingRecipe.value = savedRecipe
+  
+  successMessage.value = 'レシピを読み込みました'
+  setTimeout(() => {
+    successMessage.value = ''
+  }, 3000)
+}
+
+// 保存済みレシピを削除
+const deleteSavedRecipe = (id) => {
+  if (confirm('このレシピを削除しますか？')) {
+    savedRecipes.value = savedRecipes.value.filter(r => r.id !== id)
+    updateSavedRecipes()
+    
+    if (currentEditingRecipe.value?.id === id) {
+      currentEditingRecipe.value = null
+    }
+  }
+}
+
+// 新規作成モードに切り替え
+const clearCurrentRecipe = () => {
+  if (confirm('現在の編集内容をクリアして新規作成しますか？')) {
+    Object.assign(form, {
+      title: '',
+      genre: '',
+      servings: '',
+      ingredients: [{ name: '', qty: '' }],
+      instructions: ''
+    })
+    
+    imagePreview.value = ''
+    selectedFile.value = null
+    currentEditingRecipe.value = null
+    errors.value = []
+    successMessage.value = ''
+  }
+}
 
 const triggerImageInput = () => {
   imageInput.value?.click()
@@ -206,6 +374,11 @@ const submitRecipe = async () => {
 
     successMessage.value = 'レシピが投稿されました'
     
+    // 投稿成功後、保存済みレシピから削除
+    if (currentEditingRecipe.value) {
+      deleteSavedRecipe(currentEditingRecipe.value.id)
+    }
+    
     // フォームリセット
     Object.assign(form, {
       title: '',
@@ -217,6 +390,7 @@ const submitRecipe = async () => {
     
     imagePreview.value = ''
     selectedFile.value = null
+    currentEditingRecipe.value = null
     
     // 管理画面のレシピ一覧にリダイレクト
     setTimeout(() => {
@@ -236,6 +410,36 @@ const submitRecipe = async () => {
     isSubmitting.value = false
   }
 }
+
+// 自動保存機能（オプション）
+let autoSaveTimer = null
+const startAutoSave = () => {
+  if (autoSaveTimer) {
+    clearInterval(autoSaveTimer)
+  }
+  
+  autoSaveTimer = setInterval(() => {
+    // 何かしらの入力があった場合のみ自動保存
+    if (form.title || form.genre || form.instructions || 
+        form.ingredients.some(ing => ing.name || ing.qty)) {
+      saveRecipe()
+    }
+  }, 60000) // 1分間隔で自動保存
+}
+
+// フォーム変更時の自動保存設定
+watch(form, () => {
+  // 入力変更があったら自動保存タイマーをリセット
+  if (autoSaveTimer) {
+    clearInterval(autoSaveTimer)
+    startAutoSave()
+  }
+}, { deep: true })
+
+onMounted(() => {
+  loadSavedRecipes()
+  // startAutoSave() // 自動保存を有効にする場合はコメントアウト
+})
 </script>
 
 <style scoped>
@@ -246,16 +450,113 @@ body {
     font-family: sans-serif;
 }
 
-/* 全体の2カラムレイアウト */
+/* 全体のレイアウト */
 .recipe-create-container {
     display: flex;
-    padding: 40px;
+    gap: 30px;
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+/* 左サイドバー：保存中のレシピエリア */
+.saved-recipes-sidebar {
+    width: 300px;
+    background-color: #fff;
+    padding: 20px;
+    border-radius: 8px;
+    height: fit-content;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    flex-shrink: 0;
+}
+
+.saved-recipes-sidebar h3 {
+    margin-top: 0;
+    margin-bottom: 15px;
+    font-size: 16px;
+    color: #333;
+    border-bottom: 2px solid #e0e0e0;
+    padding-bottom: 8px;
+}
+
+.saved-recipes-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-height: 600px;
+    overflow-y: auto;
+}
+
+.saved-recipe-tag {
+    background-color: #f8f9fa;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+}
+
+.saved-recipe-tag:hover {
+    background-color: #f0f0f0;
+    border-color: #ccc;
+}
+
+.saved-recipe-title {
+    font-weight: bold;
+    font-size: 14px;
+    margin-bottom: 4px;
+    color: #333;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: calc(100% - 25px);
+}
+
+.saved-recipe-date {
+    font-size: 12px;
+    color: #666;
+}
+
+.delete-saved-recipe {
+    position: absolute;
+    top: 4px;
+    right: 6px;
+    width: 20px;
+    height: 20px;
+    border: none;
+    background: #ff4444;
+    color: white;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.2s;
+}
+
+.delete-saved-recipe:hover {
+    background-color: #cc0000;
+}
+
+.no-saved-recipes {
+    text-align: center;
+    color: #999;
+    font-size: 14px;
+    padding: 20px;
+}
+
+/* メインコンテンツエリア（画像とフォーム） */
+.main-content {
+    display: flex;
     gap: 40px;
     justify-content: center;
     align-items: flex-start;
+    flex: 1;
 }
 
-/* 左側の画像部分 */
+/* 中央：画像プレビューエリア */
 .image-preview {
     width: 300px;
     height: 300px;
@@ -281,7 +582,7 @@ body {
     font-size: 18px;
 }
 
-/* 右側の入力フォーム */
+/* 右側：入力フォーム */
 .recipe-form {
     width: 400px;
 }
@@ -290,6 +591,32 @@ body {
     margin-bottom: 20px;
     text-align: center;
     font-family: cursive;
+}
+
+/* 編集中のレシピ情報 */
+.editing-recipe-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background-color: #e7f3ff;
+    padding: 10px;
+    border-radius: 6px;
+    margin-bottom: 15px;
+    font-size: 14px;
+}
+
+.clear-editing {
+    background: #666;
+    color: white;
+    border: none;
+    padding: 4px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+}
+
+.clear-editing:hover {
+    background: #555;
 }
 
 .recipe-form label {
@@ -352,10 +679,6 @@ body {
     border-left: none !important;
 }
 
-.remove-ingredient:hover {
-    background-color: #cc0000;
-}
-
 .servings-input {
     width: 150px;
     padding: 8px;
@@ -387,23 +710,52 @@ body {
     border: 1px solid #aaa;
 }
 
-.recipe-form button {
+/* ボタンコンテナ */
+.button-container {
+    display: flex;
+    gap: 10px;
     margin-top: 20px;
-    width: 100%;
+}
+
+.save-button {
+    flex: 1;
     padding: 12px;
-    background-color: #ccc;
+    background-color: #59d4d4fc;
+    color: white;
     border: none;
     font-weight: bold;
     cursor: pointer;
     border-radius: 6px;
+    transition: background-color 0.2s;
 }
 
-.recipe-form button:hover:not(:disabled) {
-    background-color: #bbb;
+.save-button:hover:not(:disabled) {
+    background-color: #59b9d4fc;
 }
 
-.recipe-form button:disabled {
-    background-color: #ccc;
+.save-button:disabled {
+    background-color: #6c757d;
+    cursor: not-allowed;
+}
+
+.submit-button {
+    flex: 1;
+    padding: 12px;
+    background-color: #ffbf00;
+    color: white;
+    border: none;
+    font-weight: bold;
+    cursor: pointer;
+    border-radius: 6px;
+    transition: background-color 0.2s;
+}
+
+.submit-button:hover:not(:disabled) {
+    background-color: #ff9d00;
+}
+
+.submit-button:disabled {
+    background-color: #6c757d;
     cursor: not-allowed;
 }
 
@@ -437,24 +789,74 @@ textarea::placeholder {
     opacity: 1 !important;
 }
 
-@media screen and (max-width: 768px) {
+/* レスポンシブデザイン */
+@media screen and (max-width: 1024px) {
     .recipe-create-container {
         flex-direction: column;
+        gap: 20px;
+    }
+
+    .saved-recipes-sidebar {
+        width: 100%;
+        order: 1;
+    }
+
+    .saved-recipes-list {
+        flex-direction: row;
+        flex-wrap: wrap;
+        max-height: 200px;
+    }
+
+    .saved-recipe-tag {
+        min-width: 150px;
+        flex: 1;
+        max-width: 200px;
+    }
+
+    .main-content {
+        flex-direction: column;
         align-items: center;
+        gap: 20px;
+        order: 2;
+    }
+
+    .image-preview {
+        width: 100%;
+        max-width: 300px;
+        margin-top: 0;
+    }
+
+    .recipe-form {
+        width: 100%;
+        max-width: 400px;
+    }
+}
+
+@media screen and (max-width: 768px) {
+    .recipe-create-container {
         padding: 20px;
         gap: 20px;
+    }
+
+    .saved-recipes-sidebar {
+        padding: 15px;
+    }
+
+    .saved-recipes-list {
+        flex-direction: column;
+        gap: 8px;
+        max-height: 150px;
+    }
+
+    .saved-recipe-tag {
+        min-width: auto;
+        max-width: none;
     }
 
     .image-preview {
         width: 100%;
         max-width: 280px;
         height: 280px;
-        margin: 40px auto 0;
-    }
-
-    .recipe-form {
-        width: 100%;
-        max-width: 400px;
     }
 
     .ingredient-row {
@@ -486,6 +888,11 @@ textarea::placeholder {
 
     .auto-resize {
         min-height: 100px;
+    }
+
+    .button-container {
+        flex-direction: column;
+        gap: 8px;
     }
 }
 </style>
