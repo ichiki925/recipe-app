@@ -118,6 +118,22 @@ definePageMeta({
     layout: false
 })
 
+// 🔁 Firebaseエラーコード対応マップ
+const firebaseErrorMessages = {
+    'auth/email-already-in-use': 'このメールアドレスは既に使用されています',
+    'auth/invalid-email': '無効なメールアドレスです',
+    'auth/weak-password': 'パスワードは8文字以上で入力してください',
+    'auth/operation-not-allowed': 'メール/パスワード認証が無効になっています',
+    'auth/user-not-found': 'ユーザーが見つかりません',
+    'auth/wrong-password': 'パスワードが正しくありません',
+    'auth/admin-code-invalid': '管理者コードが正しくありません'
+}
+
+const translateFirebaseError = (code) => {
+    return firebaseErrorMessages[code] || '管理者登録でエラーが発生しました'
+}
+
+
 // リアクティブなフォームデータ
 const form = reactive({
     adminCode: '',
@@ -319,7 +335,6 @@ const handlePasswordConfirmBlur = () => {
     }
 }
 
-// フォーム送信処理（バリデーション強化）
 const handleSubmit = async () => {
     // 最終バリデーション
     const adminCodeError = validateAdminCode(form.adminCode)
@@ -333,59 +348,38 @@ const handleSubmit = async () => {
     if (emailError) errors.value.email = emailError
     if (passwordError) errors.value.password = passwordError
     if (passwordConfirmError) errors.value.password_confirmation = passwordConfirmError
-    
+
     if (adminCodeError || nameError || emailError || passwordError || passwordConfirmError) {
         return
     }
-    
-    // 送信中の重複防止
+
     if (loading.value) return
     loading.value = true
     errors.value = {}
 
     try {
         console.log('🚀 管理者登録処理開始:', form.email)
-        
-        // Firebase Authentication で管理者ユーザー作成
-        const { registerWithRole } = useAuth()
-        
-        await registerWithRole(form.email, form.password, form.name.trim(), 'admin')
-        
+
+        const { registerAdmin } = useAuth()
+
+        await registerAdmin({
+            adminCode: form.adminCode,
+            name: form.name.trim(),
+            email: form.email,
+            password: form.password
+        })
+
         console.log('✅ 管理者登録成功！ログイン画面に遷移します')
-        
         errors.value = {}
-        
-        // 管理者ログイン画面にリダイレクト
+
         await navigateTo('/admin/login?registered=true')
 
     } catch (error) {
         console.error('❌ 管理者登録エラー:', error)
-        
-        let errorMessage = '管理者登録でエラーが発生しました'
-        
-        if (error.code) {
-            switch (error.code) {
-                case 'auth/email-already-in-use':
-                    errorMessage = 'このメールアドレスは既に使用されています'
-                    break
-                case 'auth/invalid-email':
-                    errorMessage = '無効なメールアドレスです'
-                    break
-                case 'auth/weak-password':
-                    errorMessage = 'パスワードは8文字以上で入力してください'
-                    break
-                case 'auth/operation-not-allowed':
-                    errorMessage = 'メール/パスワード認証が無効になっています'
-                    break
-                case 'auth/admin-code-invalid':
-                    errorMessage = '管理者コードが正しくありません'
-                    break
-                default:
-                    errorMessage = error.message || '管理者登録でエラーが発生しました'
-            }
-        }
-        
+
+        const errorMessage = translateFirebaseError(error.code)
         errors.value.general = errorMessage
+
     } finally {
         loading.value = false
     }

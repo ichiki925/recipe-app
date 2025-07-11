@@ -265,7 +265,7 @@ onUnmounted(() => {
   font-size: 16px;
   font-weight: normal;
   cursor: pointer;
-  margin-bottom: 20px;
+  margin-top: 20px;
   box-sizing: border-box;
   transition: all 0.3s ease;
 }
@@ -289,7 +289,7 @@ onUnmounted(() => {
   color: #888;
   text-decoration: underline;
   font-size: 14px;
-  margin-bottom: 10px;
+  margin: 30px auto;
   transition: color 0.3s ease;
 }
 
@@ -304,15 +304,23 @@ onUnmounted(() => {
 /* レスポンシブ対応 */
 @media (max-width: 768px) {
   .admin-login-page {
+    min-height: 100vh;
+    align-items: flex-start;
     padding: 20px;
+    background: white;
   }
-  
+
   .form-container {
     max-width: 100%;
+    padding: 0;
   }
-  
+
   .login-form {
     padding: 30px 20px;
+    border: none;
+    box-shadow: none;
+    border-radius: 0;
+    background: white;
   }
 }
 </style>

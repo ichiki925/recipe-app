@@ -2,14 +2,19 @@
 
 return [
 
+    /*
+    |--------------------------------------------------------------------------
+    | Cross-Origin Resource Sharing (CORS) Configuration
+    |--------------------------------------------------------------------------
+    */
 
     'paths' => ['api/*', 'sanctum/csrf-cookie'],
 
     'allowed_methods' => ['*'],
 
     'allowed_origins' => [
-        'http://localhost:3000',  // Nuxt.jsの開発サーバー
-        'http://127.0.0.1:3000',
+        'http://localhost:3000',  // Nuxt.js フロントエンド
+        'http://localhost',       // 念のため
     ],
 
     'allowed_origins_patterns' => [],

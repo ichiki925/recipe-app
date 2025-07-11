@@ -15,25 +15,37 @@ class UserFactory extends Factory
     public function definition()
     {
         return [
+            'firebase_uid' => 'test_' . Str::random(28), // Firebase UIDっぽい文字列
             'name' => $this->faker->name(),
             'email' => $this->faker->unique()->safeEmail(),
+            'username' => $this->faker->unique()->userName(),
+            'avatar_url' => $this->faker->imageUrl(200, 200, 'people'),
+            'role' => 'user', // デフォルトは一般ユーザー
             'email_verified_at' => now(),
-            'password' => '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', // password
-            'remember_token' => Str::random(10),
         ];
     }
 
     /**
-     * Indicate that the model's email address should be unverified.
+     * 管理者ユーザー用の状態
+     *
+     * @return \Illuminate\Database\Eloquent\Factories\Factory
+     */
+    public function admin()
+    {
+        return $this->state([
+            'role' => 'admin',
+        ]);
+    }
+
+    /**
+     * メール未認証状態
      *
      * @return \Illuminate\Database\Eloquent\Factories\Factory
      */
     public function unverified()
     {
-        return $this->state(function (array $attributes) {
-            return [
-                'email_verified_at' => null,
-            ];
-        });
+        return $this->state([
+            'email_verified_at' => null,
+        ]);
     }
 }

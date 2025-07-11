@@ -4,13 +4,30 @@
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+use App\Models\User;
 use App\Http\Controllers\Api\RecipeController;
 use App\Http\Controllers\Api\LikeController;
 use App\Http\Controllers\Api\CommentController;
 use App\Http\Controllers\User\ProfileController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\CommentController as AdminCommentController;
+use App\Http\Controllers\Admin\AuthController as AdminAuthController;
 
+
+// ========================================
+// 🔥 管理者認証関連（コントローラー使用）
+// ========================================
+
+// 新規管理者登録（認証不要）
+Route::post('/admin/register', [AdminAuthController::class, 'register']);
+
+// Firebase認証が必要なテスト用エンドポイント
+Route::middleware('firebase.auth')->group(function () {
+
+    // 管理者権限確認用
+    Route::get('/admin/check', [AdminAuthController::class, 'check']);
+
+});
 
 
 // ========================================
@@ -48,32 +65,6 @@ Route::middleware('firebase.auth')->group(function () {
         ]);
     });
 
-    // 管理者登録用
-    Route::middleware('firebase.auth')->post('/admin/register', function(Request $request) {
-        $user = $request->user();
-
-        // 管理者コード確認
-        if ($request->admin_code !== 'VANILLA_KITCHEN_ADMIN_2025') {
-            return response()->json(['error' => '無効な管理者コードです'], 400);
-        }
-
-        // roleを管理者に更新
-        $user->update(['role' => 'admin']);
-
-        return response()->json(['admin' => $user]);
-    });
-
-    // 管理者権限確認用
-    Route::middleware('firebase.auth')->get('/admin', function(Request $request) {
-        $user = $request->user();
-
-        if (!$user->isAdmin()) {
-            return response()->json(['error' => 'Admin access required'], 403);
-        }
-
-        return response()->json(['admin' => $user]);
-    });
-
     // 管理者専用エンドポイント（テスト用）
     Route::get('/auth/admin-only', function (Request $request) {
         $user = $request->user();
@@ -109,7 +100,7 @@ Route::middleware('firebase.auth')->group(function () {
     // データベース接続テスト
     Route::get('/auth/db-test', function (Request $request) {
         $user = $request->user();
-        $userCount = \App\Models\User::count();
+        $userCount = User::count();
 
         return response()->json([
             'message' => 'Database connection successful!',
@@ -173,8 +164,6 @@ Route::middleware(['firebase.auth', 'admin'])->prefix('admin')->group(function (
 
     // ダッシュボード
     Route::get('/dashboard', [DashboardController::class, 'index']);
-    // Route::get('/dashboard/system-info', [DashboardController::class, 'systemInfo']);
-    // Route::get('/dashboard/monthly-report', [DashboardController::class, 'monthlyReport']);
 
     // レシピ管理（CRUD）
     Route::prefix('recipes')->group(function () {
@@ -187,16 +176,16 @@ Route::middleware(['firebase.auth', 'admin'])->prefix('admin')->group(function (
 
     // コメント管理
     Route::prefix('comments')->group(function () {
-        Route::get('/', [Admin\CommentController::class, 'index']);
-        Route::get('/stats', [Admin\CommentController::class, 'stats']);
-        Route::get('/flagged', [Admin\CommentController::class, 'flagged']);
-        Route::get('/user/{user}', [Admin\CommentController::class, 'userComments']);
-        Route::get('/{comment}', [Admin\CommentController::class, 'show']);
-        Route::delete('/{comment}', [Admin\CommentController::class, 'destroy']);
-        Route::delete('/bulk', [Admin\CommentController::class, 'bulkDestroy']);
+        Route::get('/', [AdminCommentController::class, 'index']); // 👈 修正
+        Route::get('/stats', [AdminCommentController::class, 'stats']);
+        Route::get('/flagged', [AdminCommentController::class, 'flagged']);
+        Route::get('/user/{user}', [AdminCommentController::class, 'userComments']);
+        Route::get('/{comment}', [AdminCommentController::class, 'show']);
+        Route::delete('/{comment}', [AdminCommentController::class, 'destroy']);
+        Route::delete('/bulk', [AdminCommentController::class, 'bulkDestroy']);
     });
 
-    // いいね統計（追加）
+    // いいね統計
     Route::get('/like-stats', [LikeController::class, 'stats']);
     Route::get('/comment-stats', [CommentController::class, 'stats']);
 });

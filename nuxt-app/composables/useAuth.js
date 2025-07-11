@@ -27,7 +27,7 @@ export const useAuth = () => {
 
             // Laravel APIでユーザー情報を取得・確認
             const config = useRuntimeConfig()
-            const response = await $fetch('/auth/user', {
+            const response = await $fetch('/api/auth/user', {
                 baseURL: config.public.apiBaseUrl,
                 headers: {
                     'Authorization': `Bearer ${token}`
@@ -61,10 +61,10 @@ export const useAuth = () => {
             // 1. Firebase認証でログイン
             const userCredential = await signInWithEmailAndPassword($auth, email, password)
             const token = await userCredential.user.getIdToken()
-            
+
             // 2. Laravel APIで管理者権限を確認
             const config = useRuntimeConfig()
-            const response = await $fetch('/admin', {
+            const response = await $fetch('/api/admin/check', {
                 baseURL: config.public.apiBaseUrl,
                 headers: {
                     'Authorization': `Bearer ${token}`
@@ -116,7 +116,7 @@ export const useAuth = () => {
 
             // 2. Laravel APIにユーザー情報を保存
             const config = useRuntimeConfig()
-            const response = await $fetch('/auth/register', {
+            const response = await $fetch('/api/auth/register', {
                 method: 'POST',
                 baseURL: config.public.apiBaseUrl,
                 headers: {
@@ -150,67 +150,59 @@ export const useAuth = () => {
     }
 
     // 管理者登録機能
-    const registerAdmin = async (formData) => {
+    const registerAdmin = async ({ adminCode, name, email, password }) => {
         try {
+            console.log('🚀 管理者登録開始:', { adminCode, name, email })
             loading.value = true
+
+            // 1. Firebase認証でアカウント作成
             const { $auth } = useNuxtApp()
+            const userCredential = await createUserWithEmailAndPassword($auth, email, password)
+            const firebaseUser = userCredential.user
 
-            // 1. Firebase Authentication
-            const userCredential = await createUserWithEmailAndPassword(
-                $auth,
-                formData.email,
-                formData.password
-            )
-            const token = await userCredential.user.getIdToken()
+            console.log('✅ Firebase認証完了:', firebaseUser.uid)
 
-            // 2. Laravel APIで管理者登録（管理者コード検証含む）
+            // 2. Laravel APIに管理者情報を送信
             const config = useRuntimeConfig()
-            const response = await $fetch('/admin/register', {
+
+            const response = await $fetch('/api/admin/register', {
                 method: 'POST',
                 baseURL: config.public.apiBaseUrl,
                 headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
                 },
                 body: {
-                    firebase_uid: userCredential.user.uid,
-                    name: formData.name,
-                    email: formData.email,
-                    admin_code: formData.adminCode,
-                    role: 'admin'
+                    admin_code: adminCode,
+                    firebase_uid: firebaseUser.uid,
+                    name: name,
+                    email: email,
                 }
             })
 
-            if (!response.admin) {
-                throw new Error('管理者登録に失敗しました')
+            console.log('✅ Laravel API登録完了:', response)
+
+            return {
+                success: true,
+                user: response.admin
             }
 
-            // 3. メール認証送信
-            await sendEmailVerification(userCredential.user)
-
-            // 4. 管理者情報をセット
-            admin.value = {
-                uid: userCredential.user.uid,
-                email: userCredential.user.email,
-                displayName: response.admin.name,
-                role: response.admin.role,
-                createdAt: response.admin.created_at
-            }
-
-            user.value = {
-                ...userCredential.user,
-                profile: response.admin
-            }
-
-            return { success: true, user: userCredential.user, admin: admin.value }
         } catch (error) {
-            console.error('Admin registration error:', error)
-            throw new Error(error.message || '管理者登録に失敗しました')
+            console.error('❌ 管理者登録エラー:', error)
+
+            if (error.data?.error) {
+                // Laravel APIのエラー
+                throw new Error(error.data.error)
+            } else if (error.code) {
+                // Firebase認証のエラー
+                throw new Error(getAuthErrorMessage(error.code))
+            } else {
+                // その他のエラー
+                throw new Error(error.message || '管理者登録に失敗しました')
+            }
         } finally {
             loading.value = false
         }
     }
-
     // パスワードリセット機能
     const resetPassword = async (email) => {
         try {
@@ -300,19 +292,19 @@ export const useAuth = () => {
 
             console.log('📤 Laravel APIテスト開始...')
             console.log('🔑 使用するトークン:', token)
-            
+
             // 実際のAPIリクエスト
             const config = useRuntimeConfig()
-            const response = await $fetch('/auth/user', {
+            const response = await $fetch('/api/auth/user', {
                 baseURL: config.public.apiBaseUrl,
                 headers: {
                     'Authorization': `Bearer ${token}`
                 }
             })
-            
+
             console.log('✅ Laravel API Response:', response)
             return response
-            
+
         } catch (error) {
             console.error('🚨 Laravel API エラー:', error)
             throw error
@@ -329,14 +321,14 @@ export const useAuth = () => {
 
         onAuthStateChanged($auth, async (firebaseUser) => {
             console.log('🔄 認証状態変更:', firebaseUser ? firebaseUser.email : 'null')
-            
+
             if (firebaseUser) {
                 try {
                     const token = await firebaseUser.getIdToken()
-                    
+
                     // Laravel APIでユーザー情報と権限を確認
                     const config = useRuntimeConfig()
-                    const response = await $fetch('/auth/user', {
+                    const response = await $fetch('/api/auth/user', {
                         baseURL: config.public.apiBaseUrl,
                         headers: {
                             'Authorization': `Bearer ${token}`
@@ -455,17 +447,17 @@ export const useAuth = () => {
         user: readonly(user),
         admin: readonly(admin),
         loading: readonly(loading),
-        
+
         // 計算プロパティ
         isAdmin,
         isLoggedIn,
-        
+
         // 一般ユーザー機能
         login,
         register,
         logout,
         requireAuth,
-        
+
         // 管理者機能
         adminLogin,
         registerAdmin,
@@ -473,7 +465,7 @@ export const useAuth = () => {
         setAdmin,
         requireAdmin,
         getCurrentAdmin,
-        
+
         // 共通機能
         resetPassword,
         initAuth,
