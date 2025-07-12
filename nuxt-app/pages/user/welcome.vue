@@ -26,7 +26,7 @@ definePageMeta({
     left: 0;
     width: 100vw;
     height: 100vh;
-    overflow: hidden;
+
 
     background-color: #f2f2f2;
     font-family: 'Noto Sans JP', sans-serif;
@@ -110,6 +110,9 @@ definePageMeta({
     .welcome-page {
         background-color: #ffffff;
         padding: 15px;
+        /* スマホでは上部に配置し、必要に応じてスクロール可能にする */
+        align-items: flex-start;
+        padding-top: 10vh; /* 上部に少しだけ余白を作る */
     }
 
     .welcome-container {
@@ -117,6 +120,38 @@ definePageMeta({
         border-radius: 0;
         max-width: 100%;
         padding: 1rem;
+        /* コンテンツが画面に収まるように調整 */
+        margin-bottom: 2rem;
+    }
+
+    .title {
+        font-size: 1.5rem;
+    }
+
+    .subtitle {
+        font-size: 0.9rem;
+        margin-bottom: 1.5rem;
+    }
+
+    /* 非常に小さな画面の場合 */
+    @media screen and (max-height: 600px) {
+        .welcome-page {
+            padding-top: 5vh;
+        }
+        
+        .welcome-container {
+            padding: 1rem 1rem 2rem;
+        }
+        
+        .title {
+            font-size: 1.3rem;
+            margin-bottom: 0.3rem;
+        }
+        
+        .subtitle {
+            font-size: 0.85rem;
+            margin-bottom: 1rem;
+        }
     }
 }
 </style>
