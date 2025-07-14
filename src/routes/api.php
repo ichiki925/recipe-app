@@ -12,21 +12,41 @@ use App\Http\Controllers\User\ProfileController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\CommentController as AdminCommentController;
 use App\Http\Controllers\Admin\AuthController as AdminAuthController;
+use App\Http\Controllers\Auth\AuthController;
+
 
 
 // ========================================
-// 🔥 管理者認証関連（コントローラー使用）
+// 🔥 認証関連
 // ========================================
 
-// 新規管理者登録（認証不要）
-Route::post('/admin/register', [AdminAuthController::class, 'register']);
+// 一般ユーザー認証ルート
+Route::prefix('auth')->group(function () {
+    // 登録（認証不要）
+    Route::post('/register', [AuthController::class, 'register']);
 
-// Firebase認証が必要なテスト用エンドポイント
-Route::middleware('firebase.auth')->group(function () {
+    // 認証が必要なルート
+    Route::middleware('firebase.auth')->group(function () {
+        Route::get('/check', [AuthController::class, 'check']);
+        Route::post('/logout', [AuthController::class, 'logout']);
+    });
+});
 
-    // 管理者権限確認用
-    Route::get('/admin/check', [AdminAuthController::class, 'check']);
+// 管理者認証ルート
+Route::prefix('admin')->group(function () {
+    // 管理者登録（認証不要）
+    Route::post('/register', [AdminAuthController::class, 'register']);
 
+    // 管理者認証が必要なルート
+    Route::middleware(['firebase.auth', 'admin'])->group(function () {
+        Route::get('/check', [AdminAuthController::class, 'check']);
+        Route::post('/logout', [AdminAuthController::class, 'logout']);
+    });
+});
+
+// その他のAPIルート
+Route::middleware('auth:api')->get('/user', function (Request $request) {
+    return $request->user();
 });
 
 
@@ -176,7 +196,7 @@ Route::middleware(['firebase.auth', 'admin'])->prefix('admin')->group(function (
 
     // コメント管理
     Route::prefix('comments')->group(function () {
-        Route::get('/', [AdminCommentController::class, 'index']); // 👈 修正
+        Route::get('/', [AdminCommentController::class, 'index']);
         Route::get('/stats', [AdminCommentController::class, 'stats']);
         Route::get('/flagged', [AdminCommentController::class, 'flagged']);
         Route::get('/user/{user}', [AdminCommentController::class, 'userComments']);

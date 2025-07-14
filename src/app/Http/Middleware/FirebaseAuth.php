@@ -15,8 +15,27 @@ class FirebaseAuth
 
     public function __construct()
     {
-        $factory = (new Factory)->withServiceAccount(config('firebase.credentials'));
-        $this->auth = $factory->createAuth();
+        try {
+            Log::info('Firebase middleware constructor called');
+            
+            // 設定ファイルの確認
+            $credentials = config('firebase.credentials');
+            Log::info('Firebase credentials config loaded: ' . ($credentials ? 'YES' : 'NO'));
+            
+            if (!$credentials) {
+                Log::error('Firebase credentials not found in config');
+                throw new \Exception('Firebase credentials not configured');
+            }
+            
+            $factory = (new Factory)->withServiceAccount($credentials);
+            $this->auth = $factory->createAuth();
+            
+            Log::info('Firebase auth initialized successfully');
+            
+        } catch (\Exception $e) {
+            Log::error('Firebase constructor error: ' . $e->getMessage());
+            throw $e;
+        }
     }
 
     /**
@@ -28,11 +47,14 @@ class FirebaseAuth
      */
     public function handle(Request $request, Closure $next)
     {
+        Log::info('Firebase auth middleware called');
         $idToken = $request->bearerToken();
 
         if (!$idToken) {
+            Log::error('No bearer token found');
             return response()->json(['error' => 'Authorization token not provided'], 401);
         }
+        Log::info('Bearer token found: ' . substr($idToken, 0, 20) . '...');
 
         try {
             // Firebase ID トークンを検証
@@ -70,6 +92,7 @@ class FirebaseAuth
             });
 
         } catch (\Exception $e) {
+            Log::error('Firebase auth error: ' . $e->getMessage());
             Log::error('Firebase authentication failed: ' . $e->getMessage());
             return response()->json(['error' => 'Invalid token'], 401);
         }

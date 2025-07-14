@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Controllers\Admin;
+namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
@@ -10,62 +10,51 @@ use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
 {
-    /**
-     * 新規管理者登録
-     */
+
     public function register(Request $request)
     {
         try {
             // バリデーション
             $validated = $request->validate([
-                'admin_code' => 'required|string',
                 'firebase_uid' => 'required|string|unique:users,firebase_uid',
                 'name' => 'required|string|max:20|min:2',
                 'email' => 'required|email|unique:users,email',
             ]);
 
-            // 管理者コード確認
-            if ($validated['admin_code'] !== 'VANILLA_KITCHEN_ADMIN_2025') {
-                return response()->json([
-                    'success' => false,
-                    'error' => '無効な管理者コードです'
-                ], 422);
-            }
-
-            // 新規管理者ユーザー作成
-            $admin = User::create([
+            // 新規ユーザー作成
+            $user = User::create([
                 'firebase_uid' => $validated['firebase_uid'],
                 'name' => $validated['name'],
                 'email' => $validated['email'],
-                'role' => 'admin',
+                'role' => 'user',
                 'email_verified_at' => now(),
             ]);
 
             // 成功ログ
-            Log::info('Admin user created successfully', [
-                'admin_id' => $admin->id,
-                'firebase_uid' => $admin->firebase_uid,
-                'email' => $admin->email,
+            Log::info('User created successfully', [
+                'user_id' => $user->id,
+                'firebase_uid' => $user->firebase_uid,
+                'email' => $user->email,
                 'created_by' => 'registration_form'
             ]);
 
             return response()->json([
                 'success' => true,
-                'message' => '管理者登録が完了しました',
+                'message' => 'ユーザー登録が完了しました',
                 'data' => [
-                    'admin' => [
-                        'id' => $admin->id,
-                        'firebase_uid' => $admin->firebase_uid,
-                        'name' => $admin->name,
-                        'email' => $admin->email,
-                        'role' => $admin->role,
-                        'created_at' => $admin->created_at,
+                    'user' => [
+                        'id' => $user->id,
+                        'firebase_uid' => $user->firebase_uid,
+                        'name' => $user->name,
+                        'email' => $user->email,
+                        'role' => $user->role,
+                        'created_at' => $user->created_at,
                     ]
                 ]
             ], 201);
 
         } catch (ValidationException $e) {
-            Log::warning('Admin registration validation failed', [
+            Log::warning('User registration validation failed', [
                 'errors' => $e->errors(),
                 'input' => $request->only(['name', 'email', 'firebase_uid'])
             ]);
@@ -77,7 +66,7 @@ class AuthController extends Controller
             ], 422);
 
         } catch (\Exception $e) {
-            Log::error('Admin registration failed', [
+            Log::error('User registration failed', [
                 'error' => $e->getMessage(),
                 'firebase_uid' => $request->firebase_uid ?? null,
                 'email' => $request->email ?? null,
@@ -86,41 +75,29 @@ class AuthController extends Controller
 
             return response()->json([
                 'success' => false,
-                'error' => '管理者登録に失敗しました',
+                'error' => 'ユーザー登録に失敗しました',
                 'message' => 'サーバーエラーが発生しました'
             ], 500);
         }
     }
 
     /**
-     * 管理者権限確認
+     * ユーザー情報確認
      */
     public function check(Request $request)
     {
         try {
             $user = $request->user();
 
-            if (!$user->isAdmin()) {
-                Log::warning('Non-admin user tried to access admin endpoint', [
-                    'user_id' => $user->id,
-                    'user_role' => $user->role,
-                    'firebase_uid' => $user->firebase_uid
-                ]);
-
-                return response()->json([
-                    'success' => false,  // 🔧 統一性のため追加
-                    'error' => 'Admin access required'
-                ], 403);
-            }
-
-            Log::info('Admin access granted', [
-                'admin_id' => $user->id,
-                'firebase_uid' => $user->firebase_uid
+            Log::info('User access granted', [
+                'user_id' => $user->id,
+                'firebase_uid' => $user->firebase_uid,
+                'role' => $user->role
             ]);
 
             return response()->json([
                 'success' => true,  // 🔧 統一性のため追加
-                'admin' => [
+                'user' => [
                     'id' => $user->id,
                     'firebase_uid' => $user->firebase_uid,
                     'name' => $user->name,
@@ -132,45 +109,45 @@ class AuthController extends Controller
             ]);
 
         } catch (\Exception $e) {
-            Log::error('Admin check failed', [
+            Log::error('User check failed', [
                 'error' => $e->getMessage(),
                 'stack' => $e->getTraceAsString()
             ]);
 
             return response()->json([
                 'success' => false,
-                'error' => '管理者情報の取得に失敗しました'
+                'error' => 'ユーザー情報の取得に失敗しました'
             ], 500);
         }
     }
 
     /**
-     * 管理者ログアウト処理
+     * ログアウト処理
      */
     public function logout(Request $request)
     {
         try {
             $user = $request->user();
 
-            Log::info('Admin logged out', [
-                'admin_id' => $user->id,
+            Log::info('User logged out', [
+                'user_id' => $user->id,
                 'firebase_uid' => $user->firebase_uid
             ]);
 
             return response()->json([
                 'success' => true,
-                'message' => '管理者ログアウトしました'
+                'message' => 'ログアウトしました'
             ]);
 
         } catch (\Exception $e) {
-            Log::error('Admin logout failed', [
+            Log::error('Logout failed', [
                 'error' => $e->getMessage(),
                 'stack' => $e->getTraceAsString()
             ]);
 
             return response()->json([
                 'success' => false,
-                'error' => '管理者ログアウトに失敗しました'
+                'error' => 'ログアウトに失敗しました'
             ], 500);
         }
     }

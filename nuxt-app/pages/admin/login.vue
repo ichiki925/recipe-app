@@ -13,7 +13,7 @@
             class="form-input"
             v-model="form.email"
             :class="{ 'error-input': errors.email }"
-            :disabled="loading"
+            :disabled="localLoading || loading"
           >
           <div v-if="errors.email" class="error">{{ errors.email }}</div>
         </div>
@@ -24,13 +24,13 @@
             class="form-input"
             v-model="form.password"
             :class="{ 'error-input': errors.password }"
-            :disabled="loading"
+            :disabled="localLoading || loading"
           >
           <div v-if="errors.password" class="error">{{ errors.password }}</div>
         </div>
         <div v-if="errors.general" class="error general-error">{{ errors.general }}</div>
-        <button type="submit" class="submit-button" :disabled="loading">
-          {{ loading ? 'ログイン中...' : 'ログイン' }}
+        <button type="submit" class="submit-button" :disabled="localLoading || loading">
+          {{ (localLoading || loading) ? 'ログイン中...' : 'ログイン' }}
         </button>
         <div class="form-footer">
           <NuxtLink to="/auth/forgot-password" class="forgot-link">パスワードを忘れた場合はこちら</NuxtLink>
@@ -41,14 +41,11 @@
 </template>
 
 <script setup>
-import { signInWithEmailAndPassword } from 'firebase/auth'
-
 definePageMeta({
   layout: false
 })
 
-const { $auth, $firestore } = useNuxtApp()
-const { setAdmin } = useAuth()
+const { login, loading, user } = useAuth()
 
 const form = ref({
   email: '',
@@ -56,14 +53,14 @@ const form = ref({
 })
 
 const errors = ref({})
-const loading = ref(false)
+const localLoading = ref(false)
 
 
 // ログイン処理メソッド
 const handleLogin = async () => {
   // バリデーションリセット
   errors.value = {}
-  loading.value = true
+  localLoading.value = true
 
   // 簡単なバリデーション
   if (!form.value.email) {
@@ -75,83 +72,73 @@ const handleLogin = async () => {
 
   // エラーがある場合は送信しない
   if (Object.keys(errors.value).length > 0) {
-    loading.value = false
+    localLoading.value = false
     return
   }
 
   try {
-    // Firebase認証でログイン
-    const userCredential = await signInWithEmailAndPassword(
-      $auth, 
-      form.value.email, 
-      form.value.password
-    )
-    
-    const user = userCredential.user
-    
-    // Firestoreから管理者権限を確認
-    const adminDoc = await $firestore.collection('admins').doc(user.uid).get()
-    
-    if (!adminDoc.exists) {
-      // 管理者として登録されていない場合
-      await $auth.signOut()
+    console.log('🚀 管理者ログイン開始:', form.value.email)
+    const userData = await login(form.value.email, form.value.password)
+
+    console.log('✅ ログイン成功:', userData)
+
+    // 管理者かどうかをチェック
+    if (userData && userData.role === 'admin') {
+      console.log('✅ 管理者権限確認完了')
+      // 管理者ダッシュボードにリダイレクト
+      await navigateTo('/admin/dashboard')
+    } else {
+      console.log('❌ 管理者権限なし')
+      // Firebase からログアウト
+      const { logout } = useAuth()
+      await logout()
       errors.value.general = '管理者権限がありません'
-      loading.value = false
-      return
     }
 
-    const adminData = adminDoc.data()
-    
-    // 管理者情報をセット
-    setAdmin({
-      uid: user.uid,
-      email: user.email,
-      displayName: adminData.displayName || user.displayName,
-      createdAt: adminData.createdAt
-    })
-
-    // ダッシュボードにリダイレクト
-    await navigateTo('/admin/dashboard')
-    
   } catch (error) {
-    console.error('ログインエラー:', error)
-    
-    // Firebase認証エラーの日本語化
+    console.error('❌ ログインエラー:', error)
+
+    // エラーメッセージの設定
     let errorMessage = 'ログインに失敗しました'
-    
-    switch (error.code) {
-      case 'auth/user-not-found':
-        errorMessage = 'ユーザーが見つかりません'
-        break
-      case 'auth/wrong-password':
-        errorMessage = 'パスワードが正しくありません'
-        break
-      case 'auth/invalid-email':
-        errorMessage = 'メールアドレスの形式が正しくありません'
-        break
-      case 'auth/user-disabled':
-        errorMessage = 'このアカウントは無効になっています'
-        break
-      case 'auth/too-many-requests':
-        errorMessage = 'ログイン試行回数が多すぎます。しばらく待ってからお試しください'
-        break
-      case 'auth/network-request-failed':
-        errorMessage = 'ネットワークエラーが発生しました'
-        break
-      default:
-        errorMessage = 'ログインに失敗しました'
+
+    // Firebase認証エラーの場合
+    if (error.code) {
+      switch (error.code) {
+        case 'auth/user-not-found':
+          errorMessage = 'ユーザーが見つかりません'
+          break
+        case 'auth/wrong-password':
+          errorMessage = 'パスワードが正しくありません'
+          break
+        case 'auth/invalid-email':
+          errorMessage = 'メールアドレスの形式が正しくありません'
+          break
+        case 'auth/user-disabled':
+          errorMessage = 'このアカウントは無効になっています'
+          break
+        case 'auth/too-many-requests':
+          errorMessage = 'ログイン試行回数が多すぎます。しばらく待ってからお試しください'
+          break
+        case 'auth/network-request-failed':
+          errorMessage = 'ネットワークエラーが発生しました'
+          break
+      }
+    }
+    // Laravel API エラーの場合
+    else if (error.data) {
+      errorMessage = error.data.error || error.data.message || 'サーバーエラーが発生しました'
     }
 
     errors.value.general = errorMessage
-    loading.value = false
+  } finally {
+    localLoading.value = false
   }
 }
 
 // ページ離脱時のクリーンアップ
 onUnmounted(() => {
-  loading.value = false
+  localLoading.value = false
 })
-
 </script>
 
 <style scoped>

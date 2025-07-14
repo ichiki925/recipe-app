@@ -204,17 +204,19 @@ const handleLogin = async () => {
     console.log('🔐 Firebase認証実行中...')
     const result = await login(form.email.trim(), form.password)
 
-    if (!result || !result.user) {
+    if (!result || (!result.id && !result.firebase_uid)) {
       console.error('❌ ログイン結果が無効です:', result)
       errors.value.general = 'ログインに失敗しました'
       return
     }
 
-    console.log('✅ ログイン成功:', result.user.uid)
+    console.log('✅ ログイン成功:', result)
     console.log('👤 ユーザー情報:', {
-      uid: result.user.uid,
-      email: result.user.email,
-      displayName: result.user.displayName
+        id: result.id,
+        firebase_uid: result.firebase_uid,
+        email: result.email,
+        name: result.name,
+        role: result.role
     })
 
     successMessage.value = 'ログインに成功しました！'

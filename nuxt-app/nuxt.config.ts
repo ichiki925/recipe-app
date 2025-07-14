@@ -29,7 +29,7 @@ export default defineNuxtConfig({
     public: {
       // Laravel API設定
       apiBaseUrl: process.env.API_BASE_URL || 'http://localhost',
-      
+
       // Firebase設定
       firebaseApiKey: process.env.FIREBASE_API_KEY,
       firebaseAuthDomain: process.env.FIREBASE_AUTH_DOMAIN,
