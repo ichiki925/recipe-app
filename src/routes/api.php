@@ -13,6 +13,7 @@ use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\CommentController as AdminCommentController;
 use App\Http\Controllers\Admin\AuthController as AdminAuthController;
 use App\Http\Controllers\Auth\AuthController;
+use App\Http\Resources\UserResource;
 
 
 
@@ -65,23 +66,10 @@ Route::get('/test', function () {
 // Firebase認証が必要なテスト用エンドポイント
 Route::middleware('firebase.auth')->group(function () {
 
-    // 認証済みユーザー情報を取得
     Route::get('/auth/user', function (Request $request) {
-        $user = $request->user();
-
         return response()->json([
             'message' => 'Firebase authentication successful!',
-            'user' => [
-                'id' => $user->id,
-                'firebase_uid' => $user->firebase_uid,
-                'name' => $user->name,
-                'email' => $user->email,
-                'avatar' => $user->avatar,
-                'role' => $user->role,
-                'is_admin' => $user->isAdmin(),
-                'is_user' => $user->isUser(),
-                'created_at' => $user->created_at,
-            ]
+            'user' => new UserResource($request->user()),
         ]);
     });
 
@@ -128,6 +116,25 @@ Route::middleware('firebase.auth')->group(function () {
             'total_users' => $userCount,
         ]);
     });
+});
+
+// ========================================
+// 🧪 開発用テストルート（本番時削除）
+// ========================================
+Route::get('/test/profile', function() {
+    $user = User::first();
+    auth()->setUser($user);
+    
+    $controller = new App\Http\Controllers\User\ProfileController();
+    return $controller->show(request());
+});
+
+Route::get('/test/user-resource', function() {
+    $user = User::first();
+    return response()->json([
+        'message' => 'UserResource test',
+        'user' => new App\Http\Resources\UserResource($user),
+    ]);
 });
 
 // ========================================

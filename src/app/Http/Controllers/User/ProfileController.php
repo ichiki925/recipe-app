@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\User;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\UserProfileResource;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Intervention\Image\ImageManagerStatic as Image;
@@ -22,22 +23,11 @@ class ProfileController extends Controller
             ], 401);
         }
 
+        // 統計情報のためにリレーションを読み込み
+        $user->loadCount(['recipeLikes', 'recipeComments', 'likedRecipes', 'recipes']);
+
         return response()->json([
-            'data' => [
-                'id' => $user->id,
-                'firebase_uid' => $user->firebase_uid,
-                'name' => $user->name,
-                'email' => $user->email,
-                'username' => $user->username,
-                'avatar_url' => $user->avatar_url,
-                'avatar' => $user->avatar,
-                'role' => $user->role,
-                'is_admin' => $user->isAdmin(),
-                'is_user' => $user->isUser(),
-                'email_verified_at' => $user->email_verified_at,
-                'created_at' => $user->created_at,
-                'updated_at' => $user->updated_at,
-            ]
+            'data' => new UserProfileResource($user)
         ]);
     }
 
@@ -135,14 +125,7 @@ class ProfileController extends Controller
 
         return response()->json([
             'message' => 'プロフィールを更新しました',
-            'data' => [
-                'id' => $user->id,
-                'name' => $user->name,
-                'username' => $user->username,
-                'avatar_url' => $user->avatar_url,
-                'avatar' => $user->avatar,
-                'updated_at' => $user->updated_at,
-            ]
+            'data' => new UserProfileResource($user),
         ]);
     }
 
@@ -186,17 +169,20 @@ class ProfileController extends Controller
             ], 401);
         }
 
+        // 統計情報を読み込み
+        $user->loadCount(['recipeLikes', 'recipeComments', 'recipes']);
+
         // ユーザーの活動統計
         $stats = [
-            'total_likes' => $user->recipeLikes()->count(),
-            'total_comments' => $user->recipeComments()->count(),
+            'total_likes' => $user->recipe_likes_count ?? 0,
+            'total_comments' => $user->recipe_comments_count ?? 0,
             'member_since' => $user->created_at->format('Y年m月'),
             'days_since_joined' => $user->created_at->diffInDays(now()),
         ];
 
         // 管理者の場合は投稿レシピ数も追加
         if ($user->isAdmin()) {
-            $stats['total_recipes'] = $user->recipes()->count();
+            $stats['total_recipes'] = $user->recipes_count ?? 0;
             $stats['published_recipes'] = $user->recipes()->where('is_published', true)->count();
         }
 
@@ -227,10 +213,6 @@ class ProfileController extends Controller
                 Storage::disk('public')->delete($imagePath);
             }
 
-            // 関連データの処理（必要に応じて）
-            // - いいねは残す（匿名化）
-            // - コメントは残す（匿名化）
-
             // ユーザー情報を匿名化して論理削除
             $user->update([
                 'name' => '削除されたユーザー',
@@ -239,9 +221,6 @@ class ProfileController extends Controller
                 'avatar_url' => null,
                 'firebase_uid' => null,
             ]);
-
-            // 実際の削除処理（SoftDeletesを使用している場合）
-            // $user->delete();
 
             return response()->json([
                 'message' => 'アカウントを削除しました'
