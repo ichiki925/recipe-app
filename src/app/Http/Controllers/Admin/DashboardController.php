@@ -9,6 +9,7 @@ use App\Models\RecipeLike;
 use App\Models\RecipeComment;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Carbon\Carbon;
 
 class DashboardController extends Controller
@@ -18,7 +19,7 @@ class DashboardController extends Controller
      */
     public function index(Request $request)
     {
-        $user = auth()->user();
+        $user = $request->user();
 
         if (!$user || !$user->isAdmin()) {
             return response()->json([
@@ -39,6 +40,11 @@ class DashboardController extends Controller
             // 人気レシピ Top 5
             $popularRecipes = $this->getPopularRecipes();
 
+            \Log::info('Dashboard data prepared successfully', [
+                'user_id' => $user->id,
+                'stats' => $stats
+            ]);
+
             return response()->json([
                 'data' => [
                     'stats' => $stats,
@@ -50,8 +56,10 @@ class DashboardController extends Controller
 
         } catch (\Exception $e) {
             \Log::error('Dashboard data fetch failed: ' . $e->getMessage());
+            \Log::error('Stack trace: ' . $e->getTraceAsString());
             return response()->json([
-                'message' => 'ダッシュボードデータの取得に失敗しました'
+                'message' => 'ダッシュボードデータの取得に失敗しました',
+                'error' => $e->getMessage()
             ], 500);
         }
     }
@@ -61,61 +69,121 @@ class DashboardController extends Controller
      */
     private function getBasicStats()
     {
-        // 全レシピ数（削除されたものも含む）
-        $totalRecipes = Recipe::withTrashed()->count();
+        try {
+            // ユーザー統計（これは確実に存在）
+            $totalUsers = User::where('role', 'user')->count();
+            $totalAdmins = User::where('role', 'admin')->count();
+            $todayNewUsers = User::whereDate('created_at', Carbon::today())->count();
 
-        // 公開中のレシピ数
-        $publishedRecipes = Recipe::where('is_published', true)->count();
+            // レシピ統計（テーブルが存在するかチェック）
+            $recipeStats = [
+                'total_recipes' => 0,
+                'published_recipes' => 0,
+                'draft_recipes' => 0,
+                'recent_updated_recipes' => 0,
+            ];
 
-        // 下書きレシピ数
-        $draftRecipes = Recipe::where('is_published', false)->count();
+            if (Schema::hasTable('recipes')) {
+                try {
+                    $recipeStats['total_recipes'] = Recipe::withTrashed()->count();
+                    $recipeStats['published_recipes'] = Recipe::where('is_published', true)->count();
+                    $recipeStats['draft_recipes'] = Recipe::where('is_published', false)->count();
+                    $recipeStats['recent_updated_recipes'] = Recipe::where('updated_at', '>=', Carbon::now()->subDays(7))->count();
+                } catch (\Exception $e) {
+                    \Log::warning('Recipe stats error: ' . $e->getMessage());
+                }
+            }
 
-        // 最近更新されたレシピ数（7日以内）
-        $recentUpdatedRecipes = Recipe::where('updated_at', '>=', Carbon::now()->subDays(7))->count();
+            // いいね統計
+            $totalLikes = 0;
+            if (Schema::hasTable('recipe_likes')) {
+                try {
+                    $totalLikes = RecipeLike::count();
+                } catch (\Exception $e) {
+                    \Log::warning('Likes stats error: ' . $e->getMessage());
+                }
+            }
 
-        // ユーザー登録数
-        $totalUsers = User::where('role', 'user')->count();
+            // コメント統計
+            $totalComments = 0;
+            if (Schema::hasTable('recipe_comments')) {
+                try {
+                    $totalComments = RecipeComment::count();
+                } catch (\Exception $e) {
+                    \Log::warning('Comments stats error: ' . $e->getMessage());
+                }
+            }
 
-        // 管理者数
-        $totalAdmins = User::where('role', 'admin')->count();
+            // 今週のアクティビティ統計
+            $weeklyStats = [
+                'new_recipes' => 0,
+                'new_likes' => 0,
+                'new_comments' => 0,
+            ];
 
-        // 総いいね数
-        $totalLikes = RecipeLike::count();
+            if (Schema::hasTable('recipes')) {
+                try {
+                    $weeklyStats['new_recipes'] = Recipe::whereBetween('created_at', [
+                        Carbon::now()->startOfWeek(),
+                        Carbon::now()->endOfWeek()
+                    ])->count();
+                } catch (\Exception $e) {
+                    \Log::warning('Weekly recipes error: ' . $e->getMessage());
+                }
+            }
 
-        // 総コメント数
-        $totalComments = RecipeComment::count();
+            if (Schema::hasTable('recipe_likes')) {
+                try {
+                    $weeklyStats['new_likes'] = RecipeLike::whereBetween('created_at', [
+                        Carbon::now()->startOfWeek(),
+                        Carbon::now()->endOfWeek()
+                    ])->count();
+                } catch (\Exception $e) {
+                    \Log::warning('Weekly likes error: ' . $e->getMessage());
+                }
+            }
 
-        // 今日の新規ユーザー数
-        $todayNewUsers = User::whereDate('created_at', Carbon::today())->count();
+            if (Schema::hasTable('recipe_comments')) {
+                try {
+                    $weeklyStats['new_comments'] = RecipeComment::whereBetween('created_at', [
+                        Carbon::now()->startOfWeek(),
+                        Carbon::now()->endOfWeek()
+                    ])->count();
+                } catch (\Exception $e) {
+                    \Log::warning('Weekly comments error: ' . $e->getMessage());
+                }
+            }
 
-        // 今週のアクティビティ
-        $weeklyStats = [
-            'new_recipes' => Recipe::whereBetween('created_at', [
-                Carbon::now()->startOfWeek(),
-                Carbon::now()->endOfWeek()
-            ])->count(),
-            'new_likes' => RecipeLike::whereBetween('created_at', [
-                Carbon::now()->startOfWeek(),
-                Carbon::now()->endOfWeek()
-            ])->count(),
-            'new_comments' => RecipeComment::whereBetween('created_at', [
-                Carbon::now()->startOfWeek(),
-                Carbon::now()->endOfWeek()
-            ])->count(),
-        ];
+            return array_merge($recipeStats, [
+                'total_users' => $totalUsers,
+                'total_admins' => $totalAdmins,
+                'total_likes' => $totalLikes,
+                'total_comments' => $totalComments,
+                'today_new_users' => $todayNewUsers,
+                'weekly_stats' => $weeklyStats,
+            ]);
 
-        return [
-            'total_recipes' => $totalRecipes,
-            'published_recipes' => $publishedRecipes,
-            'draft_recipes' => $draftRecipes,
-            'recent_updated_recipes' => $recentUpdatedRecipes,
-            'total_users' => $totalUsers,
-            'total_admins' => $totalAdmins,
-            'total_likes' => $totalLikes,
-            'total_comments' => $totalComments,
-            'today_new_users' => $todayNewUsers,
-            'weekly_stats' => $weeklyStats,
-        ];
+        } catch (\Exception $e) {
+            \Log::error('getBasicStats error: ' . $e->getMessage());
+
+            // エラーが発生した場合は最小限の統計を返す
+            return [
+                'total_recipes' => 0,
+                'published_recipes' => 0,
+                'draft_recipes' => 0,
+                'recent_updated_recipes' => 0,
+                'total_users' => User::count(),
+                'total_admins' => User::where('role', 'admin')->count(),
+                'total_likes' => 0,
+                'total_comments' => 0,
+                'today_new_users' => 0,
+                'weekly_stats' => [
+                    'new_recipes' => 0,
+                    'new_likes' => 0,
+                    'new_comments' => 0,
+                ],
+            ];
+        }
     }
 
     /**
@@ -123,21 +191,30 @@ class DashboardController extends Controller
      */
     private function getRecentDeletedRecipes($limit = 10)
     {
-        return Recipe::onlyTrashed()
-            ->with('admin:id,name')
-            ->latest('deleted_at')
-            ->limit($limit)
-            ->get()
-            ->map(function ($recipe) {
-                return [
-                    'id' => $recipe->id,
-                    'title' => $recipe->title,
-                    'genre' => $recipe->genre,
-                    'admin_name' => $recipe->admin ? $recipe->admin->name : '不明',
-                    'deleted_at' => $recipe->deleted_at->format('Y-m-d H:i'),
-                    'deleted_at_human' => $recipe->deleted_at->diffForHumans(),
-                ];
-            });
+        try {
+            if (!Schema::hasTable('recipes')) {
+                return [];
+            }
+
+            return Recipe::onlyTrashed()
+                ->with('admin:id,name')
+                ->latest('deleted_at')
+                ->limit($limit)
+                ->get()
+                ->map(function ($recipe) {
+                    return [
+                        'id' => $recipe->id,
+                        'title' => $recipe->title,
+                        'genre' => $recipe->genre,
+                        'admin_name' => $recipe->admin ? $recipe->admin->name : '不明',
+                        'deleted_at' => $recipe->deleted_at->format('Y-m-d H:i'),
+                        'deleted_at_human' => $recipe->deleted_at->diffForHumans(),
+                    ];
+                });
+        } catch (\Exception $e) {
+            \Log::warning('getRecentDeletedRecipes error: ' . $e->getMessage());
+            return [];
+        }
     }
 
     /**
@@ -145,67 +222,87 @@ class DashboardController extends Controller
      */
     private function getRecentActivities($limit = 20)
     {
-        $activities = collect();
+        try {
+            $activities = collect();
 
-        // 最近のレシピ投稿
-        $recentRecipes = Recipe::with('admin:id,name')
-            ->latest()
-            ->limit(5)
-            ->get()
-            ->map(function ($recipe) {
-                return [
-                    'type' => 'recipe_created',
-                    'message' => "「{$recipe->title}」が投稿されました",
-                    'user_name' => $recipe->admin ? $recipe->admin->name : '不明',
-                    'created_at' => $recipe->created_at,
-                    'url' => "/admin/recipes/{$recipe->id}",
-                ];
-            });
+            // 最近のユーザー登録（これは確実に取得可能）
+            $recentUsers = User::where('role', 'user')
+                ->latest()
+                ->limit(5)
+                ->get()
+                ->map(function ($user) {
+                    return [
+                        'type' => 'user_registered',
+                        'message' => "新しいユーザーが登録されました",
+                        'user_name' => $user->name,
+                        'created_at' => $user->created_at,
+                        'url' => null,
+                    ];
+                });
 
-        // 最近のコメント
-        $recentComments = RecipeComment::with(['user:id,name', 'recipe:id,title'])
-            ->latest()
-            ->limit(5)
-            ->get()
-            ->map(function ($comment) {
-                return [
-                    'type' => 'comment_created',
-                    'message' => "「{$comment->recipe->title}」にコメントがありました",
-                    'user_name' => $comment->user ? $comment->user->name : '不明',
-                    'created_at' => $comment->created_at,
-                    'url' => "/admin/comments",
-                ];
-            });
+            $activities = $activities->concat($recentUsers);
 
-        // 最近のユーザー登録
-        $recentUsers = User::where('role', 'user')
-            ->latest()
-            ->limit(5)
-            ->get()
-            ->map(function ($user) {
-                return [
-                    'type' => 'user_registered',
-                    'message' => "新しいユーザーが登録されました",
-                    'user_name' => $user->name,
-                    'created_at' => $user->created_at,
-                    'url' => null,
-                ];
-            });
+            // レシピ関連の活動（テーブルが存在する場合のみ）
+            if (Schema::hasTable('recipes')) {
+                try {
+                    $recentRecipes = Recipe::with('admin:id,name')
+                        ->latest()
+                        ->limit(5)
+                        ->get()
+                        ->map(function ($recipe) {
+                            return [
+                                'type' => 'recipe_created',
+                                'message' => "「{$recipe->title}」が投稿されました",
+                                'user_name' => $recipe->admin ? $recipe->admin->name : '不明',
+                                'created_at' => $recipe->created_at,
+                                'url' => "/admin/recipes/{$recipe->id}",
+                            ];
+                        });
 
-        // 全ての活動をまとめて日時順でソート
-        $activities = $recentRecipes
-            ->concat($recentComments)
-            ->concat($recentUsers)
-            ->sortByDesc('created_at')
-            ->take($limit)
-            ->values()
-            ->map(function ($activity) {
-                $activity['created_at_human'] = Carbon::parse($activity['created_at'])->diffForHumans();
-                $activity['created_at_formatted'] = Carbon::parse($activity['created_at'])->format('m/d H:i');
-                return $activity;
-            });
+                    $activities = $activities->concat($recentRecipes);
+                } catch (\Exception $e) {
+                    \Log::warning('Recent recipes error: ' . $e->getMessage());
+                }
+            }
 
-        return $activities;
+            // コメント関連の活動
+            if (Schema::hasTable('recipe_comments')) {
+                try {
+                    $recentComments = RecipeComment::with(['user:id,name', 'recipe:id,title'])
+                        ->latest()
+                        ->limit(5)
+                        ->get()
+                        ->map(function ($comment) {
+                            return [
+                                'type' => 'comment_created',
+                                'message' => "「{$comment->recipe->title}」にコメントがありました",
+                                'user_name' => $comment->user ? $comment->user->name : '不明',
+                                'created_at' => $comment->created_at,
+                                'url' => "/admin/comments",
+                            ];
+                        });
+
+                    $activities = $activities->concat($recentComments);
+                } catch (\Exception $e) {
+                    \Log::warning('Recent comments error: ' . $e->getMessage());
+                }
+            }
+
+            // 全ての活動をまとめて日時順でソート
+            return $activities
+                ->sortByDesc('created_at')
+                ->take($limit)
+                ->values()
+                ->map(function ($activity) {
+                    $activity['created_at_human'] = Carbon::parse($activity['created_at'])->diffForHumans();
+                    $activity['created_at_formatted'] = Carbon::parse($activity['created_at'])->format('m/d H:i');
+                    return $activity;
+                });
+
+        } catch (\Exception $e) {
+            \Log::warning('getRecentActivities error: ' . $e->getMessage());
+            return [];
+        }
     }
 
     /**
@@ -213,31 +310,40 @@ class DashboardController extends Controller
      */
     private function getPopularRecipes($limit = 5)
     {
-        return Recipe::published()
-            ->with('admin:id,name')
-            ->orderBy('likes_count', 'desc')
-            ->orderBy('views_count', 'desc')
-            ->limit($limit)
-            ->get()
-            ->map(function ($recipe) {
-                return [
-                    'id' => $recipe->id,
-                    'title' => $recipe->title,
-                    'genre' => $recipe->genre,
-                    'likes_count' => $recipe->likes_count,
-                    'views_count' => $recipe->views_count,
-                    'admin_name' => $recipe->admin ? $recipe->admin->name : '不明',
-                    'created_at_human' => $recipe->created_at->diffForHumans(),
-                ];
-            });
+        try {
+            if (!Schema::hasTable('recipes')) {
+                return [];
+            }
+
+            return Recipe::published()
+                ->with('admin:id,name')
+                ->orderBy('likes_count', 'desc')
+                ->orderBy('views_count', 'desc')
+                ->limit($limit)
+                ->get()
+                ->map(function ($recipe) {
+                    return [
+                        'id' => $recipe->id,
+                        'title' => $recipe->title,
+                        'genre' => $recipe->genre,
+                        'likes_count' => $recipe->likes_count,
+                        'views_count' => $recipe->views_count,
+                        'admin_name' => $recipe->admin ? $recipe->admin->name : '不明',
+                        'created_at_human' => $recipe->created_at->diffForHumans(),
+                    ];
+                });
+        } catch (\Exception $e) {
+            \Log::warning('getPopularRecipes error: ' . $e->getMessage());
+            return [];
+        }
     }
 
     /**
      * システム情報を取得
      */
-    public function systemInfo()
+    public function systemInfo(Request $request)
     {
-        $user = auth()->user();
+        $user = $request->user();
 
         if (!$user || !$user->isAdmin()) {
             return response()->json([
@@ -247,10 +353,10 @@ class DashboardController extends Controller
 
         // データベース情報
         $dbStats = [
-            'recipes_table_size' => DB::table('recipes')->count(),
+            'recipes_table_size' => Schema::hasTable('recipes') ? DB::table('recipes')->count() : 0,
             'users_table_size' => DB::table('users')->count(),
-            'likes_table_size' => DB::table('recipe_likes')->count(),
-            'comments_table_size' => DB::table('recipe_comments')->count(),
+            'likes_table_size' => Schema::hasTable('recipe_likes') ? DB::table('recipe_likes')->count() : 0,
+            'comments_table_size' => Schema::hasTable('recipe_comments') ? DB::table('recipe_comments')->count() : 0,
         ];
 
         // ディスク使用量（画像ファイル）
@@ -269,12 +375,14 @@ class DashboardController extends Controller
         ]);
     }
 
+    
+
     /**
      * 月次レポートを取得
      */
     public function monthlyReport(Request $request)
     {
-        $user = auth()->user();
+        $user = $request->user();
 
         if (!$user || !$user->isAdmin()) {
             return response()->json([
@@ -288,10 +396,10 @@ class DashboardController extends Controller
 
         $report = [
             'period' => $month,
-            'recipes_created' => Recipe::whereBetween('created_at', [$startDate, $endDate])->count(),
+            'recipes_created' => Schema::hasTable('recipes') ? Recipe::whereBetween('created_at', [$startDate, $endDate])->count() : 0,
             'users_registered' => User::whereBetween('created_at', [$startDate, $endDate])->count(),
-            'likes_given' => RecipeLike::whereBetween('created_at', [$startDate, $endDate])->count(),
-            'comments_posted' => RecipeComment::whereBetween('created_at', [$startDate, $endDate])->count(),
+            'likes_given' => Schema::hasTable('recipe_likes') ? RecipeLike::whereBetween('created_at', [$startDate, $endDate])->count() : 0,
+            'comments_posted' => Schema::hasTable('recipe_comments') ? RecipeComment::whereBetween('created_at', [$startDate, $endDate])->count() : 0,
             'most_popular_genre' => $this->getMostPopularGenre($startDate, $endDate),
             'top_admin' => $this->getTopAdmin($startDate, $endDate),
         ];
@@ -300,6 +408,7 @@ class DashboardController extends Controller
             'data' => $report
         ]);
     }
+
 
     /**
      * ディレクトリサイズを取得
@@ -334,23 +443,40 @@ class DashboardController extends Controller
      */
     private function getMostPopularGenre($startDate, $endDate)
     {
-        return Recipe::whereBetween('created_at', [$startDate, $endDate])
-            ->select('genre', DB::raw('COUNT(*) as count'))
-            ->groupBy('genre')
-            ->orderBy('count', 'desc')
-            ->first();
+        try {
+            if (!Schema::hasTable('recipes')) {
+                return null;
+            }
+
+            return Recipe::whereBetween('created_at', [$startDate, $endDate])
+                ->select('genre', DB::raw('COUNT(*) as count'))
+                ->groupBy('genre')
+                ->orderBy('count', 'desc')
+                ->first();
+        } catch (\Exception $e) {
+            return null;
+        }
     }
+
 
     /**
      * 期間内で最も活発な管理者を取得
      */
     private function getTopAdmin($startDate, $endDate)
     {
-        return Recipe::with('admin:id,name')
-            ->whereBetween('created_at', [$startDate, $endDate])
-            ->select('admin_id', DB::raw('COUNT(*) as recipes_count'))
-            ->groupBy('admin_id')
-            ->orderBy('recipes_count', 'desc')
-            ->first();
+        try {
+            if (!Schema::hasTable('recipes')) {
+                return null;
+            }
+
+            return Recipe::with('admin:id,name')
+                ->whereBetween('created_at', [$startDate, $endDate])
+                ->select('admin_id', DB::raw('COUNT(*) as recipes_count'))
+                ->groupBy('admin_id')
+                ->orderBy('recipes_count', 'desc')
+                ->first();
+        } catch (\Exception $e) {
+            return null;
+        }
     }
 }

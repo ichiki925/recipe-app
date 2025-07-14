@@ -32,7 +32,20 @@
     <script setup>
     import { ref, onMounted } from 'vue'
 
-    const isAuthenticated = ref(false) // 初期値をfalseに
+    const { logout: authLogout, isLoggedIn, isAdmin } = useAuth()
+
+
+    const isAuthenticated = ref(false)
+
+    // ログアウト処理を useAuth の logout に変更
+    const logout = async () => {
+        try {
+            await authLogout()  // useAuth の logout 関数を使用
+            console.log('ログアウト成功')
+        } catch (error) {
+            console.error('Logout failed:', error)
+        }
+    }
 
     // 認証状態の確認
     const checkAuthStatus = async () => {
@@ -43,17 +56,6 @@
         } catch (error) {
         // 認証エラーの場合は未ログイン扱い
         isAuthenticated.value = false
-        }
-    }
-
-    // ログアウト処理
-    const logout = async () => {
-        try {
-        await $fetch('/api/logout', { method: 'POST' })
-        isAuthenticated.value = false
-        await navigateTo('/login')
-        } catch (error) {
-        console.error('Logout failed:', error)
         }
     }
 

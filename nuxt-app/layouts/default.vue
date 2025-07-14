@@ -51,8 +51,7 @@ import { ref, onMounted, computed } from 'vue'
 
 const isAuthenticated = ref(false)
 
-// Firebase認証の使用
-const { logout, getCurrentUser } = useAuth()
+const { logout, user, isLoggedIn } = useAuth()
 
 // お気に入り状態管理用のグローバルストア
 const favoriteStore = useState('favorites', () => new Set())
@@ -65,10 +64,9 @@ const favoriteCount = computed(() => {
 // 認証状態の確認
 const checkAuthStatus = () => {
   try {
-    const currentUser = getCurrentUser()
-    if (currentUser) {
+    if (isLoggedIn.value && user.value) {
       isAuthenticated.value = true
-      console.log('🔐 Layout: ユーザー認証済み', currentUser.email)
+      console.log('🔐 Layout: ユーザー認証済み', user.value.email)
     } else {
       isAuthenticated.value = false
       console.log('⚠️ Layout: 未認証ユーザー')
@@ -91,8 +89,6 @@ const handleLogout = async () => {
     
     console.log('✅ Layout: ログアウト成功')
 
-    // ログインページにリダイレクト
-    await navigateTo('/auth/login')
   } catch (error) {
     console.error('❌ Layout: ログアウト失敗:', error)
   }
@@ -103,11 +99,14 @@ onMounted(() => {
   checkAuthStatus()
 })
 
+// ユーザー状態の変化を監視
+watch([user, isLoggedIn], () => {
+  checkAuthStatus()
+})
+
 // ルート変更時にも認証状態をチェック
 watch(() => useRoute().path, () => {
-  if (process.client) {
     checkAuthStatus()
-  }
 })
 </script>
 

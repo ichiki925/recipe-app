@@ -100,7 +100,8 @@ useHead({
 })
 
 // 認証関連
-const { getCurrentUser, user, isLoggedIn, waitForAuth } = useAuth()
+const { user, isLoggedIn, initAuth } = useAuth()
+
 
 // データ定義
 const searchKeyword = ref('')
@@ -128,18 +129,18 @@ onMounted(async () => {
   console.log('🔍 /user ページの認証チェック開始...')
   
   // Firebase認証の状態確立を待機
-  const currentUser = await waitForAuth()
+  await initAuth()
   
-  console.log('👤 認証チェック結果:', currentUser ? currentUser.email : 'null')
-  console.log('👤 useAuthのuser:', user.value)
+  console.log('👤 認証チェック結果:', user.value ? user.value.email : 'null')
+  console.log('👤 isLoggedIn:', isLoggedIn.value)
   
-  if (!currentUser) {
+  if (!isLoggedIn.value || !user.value) {
     console.log('⚠️ 認証失敗 - ログインページにリダイレクト')
     await navigateTo('/auth/login')
     return
   }
   
-  console.log('✅ 認証成功:', currentUser.email, 'レシピ一覧ページを表示')
+  console.log('✅ 認証成功:', user.value.email, 'レシピ一覧ページを表示')
   
   // お気に入り状態を同期
   syncFavoriteStatus()

@@ -42,8 +42,8 @@ definePageMeta({
 })
 
 // 認証とデータ取得
-const { getIdToken, waitForAuth } = useAuth()
-const config = useRuntimeConfig()
+const { user, isLoggedIn, isAdmin, initAuth } = useAuth()
+const { $auth } = useNuxtApp()
 
 // リアクティブデータ
 const dashboardData = ref({
@@ -57,34 +57,63 @@ const isLoading = ref(true)
 
 // API呼び出し
 onMounted(async () => {
-  const currentUser = await waitForAuth()
-  if (!currentUser) {
-    await navigateTo('/auth/login')
+  console.log('🔍 ダッシュボード onMounted 開始')
+  // 認証状態の初期化を待つ
+  await initAuth()
+  
+  console.log('🔍 認証状態:', {
+    isLoggedIn: isLoggedIn.value,
+    isAdmin: isAdmin.value,
+    user: user.value
+  })
+
+  if (!isLoggedIn.value || !isAdmin.value) {
+    console.log('❌ 認証失敗またはadmin権限なし')
+    await navigateTo('/admin/login')
     return
   }
 
   try {
-    const token = await getIdToken()
+    // Firebase IDトークンを取得
+    const idToken = await $auth.currentUser?.getIdToken()
+
+    if (!idToken) {
+      console.log('❌ IDトークンが取得できませんでした')
+      await navigateTo('/admin/login')
+      return
+    }
+
+    console.log('✅ IDトークン取得成功')
+
+
+    // ダッシュボードデータを取得
     const response = await $fetch('/admin/dashboard', {
-      baseURL: config.public.apiBaseUrl,
+      baseURL: 'http://localhost/api',
       headers: {
-        'Authorization': `Bearer ${token}`,
+        'Authorization': `Bearer ${idToken}`,
         'Content-Type': 'application/json'
       }
     })
-    
-    dashboardData.value = response.data
+
+    dashboardData.value = response.data || response
+    console.log('✅ ダッシュボードデータ取得成功:', dashboardData.value)
+
   } catch (error) {
-    console.error('ダッシュボードデータ取得エラー:', error)
+    console.error('❌ ダッシュボードデータ取得エラー:', error)
+
+    // 認証エラーの場合はログインページへ
+    if (error.status === 401 || error.status === 403) {
+      await navigateTo('/admin/login')
+    }
   } finally {
     isLoading.value = false
   }
 })
 
 // computed プロパティ
-const totalRecipes = computed(() => dashboardData.value.stats.total_recipes || 0)
-const recentUpdatedRecipes = computed(() => dashboardData.value.stats.recent_updated_recipes || 0)
-const totalUsers = computed(() => dashboardData.value.stats.total_users || 0)
+const totalRecipes = computed(() => dashboardData.value.stats?.total_recipes || 0)
+const recentUpdatedRecipes = computed(() => dashboardData.value.stats?.recent_updated_recipes || 0)
+const totalUsers = computed(() => dashboardData.value.stats?.total_users || 0)
 const deletedRecipes = computed(() => dashboardData.value.deleted_recipes || [])
 </script>
 
