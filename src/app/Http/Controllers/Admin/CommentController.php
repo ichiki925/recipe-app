@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\RecipeComment;
 use App\Models\Recipe;
 use App\Models\User;
+use App\Http\Resources\AdminCommentResource;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
@@ -84,11 +85,11 @@ class CommentController extends Controller
 
             // ページネーション
             $perPage = $request->get('per_page', 10);
-            $perPage = min(max($perPage, 5), 100); // 5-100の範囲で制限
+            $perPage = min(max($perPage, 5), 100);
 
             $comments = $query->paginate($perPage);
 
-            return response()->json($comments);
+            return AdminCommentResource::collection($comments);
 
         } catch (\Exception $e) {
             \Log::error('Admin comment list fetch failed: ' . $e->getMessage());
@@ -119,7 +120,7 @@ class CommentController extends Controller
         ]);
 
         return response()->json([
-            'data' => $comment
+            'data' => new AdminCommentResource($comment)
         ]);
     }
 
@@ -332,7 +333,7 @@ class CommentController extends Controller
             $suspiciousPatterns = [
                 'spam' => ['スパム', 'spam', '宣伝', '広告', 'http://', 'https://'],
                 'inappropriate' => ['不適切', 'バカ', 'アホ', '死ね', 'クソ'],
-                'length' => 500, // 異常に長いコメント
+                'length' => 500,
             ];
 
             $flaggedComments = $query->where(function($q) use ($suspiciousPatterns) {
@@ -346,7 +347,7 @@ class CommentController extends Controller
             ->latest()
             ->paginate(20);
 
-            return response()->json($flaggedComments);
+            return AdminCommentResource::collection($flaggedComments);
 
         } catch (\Exception $e) {
             \Log::error('Flagged comments fetch failed: ' . $e->getMessage());
@@ -391,7 +392,7 @@ class CommentController extends Controller
             ];
 
             return response()->json([
-                'data' => $comments,
+                'data' => AdminCommentResource::collection($comments),
                 'user_info' => [
                     'id' => $user->id,
                     'name' => $user->name,

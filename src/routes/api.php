@@ -5,6 +5,7 @@
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Models\User;
+use App\Models\Recipe;
 use App\Http\Controllers\Api\RecipeController;
 use App\Http\Controllers\Api\LikeController;
 use App\Http\Controllers\Api\CommentController;
@@ -14,6 +15,8 @@ use App\Http\Controllers\Admin\CommentController as AdminCommentController;
 use App\Http\Controllers\Admin\AuthController as AdminAuthController;
 use App\Http\Controllers\Auth\AuthController;
 use App\Http\Resources\UserResource;
+use App\Http\Resources\RecipeResource;
+use App\Http\Controllers\Admin\UserController;
 
 
 
@@ -137,6 +140,59 @@ Route::get('/test/user-resource', function() {
     ]);
 });
 
+Route::get('/test/recipe', function() {
+    $recipe = Recipe::with(['admin', 'comments.user'])->first();
+    return response()->json([
+        'message' => 'RecipeResource test',
+        'recipe' => new App\Http\Resources\RecipeResource($recipe),
+    ]);
+});
+
+Route::get('/test/recipe-collection', function() {
+    $recipes = Recipe::with('admin')->published()->paginate(5);
+    return new App\Http\Resources\RecipeCollection($recipes);
+});
+
+Route::get('/test/recipe-controller/{recipe}', [App\Http\Controllers\Api\RecipeController::class, 'show']);
+
+// CommentResource テスト用
+Route::get('/test/comment-resource', function() {
+    $comment = \App\Models\RecipeComment::with(['user', 'recipe'])->first();
+    return response()->json([
+        'message' => 'CommentResource test',
+        'comment' => new \App\Http\Resources\CommentResource($comment),
+    ]);
+});
+
+// RecipeLikeResource テスト用
+Route::get('/test/like-resource', function() {
+    $like = \App\Models\RecipeLike::with(['user', 'recipe'])->first();
+    return response()->json([
+        'message' => 'RecipeLikeResource test',
+        'like' => new \App\Http\Resources\RecipeLikeResource($like),
+    ]);
+});
+
+// コメント一覧テスト用
+Route::get('/test/comments/{recipe}', function($recipeId) {
+    $recipe = \App\Models\Recipe::findOrFail($recipeId);
+    $comments = $recipe->comments()->with('user')->take(3)->get();
+    return response()->json([
+        'message' => 'Comments collection test',
+        'data' => \App\Http\Resources\CommentResource::collection($comments),
+    ]);
+});
+
+// いいね一覧テスト用
+Route::get('/test/likes/{recipe}', function($recipeId) {
+    $recipe = \App\Models\Recipe::findOrFail($recipeId);
+    $likes = $recipe->likes()->with(['user', 'recipe'])->take(3)->get();
+    return response()->json([
+        'message' => 'Likes collection test',
+        'data' => \App\Http\Resources\RecipeLikeResource::collection($likes),
+    ]);
+});
+
 // ========================================
 // 🌐 公開API（未ログインユーザー）
 // ========================================
@@ -158,19 +214,31 @@ Route::middleware('firebase.auth')->group(function () {
     // レシピ詳細（認証必須）
     Route::get('/recipes/{recipe}', [RecipeController::class, 'show']);
 
-    // いいね機能
+    // いいね機能（Resource対応 + 便利メソッド）
     Route::prefix('recipes/{recipe}')->group(function () {
-        Route::post('/like', [LikeController::class, 'store']);
-        Route::delete('/like', [LikeController::class, 'destroy']);
-        Route::post('/toggle-like', [LikeController::class, 'toggle']);
-        Route::get('/likes', [LikeController::class, 'index']);
+        // Standard RESTful routes
+        Route::get('/likes', [LikeController::class, 'index']);           // いいね一覧
+        Route::post('/likes', [LikeController::class, 'store']);          // いいね作成
+        Route::delete('/likes', [LikeController::class, 'destroyByRecipe']); // レシピのいいね削除
+
+        // 便利メソッド
+        Route::post('/toggle-like', [LikeController::class, 'toggle']);   // いいねトグル
     });
 
-    // コメント機能
+    // 個別いいねリソース
+    Route::get('/likes/{like}', [LikeController::class, 'show']);         // いいね詳細
+    Route::delete('/likes/{like}', [LikeController::class, 'destroy']);   // 個別いいね削除
+
+    // コメント機能（Resource対応）
     Route::prefix('recipes/{recipe}')->group(function () {
-        Route::get('/comments', [CommentController::class, 'index']);
-        Route::post('/comments', [CommentController::class, 'store']);
+        Route::get('/comments', [CommentController::class, 'index']);     // コメント一覧
+        Route::post('/comments', [CommentController::class, 'store']);    // コメント作成
     });
+
+    // 個別コメントリソース
+    Route::get('/comments/{comment}', [CommentController::class, 'show']);       // コメント詳細
+    Route::delete('/comments/{comment}', [CommentController::class, 'destroy']); // コメント削除
+
 
     // ユーザー機能
     Route::prefix('user')->group(function () {
@@ -178,8 +246,9 @@ Route::middleware('firebase.auth')->group(function () {
         Route::get('/profile', [ProfileController::class, 'show']);
         Route::put('/profile', [ProfileController::class, 'update']);
 
-        // お気に入り
-        Route::get('/liked-recipes', [LikeController::class, 'userLikes']);
+        // ユーザーの投稿履歴
+        Route::get('/liked-recipes', [LikeController::class, 'userLikes']);      // お気に入りレシピ
+        Route::get('/comments', [CommentController::class, 'userComments']);     // 投稿したコメント
     });
 });
 
@@ -214,5 +283,7 @@ Route::middleware(['firebase.auth', 'admin'])->prefix('admin')->group(function (
 
     // いいね統計
     Route::get('/like-stats', [LikeController::class, 'stats']);
-    Route::get('/comment-stats', [CommentController::class, 'stats']);
+
+    // ユーザー統計のみ（ユーザー一覧や詳細は不要）
+    Route::get('/users/stats', [UserController::class, 'stats']);
 });

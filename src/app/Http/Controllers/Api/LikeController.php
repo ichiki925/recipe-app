@@ -5,10 +5,30 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Recipe;
 use App\Models\RecipeLike;
+use App\Http\Resources\RecipeLikeResource;
 use Illuminate\Http\Request;
 
 class LikeController extends Controller
 {
+    public function index(Recipe $recipe)
+    {
+        $likes = $recipe->likes()
+                    ->with('user:id,name,username,avatar_url')
+                    ->latest()
+                    ->paginate(20);
+
+        return response()->json([
+            'data' => RecipeLikeResource::collection($likes),
+            'pagination' => [
+                'current_page' => $likes->currentPage(),
+                'last_page' => $likes->lastPage(),
+                'per_page' => $likes->perPage(),
+                'total' => $likes->total(),
+            ],
+            'total_likes' => $recipe->likes_count
+        ]);
+    }
+
     public function store(Request $request, Recipe $recipe)
     {
         $user = auth()->user();
@@ -35,28 +55,67 @@ class LikeController extends Controller
         if ($existingLike) {
             return response()->json([
                 'message' => '既にいいね済みです',
+                'data' => new RecipeLikeResource($existingLike),
                 'is_liked' => true,
                 'likes_count' => $recipe->likes_count
             ], 200);
         }
 
         // いいね作成
-        RecipeLike::create([
+        $like = RecipeLike::create([
             'user_id' => $user->id,
             'recipe_id' => $recipe->id
         ]);
 
-        // レシピのいいね数を更新（Model のイベントで自動実行）
-        $recipe->refresh(); // 最新のいいね数を取得
+        // リレーションを読み込み
+        $like->load(['user', 'recipe']);
+
+        // レシピのいいね数を更新
+        $recipe->refresh();
 
         return response()->json([
             'message' => 'いいねしました',
+            'data' => new RecipeLikeResource($like),
             'is_liked' => true,
             'likes_count' => $recipe->likes_count
         ], 201);
     }
 
-    public function destroy(Request $request, Recipe $recipe)
+    public function show(RecipeLike $like)
+    {
+        $like->load(['user', 'recipe']);
+
+        return response()->json([
+            'data' => new RecipeLikeResource($like)
+        ]);
+    }
+
+
+    public function destroy(RecipeLike $like)
+    {
+        $user = auth()->user();
+
+        // 自分のいいねのみ削除可能
+        if ($like->user_id !== $user->id) {
+            return response()->json([
+                'message' => '他のユーザーのいいねは削除できません'
+            ], 403);
+        }
+
+        $recipe = $like->recipe;
+        $like->delete();
+
+        // レシピのいいね数を更新
+        $recipe->refresh();
+
+        return response()->json([
+            'message' => 'いいねを取り消しました',
+            'is_liked' => false,
+            'likes_count' => $recipe->likes_count
+        ], 200);
+    }
+
+    public function destroyByRecipe(Request $request, Recipe $recipe)
     {
         $user = auth()->user();
 
@@ -76,8 +135,8 @@ class LikeController extends Controller
         // いいね削除
         $like->delete();
 
-        // レシピのいいね数を更新（Model のイベントで自動実行）
-        $recipe->refresh(); // 最新のいいね数を取得
+        // レシピのいいね数を更新
+        $recipe->refresh();
 
         return response()->json([
             'message' => 'いいねを取り消しました',
@@ -86,18 +145,6 @@ class LikeController extends Controller
         ], 200);
     }
 
-    public function index(Recipe $recipe)
-    {
-        $likes = $recipe->likes()
-                    ->with('user:id,name,username,avatar_url')
-                    ->latest()
-                    ->paginate(20);
-
-        return response()->json([
-            'data' => $likes,
-            'total_likes' => $recipe->likes_count
-        ]);
-    }
 
     public function userLikes(Request $request)
     {
@@ -190,14 +237,18 @@ class LikeController extends Controller
             ]);
         } else {
             // 未いいね → 追加
-            RecipeLike::create([
+            $like = RecipeLike::create([
                 'user_id' => $user->id,
                 'recipe_id' => $recipe->id
             ]);
+            
+            // リレーションをロード
+            $like->load(['user', 'recipe']);
             $recipe->refresh();
 
             return response()->json([
                 'message' => 'いいねしました',
+                'data' => new RecipeLikeResource($like),
                 'is_liked' => true,
                 'likes_count' => $recipe->likes_count
             ]);

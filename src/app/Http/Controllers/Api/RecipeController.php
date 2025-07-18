@@ -4,6 +4,9 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Recipe;
+use App\Http\Resources\RecipeResource;
+use App\Http\Resources\RecipeCollection;
+use App\Http\Resources\AdminRecipeResource;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Intervention\Image\ImageManagerStatic as Image;
@@ -13,42 +16,35 @@ class RecipeController extends Controller
 
     public function index(Request $request)
     {
-        $query = Recipe::published()->with('admin');
+        $query = Recipe::with('admin')->published();
 
-        // 検索キーワード
-        if ($request->has('keyword')) {
-            $query->search($request->keyword);
+        // 検索機能
+        if ($request->has('search')) {
+            $query->search($request->search);
         }
 
-        // ジャンル別
+        // ジャンル絞り込み
         if ($request->has('genre')) {
             $query->byGenre($request->genre);
         }
 
         // ソート
-        $sortBy = $request->get('sort', 'latest');
-        switch ($sortBy) {
+        $sort = $request->get('sort', 'latest');
+        switch ($sort) {
             case 'popular':
                 $query->popular();
                 break;
-            case 'latest':
+            case 'views':
+                $query->orderBy('views_count', 'desc');
+                break;
             default:
                 $query->latest();
                 break;
         }
 
-        $recipes = $query->paginate(6);
+        $recipes = $query->paginate(20);
 
-        // ログイン済みの場合、いいね状態を追加
-        if (auth()->check()) {
-            $user = auth()->user();
-            $recipes->getCollection()->transform(function ($recipe) use ($user) {
-                $recipe->is_liked = $recipe->isLikedBy($user);
-                return $recipe;
-            });
-        }
-
-        return response()->json($recipes);
+        return new RecipeCollection($recipes);
     }
 
     public function search(Request $request)
@@ -117,37 +113,33 @@ class RecipeController extends Controller
             'is_published' => $request->get('is_published', true)
         ]);
 
+        $recipe->load(['admin', 'comments', 'likes']);
+
+
         return response()->json([
             'message' => 'レシピが投稿されました',
-            'data' => $recipe
+            'data' => new AdminRecipeResource($recipe)
         ], 201);
     }
 
 
     public function show(Recipe $recipe)
     {
-        // 公開されていないレシピはエラー
+        // 公開されていないレシピは表示しない
         if (!$recipe->is_published) {
             return response()->json([
-                'message' => 'このレシピは公開されていません'
+                'message' => 'レシピが見つかりません'
             ], 404);
         }
 
+        // 必要なリレーションを読み込み
+        $recipe->load(['admin', 'comments.user']);
+        
         // 閲覧数を増加
         $recipe->incrementViews();
-
-        // リレーション読み込み
-        $recipe->load(['admin', 'comments.user']);
-
-        // ログインユーザーのいいね状態
-        $user = auth()->user();
-        $recipe->is_liked = $recipe->isLikedBy($user);
-
-        // 材料と作り方を配列で返す
-        $recipe->ingredients_array = $recipe->ingredients_array;
-        $recipe->instructions_array = $recipe->instructions_array;
-
-        return response()->json(['data' => $recipe]);
+        
+        // RecipeResourceで変換して返す
+        return new RecipeResource($recipe);
     }
 
 
@@ -190,9 +182,12 @@ class RecipeController extends Controller
             'is_published' => $request->get('is_published', $recipe->is_published)
         ]);
 
+        $recipe->load(['admin', 'comments', 'likes']);
+
+
         return response()->json([
             'message' => 'レシピが更新されました',
-            'data' => $recipe
+            'data' => new AdminRecipeResource($recipe)
         ]);
     }
 
@@ -214,7 +209,8 @@ class RecipeController extends Controller
 
     public function adminIndex(Request $request)
     {
-        $query = Recipe::with('admin')->withTrashed();
+        $query = Recipe::with(['admin', 'comments', 'likes'])->withTrashed();
+
 
         // 検索
         if ($request->has('keyword')) {
@@ -238,14 +234,17 @@ class RecipeController extends Controller
 
         $recipes = $query->latest()->paginate(12);
 
-        return response()->json($recipes);
+        return AdminRecipeResource::collection($recipes);
+
     }
 
     public function adminShow(Recipe $recipe)
     {
         $recipe->load(['admin', 'comments.user', 'likes.user']);
 
-        return response()->json(['data' => $recipe]);
+        return response()->json([
+            'data' => new AdminRecipeResource($recipe)
+        ]);
     }
 
     private function handleImageUpload($uploadedFile)

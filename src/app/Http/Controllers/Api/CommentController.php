@@ -5,15 +5,11 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Recipe;
 use App\Models\RecipeComment;
+use App\Http\Resources\CommentResource;
 use Illuminate\Http\Request;
 
 class CommentController extends Controller
 {
-    /**
-     * レシピのコメント一覧取得
-     * GET /api/recipes/{recipe}/comments
-     */
-
     public function index(Recipe $recipe)
     {
         // 公開されていないレシピのコメントは取得不可
@@ -30,7 +26,7 @@ class CommentController extends Controller
 
         // コメント数も含めて返す
         return response()->json([
-            'data' => $comments->items(),
+            'data' => CommentResource::collection($comments),
             'pagination' => [
                 'current_page' => $comments->currentPage(),
                 'last_page' => $comments->lastPage(),
@@ -41,10 +37,6 @@ class CommentController extends Controller
         ]);
     }
 
-    /**
-     * コメント投稿
-     * POST /api/recipes/{recipe}/comments
-     */
     public function store(Request $request, Recipe $recipe)
     {
         $user = auth()->user();
@@ -94,7 +86,7 @@ class CommentController extends Controller
 
         return response()->json([
             'message' => 'コメントを投稿しました',
-            'data' => $comment
+            'data' => new CommentResource($comment)
         ], 201);
     }
 
@@ -107,9 +99,32 @@ class CommentController extends Controller
         $comment->load(['user:id,name,username,avatar_url,email', 'recipe:id,title']);
 
         return response()->json([
-            'data' => $comment
+            'data' => new CommentResource($comment)
         ]);
     }
+
+    /**
+     * コメント削除（管理者専用）
+     * DELETE /api/comments/{comment}
+     */
+    public function destroy(RecipeComment $comment)
+    {
+        $user = auth()->user();
+
+        // 管理者のみ削除可能
+        if (!$user->isAdmin()) {
+            return response()->json([
+                'message' => 'このコメントを削除する権限がありません'
+            ], 403);
+        }
+
+        $comment->delete();
+
+        return response()->json([
+            'message' => 'コメントを削除しました'
+        ]);
+    }
+
 
     /**
      * ユーザーが投稿したコメント一覧
@@ -124,7 +139,15 @@ class CommentController extends Controller
                         ->latest()
                         ->paginate(20);
 
-        return response()->json($comments);
+        return response()->json([
+            'data' => CommentResource::collection($comments),
+            'pagination' => [
+                'current_page' => $comments->currentPage(),
+                'last_page' => $comments->lastPage(),
+                'per_page' => $comments->perPage(),
+                'total' => $comments->total(),
+            ]
+        ]);
     }
 
 }

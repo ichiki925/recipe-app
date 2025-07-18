@@ -7,6 +7,7 @@ use App\Models\Recipe;
 use App\Models\User;
 use App\Models\RecipeLike;
 use App\Models\RecipeComment;
+use App\Http\Resources\AdminRecipeResource;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -315,23 +316,15 @@ class DashboardController extends Controller
                 return [];
             }
 
-            return Recipe::published()
-                ->with('admin:id,name')
+            $recipes = Recipe::published()
+                ->with(['admin', 'comments', 'likes'])
                 ->orderBy('likes_count', 'desc')
                 ->orderBy('views_count', 'desc')
                 ->limit($limit)
-                ->get()
-                ->map(function ($recipe) {
-                    return [
-                        'id' => $recipe->id,
-                        'title' => $recipe->title,
-                        'genre' => $recipe->genre,
-                        'likes_count' => $recipe->likes_count,
-                        'views_count' => $recipe->views_count,
-                        'admin_name' => $recipe->admin ? $recipe->admin->name : '不明',
-                        'created_at_human' => $recipe->created_at->diffForHumans(),
-                    ];
-                });
+                ->get();
+
+            return AdminRecipeResource::collection($recipes);
+
         } catch (\Exception $e) {
             \Log::warning('getPopularRecipes error: ' . $e->getMessage());
             return [];

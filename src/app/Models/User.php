@@ -135,5 +135,21 @@ class User extends Authenticatable
         return $query->where('firebase_uid', $firebaseUid);
     }
 
+    /**
+     * ユーザーのコメント一覧（エイリアス）
+     */
+    public function comments()
+    {
+        return $this->recipeComments();
+    }
+
+    /**
+     * ユーザーのいいね一覧（エイリアス）
+     */
+    public function likes()
+    {
+        return $this->recipeLikes();
+    }
+
 
 }
