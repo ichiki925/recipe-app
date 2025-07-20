@@ -93,17 +93,7 @@ const totalPages = ref(1)
 const isLoading = ref(false)
 
 // レシピデータ
-const recipes = ref([
-    { id: 1, title: 'テストレシピ1', likes: 24 },
-    { id: 2, title: 'テストレシピ2', likes: 15 },
-    { id: 3, title: 'テストレシピ3', likes: 8 },
-    { id: 4, title: 'テストレシピ4', likes: 32 },
-    { id: 5, title: 'テストレシピ5', likes: 5 },
-    { id: 6, title: 'テストレシピ6', likes: 19 },
-    { id: 7, title: 'テストレシピ7', likes: 12 },
-    { id: 8, title: 'テストレシピ8', likes: 9 },
-    { id: 9, title: 'テストレシピ9', likes: 7 }
-])
+const recipes = ref([])
 
 const route = useRoute()
 const router = useRouter()
@@ -155,17 +145,7 @@ const fetchRecipes = async () => {
         
         // エラー時はモックデータを使用（ジャンル情報なし）
         console.log('📋 モックデータを使用します')
-        const mockRecipes = [
-            { id: 1, title: 'テストレシピ1', likes: 24 },
-            { id: 2, title: 'テストレシピ2', likes: 15 },
-            { id: 3, title: 'テストレシピ3', likes: 8 },
-            { id: 4, title: 'テストレシピ4', likes: 32 },
-            { id: 5, title: 'テストレシピ5', likes: 5 },
-            { id: 6, title: 'テストレシピ6', likes: 19 },
-            { id: 7, title: 'テストレシピ7', likes: 12 },
-            { id: 8, title: 'テストレシピ8', likes: 9 },
-            { id: 9, title: 'テストレシピ9', likes: 7 }
-        ]
+        const mockRecipes = []
         
         if (searchKeyword.value) {
             // 検索キーワードがある場合はフィルタリング

@@ -24,11 +24,23 @@ export default defineNuxtConfig({
     port: 3000
   },
 
+  nitro: {
+    devProxy: {
+      '/api': {
+        target: 'http://nginx', // nginxコンテナ名を使用
+        changeOrigin: true,
+        prependPath: true
+      }
+    }
+  },
+
   // API設定（Laravel連携用とFirebase設定を統合）
   runtimeConfig: {
     public: {
-      // Laravel API設定
-      apiBaseUrl: process.env.API_BASE_URL || 'http://localhost',
+      // ★ 修正: Docker環境用のAPI URL
+      apiBaseUrl: process.env.NODE_ENV === 'development' 
+        ? 'http://nginx'  // Docker内部通信用
+        : process.env.API_BASE_URL || 'http://localhost',
 
       // Firebase設定
       firebaseApiKey: process.env.FIREBASE_API_KEY,

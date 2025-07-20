@@ -106,23 +106,16 @@ const { user, isLoggedIn, initAuth } = useAuth()
 // データ定義
 const searchKeyword = ref('')
 const currentPage = ref(1)
-const totalPages = ref(2)
+const totalPages = ref(1)
 
 // お気に入り状態を含むレシピデータ
-const recipes = ref([
-  { id: 1, title: 'チキンカレー', genre: '和食', likes: 24, isFavorited: true },
-  { id: 2, title: 'パスタボロネーゼ', genre: 'イタリアン', likes: 15, isFavorited: false },
-  { id: 3, title: '麻婆豆腐', genre: '中華', likes: 8, isFavorited: false },
-  { id: 4, title: 'ハンバーグ', genre: '洋食', likes: 32, isFavorited: false },
-  { id: 5, title: '親子丼', genre: '和食', likes: 5, isFavorited: false },
-  { id: 6, title: 'グラタン', genre: '洋食', likes: 19, isFavorited: true }
-])
+const recipes = ref([])
 
 const route = useRoute()
 const router = useRouter()
 
 // お気に入り状態管理用のグローバルストア
-const favoriteStore = useState('favorites', () => new Set([1, 6])) // 初期値として1と6をお気に入り
+const favoriteStore = useState('favorites', () => new Set()) // 初期値として1と6をお気に入り
 
 // コンポーネント初期化
 onMounted(async () => {

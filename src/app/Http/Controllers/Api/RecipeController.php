@@ -69,59 +69,127 @@ class RecipeController extends Controller
         return response()->json($recipes);
     }
 
-    
+
     public function create()
     {
         return response()->json(['message' => 'Use POST /admin/recipes to create recipe']);
     }
 
-    
+
     public function store(Request $request)
     {
-        $request->validate([
-            'title' => 'required|string|max:255',
-            'genre' => 'nullable|string|max:100',
-            'servings' => 'required|in:1人分,2人分,3人分,4人分,5人分以上',
-            'ingredients' => 'required|string',
-            'instructions' => 'required|string',
-            'image' => 'nullable|image|mimes:jpeg,jpg,png,gif,heic,webp|max:10240',
-            'is_published' => 'boolean'
-        ], [
-            'title.required' => '料理名は必須です',
-            'servings.required' => '人数を選択してください',
-            'ingredients.required' => '材料は必須です',
-            'instructions.required' => '作り方は必須です',
-            'image.image' => '画像ファイルを選択してください',
-            'image.max' => '画像サイズは10MB以下にしてください'
-        ]);
+        try {
+            \Log::info('=== Recipe store method START ===');
 
-        $imageUrl = null;
-        
-        // 画像アップロード処理
-        if ($request->hasFile('image')) {
-            $imageUrl = $this->handleImageUpload($request->file('image'));
+            // Firebase認証ユーザーを取得
+            $user = $request->user();
+
+            if (!$user || !$user->isAdmin()) {
+                return response()->json(['error' => '認証または権限エラー'], 403);
+            }
+
+            // バリデーション
+            $request->validate([
+                'title' => 'required|string|max:255',
+                'servings' => 'required|string',
+                'ingredients' => 'required|string',
+                'instructions' => 'required|string',
+                'image' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:10240'
+            ]);
+
+            \Log::info('Validation passed');
+
+            // 画像アップロード処理（修正版）
+            $imageUrl = null;
+            if ($request->hasFile('image')) {
+                try {
+                    \Log::info('Image upload starting...');
+
+                    $image = $request->file('image');
+
+                    // ファイル名を一度だけ生成（重要な修正）
+                    $timestamp = time();
+                    $uniqueId = uniqid();
+                    $extension = $image->getClientOriginalExtension();
+                    $filename = $timestamp . '_' . $uniqueId . '.' . $extension;
+
+                    \Log::info('Generated filename:', [
+                        'timestamp' => $timestamp,
+                        'unique_id' => $uniqueId,
+                        'extension' => $extension,
+                        'full_filename' => $filename
+                    ]);
+
+                    // ファイル保存
+                    $path = $image->storeAs('recipes', $filename, 'public');
+                    $imageUrl = '/storage/' . $path;
+
+                    \Log::info('Image saved successfully:', [
+                        'storage_path' => $path,
+                        'final_url' => $imageUrl,
+                        'actual_saved_filename' => basename($path)
+                    ]);
+
+                } catch (\Exception $e) {
+                    \Log::error('Image upload failed: ' . $e->getMessage());
+                    $imageUrl = null;
+                }
+            }
+
+            // レシピ作成
+            $recipe = Recipe::create([
+                'title' => $request->title,
+                'genre' => $request->genre ?? '',
+                'servings' => $request->servings,
+                'ingredients' => $request->ingredients,
+                'instructions' => $request->instructions,
+                'image_url' => $imageUrl,
+                'admin_id' => $user->id,
+                'is_published' => true,
+                'views_count' => 0,
+                'likes_count' => 0
+            ]);
+
+            \Log::info('Recipe created successfully:', [
+                'recipe_id' => $recipe->id,
+                'admin_id' => $recipe->admin_id,
+                'saved_image_url' => $recipe->image_url
+            ]);
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'レシピが投稿されました',
+                'data' => [
+                    'id' => $recipe->id,
+                    'title' => $recipe->title,
+                    'genre' => $recipe->genre,
+                    'servings' => $recipe->servings,
+                    'image_url' => $recipe->image_url,
+                    'created_at' => $recipe->created_at->format('Y-m-d H:i:s')
+                ]
+            ], 201);
+
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            \Log::error('Validation error:', ['errors' => $e->errors()]);
+            return response()->json([
+                'status' => 'error',
+                'message' => 'バリデーションエラー',
+                'errors' => $e->errors()
+            ], 422);
+
+        } catch (\Exception $e) {
+            \Log::error('Recipe store error:', [
+                'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine()
+            ]);
+            
+            return response()->json([
+                'status' => 'error',
+                'message' => 'レシピの作成に失敗しました: ' . $e->getMessage()
+            ], 500);
         }
-
-        $recipe = Recipe::create([
-            'title' => $request->title,
-            'genre' => $request->genre,
-            'servings' => $request->servings,
-            'ingredients' => $request->ingredients,
-            'instructions' => $request->instructions,
-            'image_url' => $imageUrl,
-            'admin_id' => auth()->id(),
-            'is_published' => $request->get('is_published', true)
-        ]);
-
-        $recipe->load(['admin', 'comments', 'likes']);
-
-
-        return response()->json([
-            'message' => 'レシピが投稿されました',
-            'data' => new AdminRecipeResource($recipe)
-        ], 201);
     }
-
 
     public function show(Recipe $recipe)
     {
@@ -134,10 +202,10 @@ class RecipeController extends Controller
 
         // 必要なリレーションを読み込み
         $recipe->load(['admin', 'comments.user']);
-        
+
         // 閲覧数を増加
         $recipe->incrementViews();
-        
+
         // RecipeResourceで変換して返す
         return new RecipeResource($recipe);
     }
@@ -238,13 +306,111 @@ class RecipeController extends Controller
 
     }
 
-    public function adminShow(Recipe $recipe)
+    public function adminShow($id)
     {
-        $recipe->load(['admin', 'comments.user', 'likes.user']);
+        try {
+            \Log::info('=== Admin Show Method START ===', [
+                'recipe_id' => $id,
+                'timestamp' => now(),
+                'user_id' => auth()->id() ?? 'not_authenticated'
+            ]);
 
-        return response()->json([
-            'data' => new AdminRecipeResource($recipe)
-        ]);
+            // 認証ユーザーの確認
+            $user = request()->user();
+            if (!$user) {
+                \Log::warning('No authenticated user found');
+                return response()->json([
+                    'status' => 'error',
+                    'message' => '認証が必要です'
+                ], 401);
+            }
+
+            if (!$user->isAdmin()) {
+                \Log::warning('User is not admin', ['user_id' => $user->id]);
+                return response()->json([
+                    'status' => 'error', 
+                    'message' => '管理者権限が必要です'
+                ], 403);
+            }
+
+            \Log::info('Authentication passed', [
+                'user_id' => $user->id,
+                'user_role' => $user->role ?? 'unknown'
+            ]);
+
+            // レシピを取得（削除済みも含む、必要なリレーションを含む）
+            $recipe = Recipe::withTrashed()
+                ->with([
+                    'admin', 
+                    'comments' => function($query) {
+                        $query->with('user')->orderBy('created_at', 'desc');
+                    },
+                    'likes' => function($query) {
+                        $query->with('user')->orderBy('created_at', 'desc');
+                    }
+                ])
+                ->find($id);
+
+            if (!$recipe) {
+                \Log::warning('Recipe not found', ['recipe_id' => $id]);
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'レシピが見つかりません'
+                ], 404);
+            }
+
+            \Log::info('Recipe loaded successfully', [
+                'recipe_id' => $recipe->id,
+                'recipe_title' => $recipe->title,
+                'admin_loaded' => $recipe->relationLoaded('admin'),
+                'comments_loaded' => $recipe->relationLoaded('comments'),
+                'comments_count' => $recipe->comments ? $recipe->comments->count() : 0,
+                'likes_count' => $recipe->likes ? $recipe->likes->count() : 0,
+                'is_published' => $recipe->is_published,
+                'is_deleted' => $recipe->trashed()
+            ]);
+
+            // AdminRecipeResourceを使用してレスポンス作成
+            $resourceData = new AdminRecipeResource($recipe);
+
+            \Log::info('Resource created successfully');
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'レシピを取得しました',
+                'data' => $resourceData
+            ], 200);
+
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            \Log::error('Recipe not found exception', [
+                'recipe_id' => $id,
+                'error' => $e->getMessage()
+            ]);
+            
+            return response()->json([
+                'status' => 'error',
+                'message' => 'レシピが見つかりません'
+            ], 404);
+
+        } catch (\Exception $e) {
+            \Log::error('Admin show error', [
+                'recipe_id' => $id,
+                'error_message' => $e->getMessage(),
+                'error_file' => $e->getFile(),
+                'error_line' => $e->getLine(),
+                'stack_trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'status' => 'error',
+                'message' => 'レシピの取得に失敗しました',
+                'debug_info' => config('app.debug') ? [
+                    'error' => $e->getMessage(),
+                    'file' => $e->getFile(),
+                    'line' => $e->getLine()
+                ] : null
+            ], 500);
+        }
     }
 
     private function handleImageUpload($uploadedFile)

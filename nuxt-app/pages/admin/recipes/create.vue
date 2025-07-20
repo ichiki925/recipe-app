@@ -12,7 +12,7 @@
         >
           <div class="saved-recipe-title">{{ savedRecipe.title || '無題のレシピ' }}</div>
           <div class="saved-recipe-date">{{ formatDate(savedRecipe.savedAt) }}</div>
-          <button 
+          <button
             class="delete-saved-recipe"
             @click.stop="deleteSavedRecipe(savedRecipe.id)"
           >
@@ -193,7 +193,7 @@ const formatDate = (dateString) => {
 // 保存機能
 const saveRecipe = () => {
   isSaving.value = true
-  
+
   const recipeData = {
     id: currentEditingRecipe.value?.id || Date.now().toString(),
     title: form.title,
@@ -220,12 +220,12 @@ const saveRecipe = () => {
 
   updateSavedRecipes()
   currentEditingRecipe.value = recipeData
-  
+
   successMessage.value = 'レシピを保存しました'
   setTimeout(() => {
     successMessage.value = ''
   }, 3000)
-  
+
   isSaving.value = false
 }
 
@@ -238,10 +238,10 @@ const loadSavedRecipe = (savedRecipe) => {
     ingredients: savedRecipe.ingredients.length > 0 ? savedRecipe.ingredients : [{ name: '', qty: '' }],
     instructions: savedRecipe.instructions
   })
-  
+
   imagePreview.value = savedRecipe.imagePreview || ''
   currentEditingRecipe.value = savedRecipe
-  
+
   successMessage.value = 'レシピを読み込みました'
   setTimeout(() => {
     successMessage.value = ''
@@ -253,7 +253,7 @@ const deleteSavedRecipe = (id) => {
   if (confirm('このレシピを削除しますか？')) {
     savedRecipes.value = savedRecipes.value.filter(r => r.id !== id)
     updateSavedRecipes()
-    
+
     if (currentEditingRecipe.value?.id === id) {
       currentEditingRecipe.value = null
     }
@@ -270,7 +270,7 @@ const clearCurrentRecipe = () => {
       ingredients: [{ name: '', qty: '' }],
       instructions: ''
     })
-    
+
     imagePreview.value = ''
     selectedFile.value = null
     currentEditingRecipe.value = null
@@ -333,6 +333,16 @@ const submitRecipe = async () => {
   isSubmitting.value = true
 
   try {
+    const { $auth } = useNuxtApp()
+
+    if (!$auth?.currentUser) {
+      errors.value.push('認証が必要です。')
+      isSubmitting.value = false
+      return
+    }
+
+    const token = await $auth.currentUser.getIdToken()
+
     // バリデーション
     if (!form.title.trim()) {
       errors.value.push('料理名は必須です')
@@ -354,7 +364,6 @@ const submitRecipe = async () => {
       return
     }
 
-    // FormDataを作成
     const formData = new FormData()
     formData.append('title', form.title)
     formData.append('genre', form.genre || '')
@@ -366,19 +375,44 @@ const submitRecipe = async () => {
       formData.append('image', selectedFile.value)
     }
 
-    // API送信
-    const response = await $fetch('/api/admin/recipes', {
-      method: 'POST',
-      body: formData
+    console.log('🚀 APIリクエストを送信中...')
+    console.log('📝 送信データ:', {
+      title: form.title,
+      genre: form.genre,
+      servings: form.servings,
+      ingredients: ingredientsText,
+      instructions: form.instructions,
+      hasImage: !!selectedFile.value
     })
 
-    successMessage.value = 'レシピが投稿されました'
-    
-    // 投稿成功後、保存済みレシピから削除
-    if (currentEditingRecipe.value) {
-      deleteSavedRecipe(currentEditingRecipe.value.id)
+
+    // Docker環境用の絶対URL（ここが重要な修正箇所）
+    const response = await fetch('http://localhost/api/admin/recipes', {
+      method: 'POST',
+      body: formData,
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    })
+
+    console.log('📊 レスポンス状況:', {
+      status: response.status,
+      statusText: response.statusText,
+      ok: response.ok
+    })
+
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error('❌ API Error Response:', errorText)
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`)
     }
-    
+
+    const data = await response.json()
+    console.log('✅ API response:', data)
+
+    successMessage.value = 'レシピが投稿されました'
+
     // フォームリセット
     Object.assign(form, {
       title: '',
@@ -387,29 +421,36 @@ const submitRecipe = async () => {
       ingredients: [{ name: '', qty: '' }],
       instructions: ''
     })
-    
+
     imagePreview.value = ''
     selectedFile.value = null
     currentEditingRecipe.value = null
-    
-    // 管理画面のレシピ一覧にリダイレクト
-    setTimeout(() => {
-      router.push('/admin/recipes')
-    }, 1500)
+
+    // 保存中のレシピも削除（投稿成功時）
+    if (currentEditingRecipe.value?.id) {
+      savedRecipes.value = savedRecipes.value.filter(r => r.id !== currentEditingRecipe.value.id)
+      updateSavedRecipes()
+    }
+
+    // リダイレクト
+    if (data.data?.id) {
+      setTimeout(() => {
+        router.push(`/admin/recipes/show/${data.data.id}`)
+      }, 1500)
+    } else {
+      setTimeout(() => {
+        router.push('/admin/recipes')
+      }, 1500)
+    }
 
   } catch (error) {
-    console.error('投稿エラー:', error)
-    
-    if (error.data?.errors) {
-      // Laravel バリデーションエラー
-      errors.value = Object.values(error.data.errors).flat()
-    } else {
-      errors.value = ['投稿に失敗しました。もう一度お試しください。']
-    }
+    console.error('❌ API error:', error)
+    errors.value = [`API呼び出しエラー: ${error.message}`]
   } finally {
     isSubmitting.value = false
   }
 }
+
 
 // 自動保存機能（オプション）
 let autoSaveTimer = null
@@ -417,7 +458,7 @@ const startAutoSave = () => {
   if (autoSaveTimer) {
     clearInterval(autoSaveTimer)
   }
-  
+
   autoSaveTimer = setInterval(() => {
     // 何かしらの入力があった場合のみ自動保存
     if (form.title || form.genre || form.instructions || 
@@ -520,24 +561,27 @@ body {
 
 .delete-saved-recipe {
     position: absolute;
-    top: 4px;
-    right: 6px;
-    width: 20px;
-    height: 20px;
+    top: 8px;
+    right: 8px;
+    width: 24px;
+    height: 24px;
     border: none;
-    background: #ff4444;
-    color: white;
-    border-radius: 50%;
+    color: #555;
+    border-radius: 4px;
     cursor: pointer;
-    font-size: 12px;
+    font-size: 20px;
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: background-color 0.2s;
+    transition: all 0.2s ease;
+    line-height: 1;
+    font-family: system-ui, sans-serif;
 }
 
+
+
 .delete-saved-recipe:hover {
-    background-color: #cc0000;
+    background-color: #c5414182;
 }
 
 .no-saved-recipes {
@@ -726,16 +770,25 @@ body {
     font-weight: bold;
     cursor: pointer;
     border-radius: 6px;
-    transition: background-color 0.2s;
+    transition: all 0.2s ease;
+    position: relative;
+    overflow: hidden;
 }
 
 .save-button:hover:not(:disabled) {
     background-color: #59b9d4fc;
 }
 
+.save-button:active:not(:disabled) {
+    transform: translateY(0);
+    box-shadow: 0 2px 4px rgba(89, 212, 212, 0.3);
+}
+
 .save-button:disabled {
     background-color: #6c757d;
     cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
 }
 
 .submit-button {

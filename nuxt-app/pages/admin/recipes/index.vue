@@ -15,34 +15,38 @@
       </form>
       <button @click="goToCreate" class="create-button">＋ 新規レシピ作成</button>
     </aside>
-    
+
 
     <!-- メイン：レシピ一覧 -->
     <section class="recipe-list">
       <div v-if="loading" class="loading">
         レシピを読み込み中...
       </div>
-      
+
       <div v-else-if="recipes.length === 0" class="no-recipes">
         レシピが見つかりませんでした。
       </div>
-      
+
       <div v-else class="recipe-grid">
-        <div 
-          v-for="recipe in recipes" 
-          :key="recipe.id" 
+        <div
+          v-for="recipe in recipes"
+          :key="recipe.id"
           class="recipe-card"
           @click="goToRecipeDetail(recipe.id)"
         >
           <div v-if="recipe.image_url" class="recipe-image">
-            <img :src="recipe.image_url" :alt="recipe.title" />
+            <img 
+              :src="getImageUrl(recipe.image_url)" 
+              :alt="recipe.title" 
+              @error="handleImageError($event, recipe)"
+              @load="handleImageLoad($event, recipe)"
+            />
           </div>
           <div v-else class="no-image">No Image</div>
-          
+
           <div class="recipe-title">{{ recipe.title }}</div>
-          
+
           <div class="recipe-stats">
-            <!-- 管理者は見るだけ、クリック不可 -->
             <div class="like-display">
               <i class="far fa-heart heart-icon"></i>
               <span class="like-count">{{ recipe.likes_count || 0 }}</span>
@@ -110,6 +114,47 @@ const error = ref('')
 const route = useRoute()
 const router = useRouter()
 
+// 画像URL処理関数
+const getImageUrl = (imageUrl) => {
+  console.log('🖼️ Original image URL:', imageUrl)
+  
+  if (!imageUrl) {
+    return '/images/no-image.png'
+  }
+  
+  // 相対URLの場合、絶対URLに変換
+  if (imageUrl.startsWith('/storage/')) {
+    const fullUrl = `http://localhost${imageUrl}`
+    console.log('🔗 Converted to full URL:', fullUrl)
+    return fullUrl
+  }
+  
+  return imageUrl
+}
+
+// 画像読み込みエラーハンドリング
+const handleImageError = (event, recipe) => {
+  console.error('❌ Image load failed:', {
+    recipe_id: recipe.id,
+    recipe_title: recipe.title,
+    image_url: recipe.image_url,
+    attempted_src: event.target.src
+  })
+  
+  // エラー時はデフォルト画像に変更
+  event.target.src = '/images/no-image.png'
+}
+
+// 画像読み込み成功時
+const handleImageLoad = (event, recipe) => {
+  console.log('✅ Image loaded successfully:', {
+    recipe_id: recipe.id,
+    recipe_title: recipe.title,
+    loaded_src: event.target.src
+  })
+}
+
+
 // ページネーション表示用
 const displayPages = computed(() => {
   const pages = []
@@ -173,34 +218,50 @@ const updateUrl = () => {
 const fetchRecipes = async () => {
   loading.value = true
   error.value = ''
-  
+
   try {
+    const { $auth } = useNuxtApp()
+
+    if (!$auth?.currentUser) {
+      throw new Error('認証が必要です')
+    }
+
+    const token = await $auth.currentUser.getIdToken()
+
     const params = new URLSearchParams()
     if (searchKeyword.value) params.append('keyword', searchKeyword.value)
     if (currentPage.value > 1) params.append('page', currentPage.value)
-    
+
     const queryString = params.toString()
-    const url = `/api/admin/recipes${queryString ? '?' + queryString : ''}`
-    
-    const response = await $fetch(url)
-    
-    recipes.value = response.data
-    currentPage.value = response.current_page
-    totalPages.value = response.last_page
-    
+    // Docker環境用の絶対URLに修正
+    const url = `http://localhost/api/admin/recipes${queryString ? '?' + queryString : ''}`
+
+    console.log('🔍 Fetching recipes from:', url)
+
+    const response = await fetch(url, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Accept': 'application/json'
+      }
+    })
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+    }
+
+    const data = await response.json()
+    console.log('✅ Recipes data:', data)
+
+    recipes.value = data.data || []
+    currentPage.value = data.current_page || 1
+    totalPages.value = data.last_page || 1
+
   } catch (err) {
-    console.error('レシピ取得エラー:', err)
+    console.error('❌ レシピ取得エラー:', err)
     error.value = 'レシピの取得に失敗しました。'
-    
-    // 一時的にダミーデータを表示
-    recipes.value = [
-      { id: 1, title: 'テストレシピ1', likes_count: 24 },
-      { id: 2, title: 'テストレシピ2', likes_count: 15 },
-      { id: 3, title: 'テストレシピ3', likes_count: 8 },
-      { id: 4, title: 'テストレシピ4', likes_count: 32 },
-      { id: 5, title: 'テストレシピ5', likes_count: 5 },
-      { id: 6, title: 'テストレシピ6', likes_count: 19 }
-    ]
+
+    // エラー時はダミーデータを表示しない
+    recipes.value = []
     currentPage.value = 1
     totalPages.value = 1
   } finally {
