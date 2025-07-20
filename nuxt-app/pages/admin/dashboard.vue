@@ -20,7 +20,6 @@
     <div class="admin-menu">
       <NuxtLink to="/admin/recipes" class="admin-button">📋 レシピ一覧</NuxtLink>
       <NuxtLink to="/admin/recipes/create" class="admin-button">➕ レシピ新規作成</NuxtLink>
-      <NuxtLink to="/admin/recipes/edit" class="admin-button">✏️ レシピ編集</NuxtLink>
       <NuxtLink to="/admin/comments" class="admin-button">💬 コメント管理</NuxtLink>
     </div>
 
@@ -60,7 +59,7 @@ onMounted(async () => {
   console.log('🔍 ダッシュボード onMounted 開始')
   // 認証状態の初期化を待つ
   await initAuth()
-  
+
   console.log('🔍 認証状態:', {
     isLoggedIn: isLoggedIn.value,
     isAdmin: isAdmin.value,

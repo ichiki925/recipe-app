@@ -33,14 +33,19 @@
     import { ref, onMounted } from 'vue'
 
     const { logout: authLogout, isLoggedIn, isAdmin } = useAuth()
-
+    const router = useRouter()
 
     const isAuthenticated = ref(false)
+
+    const goToDashboard = () => {
+        router.push('/admin/dashboard')
+    }
+
 
     // ログアウト処理を useAuth の logout に変更
     const logout = async () => {
         try {
-            await authLogout()  // useAuth の logout 関数を使用
+            await authLogout()
             console.log('ログアウト成功')
         } catch (error) {
             console.error('Logout failed:', error)
