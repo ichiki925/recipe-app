@@ -16,23 +16,23 @@ class RecipeLikeResource extends JsonResource
             'formatted_created_at' => $this->created_at->format('Y年m月d日 H:i'),
 
             // いいねしたユーザー情報
-            'user' => [
+            'user' => $this->user ? [
                 'id' => $this->user->id,
                 'name' => $this->user->name,
-                'avatar' => $this->user->avatar_url,
-            ],
+                'avatar' => $this->user->avatar ?? '/images/default-avatar.png',
+            ] : null,
 
             // いいねされたレシピ情報（最小限）
-            'recipe' => [
+            'recipe' => $this->recipe ? [
                 'id' => $this->recipe->id,
                 'title' => $this->recipe->title,
-                'image' => $this->recipe->image_url,
-            ],
+                'image_url' => $this->recipe->image_url ?? '/images/no-image.png', // 修正
+            ] : null,
 
             // 管理者用の詳細情報
-            'user_details' => $this->when($request->user() && $request->user()->isAdmin(), [
+            'user_details' => $this->when($request->user() && $request->user()->isAdmin() && $this->user, [
                 'email' => $this->user->email,
-                'username' => $this->user->username,
+                'username' => $this->user->username ?? null,
                 'user_created_at' => $this->user->created_at,
             ]),
         ];

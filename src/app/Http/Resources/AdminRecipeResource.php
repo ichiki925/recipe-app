@@ -6,12 +6,7 @@ use Illuminate\Http\Resources\Json\JsonResource;
 
 class AdminRecipeResource extends JsonResource
 {
-    /**
-     * Transform the resource into an array.
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @return array|\Illuminate\Contracts\Support\Arrayable|\JsonSerializable
-     */
+
     public function toArray($request)
     {
         return [
@@ -21,22 +16,24 @@ class AdminRecipeResource extends JsonResource
             'servings' => $this->servings,
             'ingredients' => $this->ingredients,
             'instructions' => $this->instructions,
-            'ingredients_array' => $this->ingredients_array,
-            'instructions_array' => $this->instructions_array,
-            'image_url' => $this->image_url,
-            'image' => $this->image, // デフォルト画像対応
-            'is_published' => $this->is_published,
-            'views_count' => $this->views_count,
-            'likes_count' => $this->likes_count,
-            'comments_count' => $this->comments()->count(),
-            
-            // 管理者情報
-            'admin' => [
-                'id' => $this->admin->id,
-                'name' => $this->admin->name,
-                'email' => $this->admin->email,
-            ],
-            
+            'ingredients_array' => $this->parseIngredients($this->ingredients),
+            'instructions_array' => $this->parseInstructions($this->instructions),
+            'image_url' => $this->image_url ?? '/images/no-image.png',
+            'image' => $this->image_url ?? '/images/no-image.png',
+            'is_published' => (bool) $this->is_published,
+            'views_count' => $this->views_count ?? 0,
+            'likes_count' => $this->likes_count ?? 0,
+            'comments_count' => $this->whenLoaded('comments', function() {
+                return $this->comments->count();
+            }, 0),
+
+            // 管理者情報（安全な取得）
+            'admin' => $this->when($this->relationLoaded('admin') && $this->admin, [
+                'id' => $this->admin->id ?? null,
+                'name' => $this->admin->name ?? '不明',
+                'email' => $this->admin->email ?? '',
+            ]),
+
             // ステータス関連
             'status' => [
                 'text' => $this->is_published ? '公開中' : '下書き',
@@ -59,11 +56,15 @@ class AdminRecipeResource extends JsonResource
             
             // 統計情報
             'stats' => [
-                'total_interactions' => $this->likes_count + $this->comments()->count(),
-                'engagement_rate' => $this->views_count > 0 ? 
-                    round(($this->likes_count + $this->comments()->count()) / $this->views_count * 100, 2) : 0,
-                'likes_per_view' => $this->views_count > 0 ? 
-                    round($this->likes_count / $this->views_count * 100, 2) : 0,
+                'total_interactions' => ($this->likes_count ?? 0) + ($this->whenLoaded('comments', function() {
+                    return $this->comments->count();
+                }, 0)),
+                'engagement_rate' => ($this->views_count ?? 0) > 0 ? 
+                    round((($this->likes_count ?? 0) + ($this->whenLoaded('comments', function() {
+                        return $this->comments->count();
+                    }, 0))) / $this->views_count * 100, 2) : 0,
+                'likes_per_view' => ($this->views_count ?? 0) > 0 ? 
+                    round(($this->likes_count ?? 0) / $this->views_count * 100, 2) : 0,
             ],
             
             // 最新のコメント情報（管理用）
@@ -71,13 +72,29 @@ class AdminRecipeResource extends JsonResource
                 return $this->comments->take(3)->map(function ($comment) {
                     return [
                         'id' => $comment->id,
-                        'content' => $comment->content,
+                        'content' => $comment->content ?? $comment->body ?? '',
                         'user_name' => $comment->user->name ?? '不明',
                         'created_at_human' => $comment->created_at->diffForHumans(),
                     ];
                 });
-            }),
-            
+            }, []),
+
+            // コメント配列（Vue側で使用）
+            'comments' => $this->whenLoaded('comments', function () {
+                return $this->comments->map(function ($comment) {
+                    return [
+                        'id' => $comment->id,
+                        'content' => $comment->content ?? $comment->body ?? '',
+                        'body' => $comment->content ?? $comment->body ?? '', // 両方に対応
+                        'user' => [
+                            'id' => $comment->user->id ?? null,
+                            'name' => $comment->user->name ?? 'ゲスト',
+                        ],
+                        'created_at' => $comment->created_at->toISOString(),
+                    ];
+                });
+            }, []),
+
             // いいねユーザー情報（管理用）
             'recent_likes' => $this->whenLoaded('likes', function () {
                 return $this->likes->take(5)->map(function ($like) {
@@ -87,7 +104,7 @@ class AdminRecipeResource extends JsonResource
                         'created_at_human' => $like->created_at->diffForHumans(),
                     ];
                 });
-            }),
+            }, []),
             
             // 管理者向けアクション用URL
             'urls' => [
@@ -96,5 +113,49 @@ class AdminRecipeResource extends JsonResource
                 'public_view' => "/recipes/{$this->id}",
             ],
         ];
+    }
+
+    /**
+     * 材料文字列を配列に変換
+     */
+    private function parseIngredients($ingredientsStr)
+    {
+        if (!$ingredientsStr) {
+            return [];
+        }
+
+        return collect(explode("\n", $ingredientsStr))
+            ->map(function($line) {
+                $line = trim($line);
+                if (empty($line)) return null;
+                
+                // スペースで分割して材料名と分量に分ける
+                $parts = preg_split('/\s+/', $line, 2);
+                return [
+                    'name' => $parts[0] ?? '',
+                    'amount' => $parts[1] ?? ''
+                ];
+            })
+            ->filter() // null値を除去
+            ->values() // インデックスを再振り
+            ->toArray();
+    }
+
+    /**
+     * 作り方文字列を配列に変換
+     */
+    private function parseInstructions($instructionsStr)
+    {
+        if (!$instructionsStr) {
+            return [];
+        }
+
+        return collect(explode("\n", $instructionsStr))
+            ->map('trim')
+            ->filter(function($line) {
+                return !empty($line);
+            })
+            ->values()
+            ->toArray();
     }
 }

@@ -56,9 +56,11 @@
                 <span v-if="!recipe.image_url" id="preview-text">No Image</span>
                 <img
                     v-else
-                    :src="recipe.image_url"
-                    alt="レシピ画像"
+                    :src="getImageUrl(recipe.image_url)"
+                    :alt="recipe.title"
                     id="preview-image"
+                    @error="handleImageError($event, recipe)"
+                    @load="handleImageLoad($event, recipe)"
                 />
             </div>
 
@@ -100,7 +102,7 @@
                     <i class="fas fa-info-circle"></i>
                     管理者はコメント表示のみです
                 </div>
-  
+
                 <div class="action-buttons">
                     <!-- いいね表示のみ（クリック不可） -->
                     <div class="like-display">
@@ -110,7 +112,7 @@
                 </div>
             </div>
         </div>
-  
+
             <!-- 右カラム -->
             <div class="right-column">
                 <div class="recipe-form">
@@ -184,6 +186,46 @@ useHead({
 const route = useRoute()
 const router = useRouter()
 
+// 画像URL処理関数
+const getImageUrl = (imageUrl) => {
+    console.log('🖼️ Original image URL:', imageUrl)
+    
+    if (!imageUrl) {
+        return '/images/no-image.png'
+    }
+    
+    // 相対URLの場合、絶対URLに変換
+    if (imageUrl.startsWith('/storage/')) {
+        const fullUrl = `http://localhost${imageUrl}`
+        console.log('🔗 Converted to full URL:', fullUrl)
+        return fullUrl
+    }
+    
+    return imageUrl
+    }
+
+    // 画像読み込みエラーハンドリング
+    const handleImageError = (event, recipe) => {
+    console.error('❌ Image load failed:', {
+        recipe_id: recipe.id,
+        recipe_title: recipe.title,
+        image_url: recipe.image_url,
+        attempted_src: event.target.src
+    })
+    
+    // エラー時はデフォルト画像に変更
+    event.target.src = '/images/no-image.png'
+    }
+
+    // 画像読み込み成功時
+    const handleImageLoad = (event, recipe) => {
+    console.log('✅ Image loaded successfully:', {
+        recipe_id: recipe.id,
+        recipe_title: recipe.title,
+        loaded_src: event.target.src
+    })
+}
+
 // データ定義
 const recipe = ref(null)
 const loading = ref(true)
@@ -233,34 +275,154 @@ onMounted(() => {
 const fetchRecipe = async () => {
     loading.value = true
     error.value = ''
+    recipe.value = null
     
     try {
-        const response = await $fetch(`/api/admin/recipes/${recipeId}`)
+        console.log('🔍 レシピ取得開始:', {
+            recipeId,
+            timestamp: new Date().toISOString()
+        })
+
+        // 認証確認
+        const { $auth } = useNuxtApp()
         
-        recipe.value = {
-            ...response.data,
-            // 材料と作り方を配列に変換
-            ingredients_array: parseIngredients(response.data.ingredients),
-            instructions_array: parseInstructions(response.data.instructions)
+        if (!$auth?.currentUser) {
+            throw new Error('認証が必要です')
+        }
+
+        console.log('🔑 認証ユーザー確認:', {
+            uid: $auth.currentUser.uid,
+            email: $auth.currentUser.email
+        })
+
+        const token = await $auth.currentUser.getIdToken()
+        
+        if (!token) {
+            throw new Error('認証トークンの取得に失敗しました')
+        }
+
+        console.log('🎫 認証トークン取得成功')
+
+        // APIリクエスト
+        const apiUrl = `http://localhost/api/admin/recipes/${recipeId}`
+        console.log('📡 APIリクエスト送信:', apiUrl)
+
+        const response = await fetch(apiUrl, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            }
+        })
+
+        console.log('📊 APIレスポンス受信:', {
+            status: response.status,
+            statusText: response.statusText,
+            ok: response.ok,
+            contentType: response.headers.get('content-type')
+        })
+
+        // レスポンステキストを取得
+        const responseText = await response.text()
+        console.log('📄 レスポンステキスト:', responseText.substring(0, 500) + (responseText.length > 500 ? '...' : ''))
+
+        if (!response.ok) {
+            console.error('❌ HTTPエラー:', {
+                status: response.status,
+                statusText: response.statusText,
+                responseText
+            })
+            
+            // エラーレスポンスの解析を試行
+            try {
+                const errorData = JSON.parse(responseText)
+                throw new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`)
+            } catch (parseError) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+            }
+        }
+
+        // JSONパース
+        let responseData
+        try {
+            responseData = JSON.parse(responseText)
+        } catch (parseError) {
+            console.error('❌ JSONパースエラー:', parseError)
+            throw new Error('サーバーからの応答が不正です')
+        }
+
+        console.log('✅ レスポンスデータパース成功:', {
+            status: responseData.status,
+            hasData: !!responseData.data,
+            dataKeys: responseData.data ? Object.keys(responseData.data) : []
+        })
+
+        // データ構造の確認と設定
+        if (responseData.status === 'success' && responseData.data) {
+            recipe.value = responseData.data
+            
+            console.log('✅ レシピデータ設定完了:', {
+                id: recipe.value.id,
+                title: recipe.value.title,
+                hasIngredients: !!recipe.value.ingredients,
+                hasInstructions: !!recipe.value.instructions,
+                ingredientsArrayLength: recipe.value.ingredients_array?.length || 0,
+                instructionsArrayLength: recipe.value.instructions_array?.length || 0,
+                commentsCount: recipe.value.comments?.length || 0,
+                hasAdmin: !!recipe.value.admin,
+                imageUrl: recipe.value.image_url
+            })
+            
+        } else {
+            console.error('❌ 予期しないレスポンス構造:', responseData)
+            throw new Error('レスポンスデータの形式が不正です')
         }
         
     } catch (err) {
-        console.error('レシピ取得エラー:', err)
+        console.error('❌ レシピ取得エラー:', {
+            error: err.message,
+            stack: err.stack,
+            recipeId
+        })
         
-        // 適切なエラー処理
-        error.value = 'レシピの取得に失敗しました。'
-        
-        if (err.status === 404) {
-            error.value = 'レシピが見つかりません。'
-        } else if (err.status === 403) {
+        // エラーメッセージの設定
+        if (err.message.includes('401') || err.message.includes('認証')) {
+            error.value = '認証が無効です。再ログインしてください。'
+        } else if (err.message.includes('403')) {
             error.value = 'このレシピを表示する権限がありません。'
-        } else if (err.status === 500) {
+        } else if (err.message.includes('404')) {
+            error.value = 'レシピが見つかりません。'
+        } else if (err.message.includes('500')) {
             error.value = 'サーバーエラーが発生しました。しばらく時間をおいて再度お試しください。'
+        } else if (err.message.includes('NetworkError') || err.message.includes('fetch')) {
+            error.value = 'ネットワークエラーが発生しました。接続を確認してください。'
+        } else {
+            error.value = `レシピの取得に失敗しました: ${err.message}`
         }
         
     } finally {
         loading.value = false
+        console.log('🏁 レシピ取得処理完了:', {
+            loading: loading.value,
+            hasError: !!error.value,
+            hasRecipe: !!recipe.value,
+            recipeId
+        })
     }
+}
+
+// デバッグ用の追加メソッドも定義してください
+const debugInfo = () => {
+    console.log('🐛 デバッグ情報:', {
+        route: route.params,
+        recipeId,
+        loading: loading.value,
+        error: error.value,
+        hasRecipe: !!recipe.value,
+        recipeTitle: recipe.value?.title,
+        currentUser: useNuxtApp().$auth?.currentUser?.uid
+    })
 }
 
 // 材料文字列を配列に変換

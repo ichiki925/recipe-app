@@ -18,11 +18,10 @@ class RecipeResource extends JsonResource
             'instructions' => $this->instructions,
             'ingredients_array' => $this->ingredients_array,
             'instructions_array' => $this->instructions_array,
-            'image_url' => $this->image_url,
-            'image' => $this->image,
-            'views_count' => $this->views_count,
-            'likes_count' => $this->likes_count,
-            'is_published' => $this->is_published,
+            'image_url' => $this->image_url ?? '/images/no-image.png',
+            'views_count' => $this->views_count ?? 0,
+            'likes_count' => $this->likes_count ?? 0,
+            'is_published' => (bool) $this->is_published,
             'created_at' => $this->created_at->toISOString(),
             'updated_at' => $this->updated_at->toISOString(),
             'formatted_created_at' => $this->created_at->format('Y年m月d日'),
@@ -40,8 +39,6 @@ class RecipeResource extends JsonResource
             'is_liked' => $this->when($request->user(), function () use ($request) {
                 return $this->isLikedBy($request->user());
             }),
-
-            // 閲覧数増加は自動的に行われる（モデルのincrementViews()メソッド）
         ];
     }
 }
