@@ -29,12 +29,19 @@
     <div class="main-content">
       <!-- 左側：画像プレビューエリア -->
       <div class="image-preview" @click="triggerImageInput">
-        <span v-if="!imagePreview" id="preview-text">No Image</span>
+        <!-- 画像がない場合のプレースホルダー -->
+        <div v-if="!imagePreview" class="no-image-placeholder">
+
+          <div class="no-image-text">No Image</div>
+        </div>
+        <!-- 画像がある場合 -->
         <img
           v-if="imagePreview"
           :src="imagePreview"
           alt="プレビュー"
-          id="preview-image"
+          class="preview-image"
+          @error="handleImageError"
+          @load="handleImageLoad"
         />
       </div>
       <input
@@ -48,14 +55,6 @@
       <!-- 右側：入力フォーム -->
       <form class="recipe-form" @submit.prevent="submitRecipe">
       <h2>New Recipe</h2>
-
-      <!-- 現在編集中のレシピ表示 -->
-      <div v-if="currentEditingRecipe" class="editing-recipe-info">
-        <span>編集中: {{ currentEditingRecipe.title || '無題のレシピ' }}</span>
-        <button type="button" @click="clearCurrentRecipe" class="clear-editing">
-          新規作成
-        </button>
-      </div>
 
       <!-- エラーメッセージ表示 -->
       <div v-if="errors.length > 0" class="error-messages">
@@ -166,99 +165,153 @@ const isSaving = ref(false)
 const savedRecipes = ref([])
 const currentEditingRecipe = ref(null)
 
-// 保存中のレシピを読み込み
+// 画像エラーハンドリング
+const handleImageError = (event) => {
+  console.error('❌ 画像読み込みエラー:', event.target.src)
+  imagePreview.value = ''
+}
+
+const handleImageLoad = (event) => {
+  console.log('✅ 画像読み込み成功:', event.target.src)
+}
+
 const loadSavedRecipes = () => {
-  const saved = localStorage.getItem('savedRecipes')
-  if (saved) {
-    savedRecipes.value = JSON.parse(saved)
+  try {
+    const saved = localStorage.getItem('savedRecipes')
+    if (saved) {
+      savedRecipes.value = JSON.parse(saved)
+    }
+  } catch (error) {
+    console.error('保存レシピの読み込みエラー:', error)
+    savedRecipes.value = []
   }
 }
 
 // 保存中のレシピを更新
 const updateSavedRecipes = () => {
-  localStorage.setItem('savedRecipes', JSON.stringify(savedRecipes.value))
+  try {
+    localStorage.setItem('savedRecipes', JSON.stringify(savedRecipes.value))
+  } catch (error) {
+    console.error('保存レシピの更新エラー:', error)
+  }
 }
 
 // 日付フォーマット
 const formatDate = (dateString) => {
-  const date = new Date(dateString)
-  return date.toLocaleDateString('ja-JP', {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  })
+  try {
+    const date = new Date(dateString)
+    return date.toLocaleDateString('ja-JP', {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    })
+  } catch (error) {
+    console.error('日付フォーマットエラー:', error)
+    return '不明'
+  }
 }
+
 
 // 保存機能
 const saveRecipe = () => {
   isSaving.value = true
 
-  const recipeData = {
-    id: currentEditingRecipe.value?.id || Date.now().toString(),
-    title: form.title,
-    genre: form.genre,
-    servings: form.servings,
-    ingredients: [...form.ingredients],
-    instructions: form.instructions,
-    imagePreview: imagePreview.value,
-    savedAt: new Date().toISOString()
+  try {
+    const recipeData = {
+      id: currentEditingRecipe.value?.id || Date.now().toString(),
+      title: form.title,
+      genre: form.genre,
+      servings: form.servings,
+      ingredients: [...form.ingredients],
+      instructions: form.instructions,
+      imagePreview: imagePreview.value,
+      savedAt: new Date().toISOString()
+    }
+
+    // 既存のレシピを更新または新規追加
+    const existingIndex = savedRecipes.value.findIndex(r => r.id === recipeData.id)
+    if (existingIndex !== -1) {
+      savedRecipes.value[existingIndex] = recipeData
+    } else {
+      savedRecipes.value.unshift(recipeData)
+    }
+
+    // 最大10件まで保存
+    if (savedRecipes.value.length > 10) {
+      savedRecipes.value = savedRecipes.value.slice(0, 10)
+    }
+
+    updateSavedRecipes()
+
+    // ★ 修正：保存後はフォームをクリアして新規作成モードにする
+    Object.assign(form, {
+      title: '',
+      genre: '',
+      servings: '',
+      ingredients: [{ name: '', qty: '' }],
+      instructions: ''
+    })
+
+    imagePreview.value = ''
+    selectedFile.value = null
+    currentEditingRecipe.value = null // 編集モードを解除
+
+    successMessage.value = 'レシピを保存しました'
+    setTimeout(() => {
+      successMessage.value = ''
+    }, 3000)
+  } catch (error) {
+    console.error('保存エラー:', error)
+    errors.value.push('保存に失敗しました')
+  } finally {
+    isSaving.value = false
   }
-
-  // 既存のレシピを更新または新規追加
-  const existingIndex = savedRecipes.value.findIndex(r => r.id === recipeData.id)
-  if (existingIndex !== -1) {
-    savedRecipes.value[existingIndex] = recipeData
-  } else {
-    savedRecipes.value.unshift(recipeData)
-  }
-
-  // 最大10件まで保存
-  if (savedRecipes.value.length > 10) {
-    savedRecipes.value = savedRecipes.value.slice(0, 10)
-  }
-
-  updateSavedRecipes()
-  currentEditingRecipe.value = recipeData
-
-  successMessage.value = 'レシピを保存しました'
-  setTimeout(() => {
-    successMessage.value = ''
-  }, 3000)
-
-  isSaving.value = false
 }
+
 
 // 保存済みレシピを読み込み
 const loadSavedRecipe = (savedRecipe) => {
-  Object.assign(form, {
-    title: savedRecipe.title,
-    genre: savedRecipe.genre,
-    servings: savedRecipe.servings,
-    ingredients: savedRecipe.ingredients.length > 0 ? savedRecipe.ingredients : [{ name: '', qty: '' }],
-    instructions: savedRecipe.instructions
-  })
+  try {
+    Object.assign(form, {
+      title: savedRecipe.title,
+      genre: savedRecipe.genre,
+      servings: savedRecipe.servings,
+      ingredients: savedRecipe.ingredients.length > 0 ? savedRecipe.ingredients : [{ name: '', qty: '' }],
+      instructions: savedRecipe.instructions
+    })
 
-  imagePreview.value = savedRecipe.imagePreview || ''
-  currentEditingRecipe.value = savedRecipe
+    imagePreview.value = savedRecipe.imagePreview || ''
+    currentEditingRecipe.value = savedRecipe
 
-  successMessage.value = 'レシピを読み込みました'
-  setTimeout(() => {
-    successMessage.value = ''
-  }, 3000)
+    successMessage.value = 'レシピを読み込みました'
+    setTimeout(() => {
+      successMessage.value = ''
+    }, 3000)
+  } catch (error) {
+    console.error('読み込みエラー:', error)
+    errors.value.push('レシピの読み込みに失敗しました')
+  }
 }
+
 
 // 保存済みレシピを削除
 const deleteSavedRecipe = (id) => {
   if (confirm('このレシピを削除しますか？')) {
-    savedRecipes.value = savedRecipes.value.filter(r => r.id !== id)
-    updateSavedRecipes()
+    try {
+      savedRecipes.value = savedRecipes.value.filter(r => r.id !== id)
+      updateSavedRecipes()
 
-    if (currentEditingRecipe.value?.id === id) {
-      currentEditingRecipe.value = null
+      if (currentEditingRecipe.value?.id === id) {
+        currentEditingRecipe.value = null
+      }
+    } catch (error) {
+      console.error('削除エラー:', error)
+      errors.value.push('削除に失敗しました')
     }
   }
 }
+
 
 // 新規作成モードに切り替え
 const clearCurrentRecipe = () => {
@@ -376,14 +429,7 @@ const submitRecipe = async () => {
     }
 
     console.log('🚀 APIリクエストを送信中...')
-    console.log('📝 送信データ:', {
-      title: form.title,
-      genre: form.genre,
-      servings: form.servings,
-      ingredients: ingredientsText,
-      instructions: form.instructions,
-      hasImage: !!selectedFile.value
-    })
+
 
 
     // Docker環境用の絶対URL（ここが重要な修正箇所）
@@ -395,11 +441,6 @@ const submitRecipe = async () => {
       }
     })
 
-    console.log('📊 レスポンス状況:', {
-      status: response.status,
-      statusText: response.statusText,
-      ok: response.ok
-    })
 
 
     if (!response.ok) {
@@ -412,6 +453,9 @@ const submitRecipe = async () => {
     console.log('✅ API response:', data)
 
     successMessage.value = 'レシピが投稿されました'
+
+    // 現在編集中のレシピのIDを保存（フォームリセット前に）
+    const currentEditingId = currentEditingRecipe.value?.id
 
     // フォームリセット
     Object.assign(form, {
@@ -427,8 +471,9 @@ const submitRecipe = async () => {
     currentEditingRecipe.value = null
 
     // 保存中のレシピも削除（投稿成功時）
-    if (currentEditingRecipe.value?.id) {
-      savedRecipes.value = savedRecipes.value.filter(r => r.id !== currentEditingRecipe.value.id)
+    if (currentEditingId) {
+      console.log('🗑️ 投稿成功により保存リストからレシピを削除:', currentEditingId)
+      savedRecipes.value = savedRecipes.value.filter(r => r.id !== currentEditingId)
       updateSavedRecipes()
     }
 
@@ -461,7 +506,7 @@ const startAutoSave = () => {
 
   autoSaveTimer = setInterval(() => {
     // 何かしらの入力があった場合のみ自動保存
-    if (form.title || form.genre || form.instructions || 
+    if (form.title || form.genre || form.instructions ||
         form.ingredients.some(ing => ing.name || ing.qty)) {
       saveRecipe()
     }
@@ -491,7 +536,6 @@ body {
     font-family: sans-serif;
 }
 
-/* 全体のレイアウト */
 .recipe-create-container {
     display: flex;
     gap: 30px;
@@ -500,7 +544,6 @@ body {
     padding: 20px;
 }
 
-/* 左サイドバー：保存中のレシピエリア */
 .saved-recipes-sidebar {
     width: 300px;
     background-color: #fff;
@@ -566,6 +609,7 @@ body {
     width: 24px;
     height: 24px;
     border: none;
+    background: transparent;
     color: #555;
     border-radius: 4px;
     cursor: pointer;
@@ -578,8 +622,6 @@ body {
     font-family: system-ui, sans-serif;
 }
 
-
-
 .delete-saved-recipe:hover {
     background-color: #c5414182;
 }
@@ -591,7 +633,6 @@ body {
     padding: 20px;
 }
 
-/* メインコンテンツエリア（画像とフォーム） */
 .main-content {
     display: flex;
     gap: 40px;
@@ -600,7 +641,6 @@ body {
     flex: 1;
 }
 
-/* 中央：画像プレビューエリア */
 .image-preview {
     width: 300px;
     height: 300px;
@@ -615,18 +655,28 @@ body {
     position: relative;
 }
 
-.image-preview img {
+.no-image-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    color: #999;
+}
+
+.no-image-text {
+    font-size: 18px;
+    font-weight: 500;
+}
+
+.preview-image {
     width: 100%;
     height: 100%;
     object-fit: cover;
+    border-radius: 12px;
 }
 
-.no-image {
-    color: #999;
-    font-size: 18px;
-}
-
-/* 右側：入力フォーム */
 .recipe-form {
     width: 400px;
 }
@@ -635,32 +685,6 @@ body {
     margin-bottom: 20px;
     text-align: center;
     font-family: cursive;
-}
-
-/* 編集中のレシピ情報 */
-.editing-recipe-info {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    background-color: #e7f3ff;
-    padding: 10px;
-    border-radius: 6px;
-    margin-bottom: 15px;
-    font-size: 14px;
-}
-
-.clear-editing {
-    background: #666;
-    color: white;
-    border: none;
-    padding: 4px 8px;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 12px;
-}
-
-.clear-editing:hover {
-    background: #555;
 }
 
 .recipe-form label {
@@ -684,14 +708,12 @@ body {
     border: 1px solid #aaa;
 }
 
-/* 材料名と分量を横並び */
 .recipe-form .ingredient-row {
     display: flex;
     gap: 0px;
     margin-bottom: 10px;
 }
 
-/* 材料名入力欄 */
 .recipe-form .ingredient-name {
     flex: 2;
     border: 1px solid #aaa !important;
@@ -707,7 +729,6 @@ body {
     border-right: none !important;
 }
 
-/* 分量入力欄 */
 .recipe-form .ingredient-qty {
     flex: 1;
     border: 1px solid #aaa !important;
@@ -754,7 +775,6 @@ body {
     border: 1px solid #aaa;
 }
 
-/* ボタンコンテナ */
 .button-container {
     display: flex;
     gap: 10px;
@@ -812,7 +832,6 @@ body {
     cursor: not-allowed;
 }
 
-/* エラーメッセージ */
 .error-messages {
     margin-bottom: 20px;
 }
@@ -826,7 +845,6 @@ body {
     border: 1px solid #f5c6cb;
 }
 
-/* 成功メッセージ */
 .success-message {
     background-color: #d4edda;
     color: #155724;
@@ -842,7 +860,6 @@ textarea::placeholder {
     opacity: 1 !important;
 }
 
-/* レスポンシブデザイン */
 @media screen and (max-width: 1024px) {
     .recipe-create-container {
         flex-direction: column;

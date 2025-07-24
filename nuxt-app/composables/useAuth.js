@@ -133,7 +133,7 @@ export const useAuth = () => {
     }
 
     /**
-     * ログイン
+     * ログイン（本番対応版）
      */
     const login = async (email, password) => {
         loading.value = true
@@ -142,35 +142,49 @@ export const useAuth = () => {
             console.log('🚀 ログイン開始:', email)
 
             const { user: firebaseUser } = await signInWithEmailAndPassword($auth, email, password)
-
             console.log('✅ Firebase認証成功:', firebaseUser.uid)
 
             // Firebase IDトークンを取得
             const idToken = await firebaseUser.getIdToken()
 
             let userData
-            try {
-                console.log('🔍 一般ユーザーとしてチェック中...')
-                userData = await $fetch('/auth/check', {
-                    baseURL: API_BASE_URL,
-                    headers: {
-                        Authorization: `Bearer ${idToken}`
-                    }
-                })
-                console.log('✅ 一般ユーザー認証成功')
-            } catch (authError) {
-                console.log('❌ 一般ユーザー認証失敗、管理者として試行中...')
+            
+            // 📧 メールアドレスで管理者/一般ユーザーを判定
+            const isAdminEmail = email.includes('admin') || email.endsWith('@admin.com')
+            
+            if (isAdminEmail) {
+                // 管理者用メールアドレスの場合
                 try {
+                    console.log('🔍 管理者としてチェック中...')
                     userData = await $fetch('/admin/check', {
                         baseURL: API_BASE_URL,
-                        headers: {
-                            Authorization: `Bearer ${idToken}`
-                        }
+                        headers: { Authorization: `Bearer ${idToken}` }
                     })
                     console.log('✅ 管理者認証成功')
                 } catch (adminError) {
-                    console.error('❌ 管理者認証も失敗:', adminError)
-                    throw authError // 最初のエラーをthrow
+                    console.log('❌ 管理者認証失敗、一般ユーザーとして試行...')
+                    userData = await $fetch('/auth/check', {
+                        baseURL: API_BASE_URL,
+                        headers: { Authorization: `Bearer ${idToken}` }
+                    })
+                    console.log('✅ 一般ユーザー認証成功')
+                }
+            } else {
+                // 一般ユーザー用メールアドレスの場合
+                try {
+                    console.log('🔍 一般ユーザーとしてチェック中...')
+                    userData = await $fetch('/auth/check', {
+                        baseURL: API_BASE_URL,
+                        headers: { Authorization: `Bearer ${idToken}` }
+                    })
+                    console.log('✅ 一般ユーザー認証成功')
+                } catch (authError) {
+                    console.log('❌ 一般ユーザー認証失敗、管理者として試行...')
+                    userData = await $fetch('/admin/check', {
+                        baseURL: API_BASE_URL,
+                        headers: { Authorization: `Bearer ${idToken}` }
+                    })
+                    console.log('✅ 管理者認証成功')
                 }
             }
 
@@ -178,7 +192,6 @@ export const useAuth = () => {
             console.log('✅ ログイン完了:', user.value)
 
             return user.value
-
 
         } catch (error) {
             console.error('❌ ログインエラー:', error)

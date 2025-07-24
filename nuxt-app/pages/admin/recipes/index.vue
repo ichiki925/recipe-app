@@ -5,9 +5,9 @@
       <form @submit.prevent="searchRecipes">
         <div class="search-wrapper">
           <i class="fa-solid fa-magnifying-glass"></i>
-          <input 
-            type="text" 
-            v-model="searchKeyword" 
+          <input
+            type="text"
+            v-model="searchKeyword"
             placeholder="料理名・材料で検索"
           >
         </div>
@@ -34,15 +34,21 @@
           class="recipe-card"
           @click="goToRecipeDetail(recipe.id)"
         >
-          <div v-if="recipe.image_url" class="recipe-image">
+          <div class="recipe-image">
+              <div v-if="!hasValidImage(recipe.image_url)" class="no-image-fallback">
+              <div class="no-image-text">No Image</div>
+            </div>
+            <!-- 実際の画像がある場合のみ表示 -->
             <img 
+              v-else
               :src="getImageUrl(recipe.image_url)" 
               :alt="recipe.title" 
               @error="handleImageError($event, recipe)"
               @load="handleImageLoad($event, recipe)"
             />
           </div>
-          <div v-else class="no-image">No Image</div>
+
+
 
           <div class="recipe-title">{{ recipe.title }}</div>
 
@@ -57,7 +63,7 @@
 
       <!-- ページネーション -->
       <div v-if="totalPages > 1" class="pagination">
-        <button 
+        <button
           v-if="currentPage > 1"
           @click="goToPage(currentPage - 1)"
           class="pagination-btn"
@@ -114,21 +120,22 @@ const error = ref('')
 const route = useRoute()
 const router = useRouter()
 
+
 // 画像URL処理関数
 const getImageUrl = (imageUrl) => {
   console.log('🖼️ Original image URL:', imageUrl)
-  
+
   if (!imageUrl) {
     return '/images/no-image.png'
   }
-  
+
   // 相対URLの場合、絶対URLに変換
   if (imageUrl.startsWith('/storage/')) {
     const fullUrl = `http://localhost${imageUrl}`
     console.log('🔗 Converted to full URL:', fullUrl)
     return fullUrl
   }
-  
+
   return imageUrl
 }
 
@@ -140,9 +147,28 @@ const handleImageError = (event, recipe) => {
     image_url: recipe.image_url,
     attempted_src: event.target.src
   })
-  
-  // エラー時はデフォルト画像に変更
-  event.target.src = '/images/no-image.png'
+
+  // 無限ループを防ぐため、エラーハンドラーを削除
+  event.target.onerror = null
+
+  // 画像要素を削除
+  const img = event.target
+  const parent = img.parentElement
+
+  if (parent) {
+    // 画像を削除
+    img.remove()
+
+    // プレースホルダーを作成（既に存在しない場合のみ）
+    if (!parent.querySelector('.no-image-fallback')) {
+      const placeholder = document.createElement('div')
+      placeholder.className = 'no-image-fallback'
+      placeholder.innerHTML = `
+        <div class="no-image-text">No Image</div>
+      `
+      parent.appendChild(placeholder)
+    }
+  }
 }
 
 // 画像読み込み成功時
@@ -160,18 +186,18 @@ const displayPages = computed(() => {
   const pages = []
   const maxDisplay = 5
   const half = Math.floor(maxDisplay / 2)
-  
+
   let start = Math.max(1, currentPage.value - half)
   let end = Math.min(totalPages.value, start + maxDisplay - 1)
-  
+
   if (end - start + 1 < maxDisplay) {
     start = Math.max(1, end - maxDisplay + 1)
   }
-  
+
   for (let i = start; i <= end; i++) {
     pages.push(i)
   }
-  
+
   return pages
 })
 
@@ -185,12 +211,77 @@ const goToCreate = () => {
   router.push('/admin/recipes/create')
 }
 
+
+// 削除フラグをチェックする関数
+const checkDeleteFlag = () => {
+  if (typeof localStorage !== 'undefined') {
+    const recipeDeleted = localStorage.getItem('recipeDeleted')
+    const deletedRecipeId = localStorage.getItem('deletedRecipeId')
+
+    if (recipeDeleted === 'true') {
+      console.log('🔄 削除フラグを検知しました。レシピID:', deletedRecipeId)
+
+      // フラグをクリア
+      localStorage.removeItem('recipeDeleted')
+      localStorage.removeItem('deletedRecipeId')
+
+      // データを強制更新
+      setTimeout(() => {
+        console.log('🔄 削除後のデータ更新を実行します')
+        fetchRecipes()
+      }, 500)
+    }
+  }
+}
+
+// 【追加】更新フラグをチェックする関数
+const checkUpdateFlag = () => {
+  if (typeof localStorage !== 'undefined') {
+    const recipeUpdated = localStorage.getItem('recipeUpdated')
+    const updatedRecipeId = localStorage.getItem('updatedRecipeId')
+    
+    if (recipeUpdated === 'true') {
+      console.log('🔄 更新フラグを検知しました。レシピID:', updatedRecipeId)
+      
+      // フラグをクリア
+      localStorage.removeItem('recipeUpdated')
+      localStorage.removeItem('updatedRecipeId')
+      
+      // データを強制更新
+      setTimeout(() => {
+        console.log('🔄 更新後のデータ更新を実行します')
+        fetchRecipes()
+      }, 500)
+    }
+  }
+}
+
 // 初期化
 onMounted(() => {
   searchKeyword.value = route.query.keyword || ''
   currentPage.value = parseInt(route.query.page) || 1
+  
+  // 削除フラグをチェック
+  checkDeleteFlag()
+
+  // 更新フラグをチェック
+  checkUpdateFlag()
+
   fetchRecipes()
 })
+
+
+// ページがフォーカスされた時もチェック
+if (typeof window !== 'undefined') {
+  window.addEventListener('focus', () => {
+    if (route.path === '/admin/recipes') {
+      console.log('🔄 ページフォーカス - 削除フラグをチェックします')
+      checkDeleteFlag()
+      checkUpdateFlag()
+    }
+  })
+}
+
 
 // 検索実行
 const searchRecipes = () => {
@@ -208,14 +299,19 @@ const goToPage = (page) => {
 
 // URL更新
 const updateUrl = () => {
-  const query = {}
-  if (searchKeyword.value) query.keyword = searchKeyword.value
-  if (currentPage.value > 1) query.page = currentPage.value
-  router.push({ path: '/admin/recipes', query })
+  try {
+    const query = {}
+    if (searchKeyword.value) query.keyword = searchKeyword.value
+    if (currentPage.value > 1) query.page = currentPage.value
+    router.push({ path: '/admin/recipes', query })
+  } catch (error) {
+    console.error('URL更新エラー:', error)
+  }
 }
 
 // レシピデータ取得
 const fetchRecipes = async () => {
+  console.log('🔍 fetchRecipes開始')
   loading.value = true
   error.value = ''
 
@@ -233,10 +329,9 @@ const fetchRecipes = async () => {
     if (currentPage.value > 1) params.append('page', currentPage.value)
 
     const queryString = params.toString()
-    // Docker環境用の絶対URLに修正
     const url = `http://localhost/api/admin/recipes${queryString ? '?' + queryString : ''}`
 
-    console.log('🔍 Fetching recipes from:', url)
+    console.log('🔍 APIリクエスト送信:', url)
 
     const response = await fetch(url, {
       headers: {
@@ -250,31 +345,63 @@ const fetchRecipes = async () => {
     }
 
     const data = await response.json()
-    console.log('✅ Recipes data:', data)
+    console.log('✅ APIレスポンス受信:', {
+      レシピ数: data.data?.length || 0,
+      現在のページ: data.current_page,
+      総ページ数: data.last_page
+    })
 
+    // レシピリストを更新
     recipes.value = data.data || []
     currentPage.value = data.current_page || 1
     totalPages.value = data.last_page || 1
 
+    // 更新されたレシピのタイトルをログ出力
+    if (data.data && Array.isArray(data.data)) {
+      console.log('📋 現在のレシピ一覧:')
+      data.data.forEach((recipe, index) => {
+        console.log(`  ${index + 1}. ${recipe.title} (ID: ${recipe.id})`)
+      })
+    }
+
   } catch (err) {
     console.error('❌ レシピ取得エラー:', err)
     error.value = 'レシピの取得に失敗しました。'
-
-    // エラー時はダミーデータを表示しない
     recipes.value = []
     currentPage.value = 1
     totalPages.value = 1
   } finally {
     loading.value = false
+    console.log('✅ fetchRecipes完了')
   }
 }
 
-// URLクエリ変更の監視
+
+// 画像があるかどうかを判定する関数を追加
+const hasValidImage = (imageUrl) => {
+  // 画像URLがない、または no-image.png の場合は false
+  if (!imageUrl ||
+      imageUrl === '' ||
+      imageUrl === null ||
+      imageUrl.includes('/images/no-image.png') ||
+      imageUrl.includes('no-image.png')) {
+    return false
+  }
+  return true
+}
+
+// URLクエリ変更の監視（修正版）
 watch(() => route.query, (newQuery) => {
-  searchKeyword.value = newQuery.keyword || ''
-  currentPage.value = parseInt(newQuery.page) || 1
-  fetchRecipes()
+  try {
+    searchKeyword.value = newQuery.keyword || ''
+    currentPage.value = parseInt(newQuery.page) || 1
+    fetchRecipes()
+  } catch (error) {
+    console.error('クエリ監視エラー:', error)
+  }
 })
+
+
 </script>
 
 <style scoped>
@@ -396,6 +523,8 @@ watch(() => route.query, (newQuery) => {
     height: 300px;
     border-radius: 6px;
     overflow: hidden;
+    position: relative;
+    background-color: #f0f0f0;
 }
 
 .recipe-image img {
@@ -404,16 +533,27 @@ watch(() => route.query, (newQuery) => {
     object-fit: cover;
 }
 
-.no-image {
+.no-image-fallback {
     width: 100%;
-    height: 300px;
+    height: 100%;
     background-color: #f0f0f0;
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
     color: #999;
-    font-size: 14px;
     border-radius: 6px;
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+}
+
+.no-image-text {
+    font-size: 14px;
+    font-weight: 500;
+    text-align: center;
 }
 
 .recipe-title {
