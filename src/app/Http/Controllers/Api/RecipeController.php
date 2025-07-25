@@ -13,6 +13,7 @@ use Intervention\Image\ImageManagerStatic as Image;
 
 class RecipeController extends Controller
 {
+    private const IMAGE_DIRECTORY = 'recipe_images';
 
     public function index(Request $request)
     {
@@ -97,37 +98,13 @@ class RecipeController extends Controller
 
             \Log::info('Validation passed');
 
-            // 画像アップロード処理（修正版）
+            // 画像アップロード処理（統一されたメソッドを使用）
             $imageUrl = null;
             if ($request->hasFile('image')) {
                 try {
                     \Log::info('Image upload starting...');
-
-                    $image = $request->file('image');
-
-                    // ファイル名を一度だけ生成（重要な修正）
-                    $timestamp = time();
-                    $uniqueId = uniqid();
-                    $extension = $image->getClientOriginalExtension();
-                    $filename = $timestamp . '_' . $uniqueId . '.' . $extension;
-
-                    \Log::info('Generated filename:', [
-                        'timestamp' => $timestamp,
-                        'unique_id' => $uniqueId,
-                        'extension' => $extension,
-                        'full_filename' => $filename
-                    ]);
-
-                    // ファイル保存
-                    $path = $image->storeAs('recipes', $filename, 'public');
-                    $imageUrl = '/storage/' . $path;
-
-                    \Log::info('Image saved successfully:', [
-                        'storage_path' => $path,
-                        'final_url' => $imageUrl,
-                        'actual_saved_filename' => basename($path)
-                    ]);
-
+                    $imageUrl = $this->handleImageUploadSecure($request->file('image'));
+                    \Log::info('Image saved successfully:', ['final_url' => $imageUrl]);
                 } catch (\Exception $e) {
                     \Log::error('Image upload failed: ' . $e->getMessage());
                     $imageUrl = null;
@@ -302,10 +279,9 @@ class RecipeController extends Controller
 
     public function destroy(Recipe $recipe)
     {
-        // 画像削除
+        // 統一されたメソッドを使用
         if ($recipe->image_url) {
-            $imagePath = str_replace('/storage/', '', $recipe->image_url);
-            Storage::disk('public')->delete($imagePath);
+            $this->deleteOldImage($recipe->image_url);
         }
 
         $recipe->delete();
@@ -372,19 +348,9 @@ class RecipeController extends Controller
                 \Log::info('Likes deleted', ['count' => $likesCount]);
             }
 
-            // 画像ファイルを削除
+            // 統一されたメソッドを使用
             if ($recipe->image_url) {
-                try {
-                    $imagePath = str_replace('/storage/', '', $recipe->image_url);
-                    if (Storage::disk('public')->exists($imagePath)) {
-                        Storage::disk('public')->delete($imagePath);
-                        \Log::info('Image file deleted', ['path' => $imagePath]);
-                    } else {
-                        \Log::warning('Image file not found', ['path' => $imagePath]);
-                    }
-                } catch (\Exception $e) {
-                    \Log::error('Image deletion failed', ['error' => $e->getMessage()]);
-                }
+                $this->deleteOldImage($recipe->image_url);
             }
 
             // レシピを完全削除
@@ -813,7 +779,8 @@ class RecipeController extends Controller
             $filename = $timestamp . '_' . $randomString . '.' . $extension;
 
             // 📁 安全なディレクトリ保存
-            $path = $uploadedFile->storeAs('recipe_images', $filename, 'public');
+            $path = $uploadedFile->storeAs(self::IMAGE_DIRECTORY, $filename, 'public');
+
 
             // ✅ ファイル保存確認
             if (!Storage::disk('public')->exists($path)) {
