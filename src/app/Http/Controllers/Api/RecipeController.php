@@ -9,6 +9,7 @@ use App\Http\Resources\RecipeCollection;
 use App\Http\Resources\AdminRecipeResource;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Log;
 use Intervention\Image\ImageManagerStatic as Image;
 
 class RecipeController extends Controller
@@ -17,57 +18,214 @@ class RecipeController extends Controller
 
     public function index(Request $request)
     {
-        $query = Recipe::with('admin')->published();
+        \Log::info('=== Public Recipe Index (未ログイン向け) ===');
+
+        $query = Recipe::with(['admin'])
+                    ->published()
+                    ->withCount('likes');
 
         // 検索機能
-        if ($request->has('search')) {
-            $query->search($request->search);
+        if ($request->has('keyword') && !empty($request->keyword)) {
+            $keyword = $request->keyword;
+            $query->where(function($q) use ($keyword) {
+                $q->where('title', 'LIKE', "%{$keyword}%")
+                ->orWhere('ingredients', 'LIKE', "%{$keyword}%");
+            });
         }
 
-        // ジャンル絞り込み
-        if ($request->has('genre')) {
-            $query->byGenre($request->genre);
-        }
+        $recipes = $query->latest()->paginate(9);
 
-        // ソート
-        $sort = $request->get('sort', 'latest');
-        switch ($sort) {
-            case 'popular':
-                $query->popular();
-                break;
-            case 'views':
-                $query->orderBy('views_count', 'desc');
-                break;
-            default:
-                $query->latest();
-                break;
-        }
+        // 🔧 未ログインユーザー向け：いいね状態は常にfalse
+        $recipesData = $recipes->getCollection()->map(function ($recipe) {
+            return [
+                'id' => $recipe->id,
+                'title' => $recipe->title,
+                'genre' => $recipe->genre,
+                'likes_count' => $recipe->likes_count ?? 0,
+                'image_url' => $recipe->image_url,
+                'is_liked' => false, // 🔧 未ログインなので常にfalse
+                'admin' => [
+                    'id' => $recipe->admin->id,
+                    'name' => $recipe->admin->name
+                ]
+            ];
+        });
 
-        $recipes = $query->paginate(20);
-
-        return new RecipeCollection($recipes);
+        return response()->json([
+            'current_page' => $recipes->currentPage(),
+            'data' => $recipesData,
+            'last_page' => $recipes->lastPage(),
+            'per_page' => $recipes->perPage(),
+            'total' => $recipes->total()
+        ]);
     }
+
+    public function userIndex(Request $request)
+    {
+        $user = $request->user();
+
+        \Log::info('=== User Recipe Index (ログインユーザー向け) ===', [
+            'user_id' => $user->id,
+            'user_email' => $user->email,
+            'is_admin' => $user->isAdmin()
+        ]);
+
+        $query = Recipe::with(['admin'])
+                    ->published()
+                    ->withCount('likes');
+
+        // 検索機能
+        if ($request->has('keyword') && !empty($request->keyword)) {
+            $keyword = $request->keyword;
+            $query->where(function($q) use ($keyword) {
+                $q->where('title', 'LIKE', "%{$keyword}%")
+                ->orWhere('ingredients', 'LIKE', "%{$keyword}%");
+            });
+        }
+
+        $recipes = $query->latest()->paginate(9);
+
+        // 🔧 ログインユーザー向け：正確ないいね状態を取得
+        $recipesWithLikeStatus = $recipes->getCollection()->map(function ($recipe) use ($user) {
+            $isLiked = false;
+
+            // 管理者チェック
+            if ($user->isAdmin()) {
+                \Log::info("Recipe {$recipe->id}: ユーザーは管理者のためis_liked=false");
+                $isLiked = false;
+            } else {
+                // 🔧 一般ユーザー：いいね状態を直接SQLで確認
+                $likeExists = \DB::table('recipe_likes')
+                    ->where('user_id', $user->id)
+                    ->where('recipe_id', $recipe->id)
+                    ->exists();
+
+                $isLiked = $likeExists;
+
+                \Log::info("Recipe {$recipe->id} いいね状態", [
+                    'user_id' => $user->id,
+                    'recipe_id' => $recipe->id,
+                    'is_liked' => $isLiked
+                ]);
+            }
+
+            return [
+                'id' => $recipe->id,
+                'title' => $recipe->title,
+                'genre' => $recipe->genre,
+                'likes_count' => $recipe->likes_count ?? 0,
+                'image_url' => $recipe->image_url,
+                'is_liked' => $isLiked,
+                'admin' => [
+                    'id' => $recipe->admin->id,
+                    'name' => $recipe->admin->name
+                ]
+            ];
+        });
+
+        return response()->json([
+            'current_page' => $recipes->currentPage(),
+            'data' => $recipesWithLikeStatus,
+            'last_page' => $recipes->lastPage(),
+            'per_page' => $recipes->perPage(),
+            'total' => $recipes->total()
+        ]);
+    }
+
+
 
     public function search(Request $request)
     {
-        $keyword = $request->get('keyword', '');
+        try {
+            $keyword = $request->get('keyword', '');
+            $perPage = $request->get('per_page', 9);
+            $user = $request->user(); // 認証ユーザーを取得（未認証ならnull）
 
-        if (empty($keyword)) {
-            return Recipe::published()
+            \Log::info('Recipe search started', [
+                'keyword' => $keyword,
+                'page' => $request->get('page', 1),
+                'is_authenticated' => $user ? true : false,
+                'user_id' => $user ? $user->id : null,
+                'is_admin' => $user && method_exists($user, 'isAdmin') ? $user->isAdmin() : false
+            ]);
+
+            $query = Recipe::published()
                 ->with('admin')
-                ->latest()
-                ->paginate(6);
+                ->withCount('likes');
+
+            // 検索条件
+            if (!empty($keyword)) {
+                $query->where(function($q) use ($keyword) {
+                    $q->where('title', 'LIKE', "%{$keyword}%")
+                        ->orWhere('ingredients', 'LIKE', "%{$keyword}%");
+                });
+            }
+
+            $recipes = $query->latest()->paginate($perPage);
+
+            // 🔧 認証状態に応じてis_liked状態を設定
+            $recipesData = collect($recipes->items())->map(function($recipe) use ($user) {
+                $isLiked = false;
+
+                if ($user) {
+                    // 管理者の場合は常にfalse
+                    if (method_exists($user, 'isAdmin') && $user->isAdmin()) {
+                        $isLiked = false;
+                        \Log::debug("Recipe {$recipe->id}: 管理者のためis_liked=false");
+                    } else {
+                        // 🔧 一般ユーザー：直接SQLで確認（isLikedByメソッドが存在しない場合の対策）
+                        $isLiked = \DB::table('recipe_likes')
+                            ->where('user_id', $user->id)
+                            ->where('recipe_id', $recipe->id)
+                            ->exists();
+
+                        \Log::debug("Recipe {$recipe->id}: ユーザー{$user->id}のいいね状態={$isLiked}");
+                    }
+                } else {
+                    $isLiked = false;
+                    \Log::debug("Recipe {$recipe->id}: 未認証のためis_liked=false");
+                }
+
+                return [
+                    'id' => $recipe->id,
+                    'title' => $recipe->title,
+                    'genre' => $recipe->genre,
+                    'likes_count' => $recipe->likes_count ?? 0,
+                    'image_url' => $recipe->image_url,
+                    'is_liked' => $isLiked,
+                    'admin' => [
+                        'id' => $recipe->admin->id,
+                        'name' => $recipe->admin->name
+                    ]
+                ];
+            });
+
+            return response()->json([
+                'current_page' => $recipes->currentPage(),
+                'data' => $recipesData,
+                'last_page' => $recipes->lastPage(),
+                'per_page' => $recipes->perPage(),
+                'total' => $recipes->total()
+            ]);
+
+        } catch (\Exception $e) {
+            \Log::error('Recipe search error', [
+                'error' => $e->getMessage(),
+                'keyword' => $request->get('keyword', ''),
+                'user_id' => $request->user() ? $request->user()->id : null,
+                'file' => $e->getFile(),
+                'line' => $e->getLine()
+            ]);
+
+            return response()->json([
+                'current_page' => 1,
+                'data' => [],
+                'last_page' => 1,
+                'per_page' => 9,
+                'total' => 0
+            ]);
         }
-
-        $recipes = Recipe::published()
-            ->with('admin')
-            ->search($keyword)
-            ->latest()
-            ->paginate(6);
-
-        return response()->json($recipes);
     }
-
 
     public function create()
     {

@@ -14,7 +14,7 @@ class RecipeLikesCommentsSeeder extends Seeder
     {
         // 一般ユーザーのみを取得（管理者は除外）
         $users = User::where('role', 'user')->get();
-        
+
         // アクティブなレシピのみを取得
         $recipes = Recipe::whereNull('deleted_at')->get();
 

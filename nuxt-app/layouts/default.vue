@@ -38,8 +38,6 @@
         </nav>
       </div>
     </header>
-
-
     <main>
       <NuxtPage />
     </main>
@@ -47,7 +45,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 
 const isAuthenticated = ref(false)
 
@@ -77,6 +75,7 @@ const checkAuthStatus = () => {
   }
 }
 
+
 // Firebase認証対応ログアウト処理
 const handleLogout = async () => {
   try {
@@ -94,22 +93,35 @@ const handleLogout = async () => {
   }
 }
 
-// 初期化時に認証状態をチェック
 onMounted(() => {
   checkAuthStatus()
 })
+
 
 // ユーザー状態の変化を監視
 watch([user, isLoggedIn], () => {
   checkAuthStatus()
 })
 
-// ルート変更時にも認証状態をチェック
-watch(() => useRoute().path, () => {
-    checkAuthStatus()
-})
+
 </script>
 
 <style>
 @import "@/assets/css/common.css";
+
+/* ナビゲーションリンクのスタイル統一 */
+.nav-link {
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
+}
+
+.nav-link:hover {
+  color: inherit;
+}
+
+.nav-link.active {
+  /* アクティブスタイルを適用 */
+  font-weight: bold;
+}
 </style>

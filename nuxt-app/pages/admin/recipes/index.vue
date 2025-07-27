@@ -35,19 +35,13 @@
           @click="goToRecipeDetail(recipe.id)"
         >
           <div class="recipe-image">
-              <div v-if="!hasValidImage(recipe.image_url)" class="no-image-fallback">
-              <div class="no-image-text">No Image</div>
-            </div>
-            <!-- 実際の画像がある場合のみ表示 -->
-            <img 
-              v-else
-              :src="getImageUrl(recipe.image_url)" 
-              :alt="recipe.title" 
-              @error="handleImageError($event, recipe)"
-              @load="handleImageLoad($event, recipe)"
-            />
+              <img 
+                  :src="getImageUrl(recipe.image_url)" 
+                  :alt="recipe.title" 
+                  @error="handleImageError($event, recipe)"
+                  @load="handleImageLoad($event, recipe)"
+              />
           </div>
-
 
 
           <div class="recipe-title">{{ recipe.title }}</div>
@@ -377,18 +371,7 @@ const fetchRecipes = async () => {
 }
 
 
-// 画像があるかどうかを判定する関数を追加
-const hasValidImage = (imageUrl) => {
-  // 画像URLがない、または no-image.png の場合は false
-  if (!imageUrl ||
-      imageUrl === '' ||
-      imageUrl === null ||
-      imageUrl.includes('/images/no-image.png') ||
-      imageUrl.includes('no-image.png')) {
-    return false
-  }
-  return true
-}
+
 
 // URLクエリ変更の監視（修正版）
 watch(() => route.query, (newQuery) => {

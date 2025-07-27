@@ -19,7 +19,6 @@ class FirebaseAuth
         try {
             Log::info('🔥 Firebase middleware constructor started');
 
-            // 環境変数の詳細チェック
             $projectId = env('FIREBASE_PROJECT_ID');
             $clientEmail = env('FIREBASE_CLIENT_EMAIL');
             $privateKey = env('FIREBASE_PRIVATE_KEY');
@@ -32,32 +31,18 @@ class FirebaseAuth
                 'app_debug' => config('app.debug')
             ]);
 
-            // 開発環境での暫定対応
             if (config('app.env') === 'local' || config('app.debug')) {
                 Log::info('🧪 Development environment detected - skipping Firebase init');
                 $this->auth = null;
                 return;
             }
 
-            // 設定ファイルの確認
             $credentials = config('firebase.credentials');
             
-            Log::info('🔍 Firebase config check', [
-                'config_exists' => !empty($credentials),
-                'config_project_id' => $credentials['project_id'] ?? 'NOT_SET',
-                'config_client_email' => $credentials['client_email'] ?? 'NOT_SET',
-                'config_has_private_key' => !empty($credentials['private_key'])
-            ]);
-
             if (!$credentials || empty($credentials['project_id']) || empty($credentials['client_email'])) {
-                throw new \Exception('Firebase credentials incomplete: missing project_id or client_email');
+                throw new \Exception('Firebase credentials incomplete');
             }
 
-            if (empty($credentials['private_key'])) {
-                throw new \Exception('Firebase credentials incomplete: missing private_key');
-            }
-
-            // Firebase初期化
             $factory = (new Factory)->withServiceAccount($credentials);
             $this->auth = $factory->createAuth();
 
@@ -66,12 +51,9 @@ class FirebaseAuth
         } catch (\Exception $e) {
             $this->initializationError = $e;
             Log::error('❌ Firebase initialization failed', [
-                'error' => $e->getMessage(),
-                'file' => $e->getFile(),
-                'line' => $e->getLine()
+                'error' => $e->getMessage()
             ]);
             
-            // 開発環境では致命的エラーにしない
             if (config('app.env') === 'local' || config('app.debug')) {
                 Log::warning('⚠️ Continuing in development mode without Firebase');
                 $this->auth = null;
@@ -115,11 +97,11 @@ class FirebaseAuth
             
             try {
                 $testUser = User::firstOrCreate(
-                    ['email' => 'test@example.com'],
+                    ['firebase_uid' => 'test_user_uid_004'],
                     [
-                        'name' => 'Test Admin',
-                        'firebase_uid' => 'test-uid-development',
-                        'role' => 'admin',
+                        'name' => 'テストユーザー',
+                        'email' => 'test@example.com',
+                        'role' => 'user',
                         'email_verified_at' => now(),
                     ]
                 );
@@ -132,6 +114,13 @@ class FirebaseAuth
                     'user_id' => $testUser->id,
                     'role' => $testUser->role,
                     'name' => $testUser->name
+                ]);
+
+                // 認証成功ログを追加
+                Log::info('User access granted', [
+                    'user_id' => $testUser->id,
+                    'firebase_uid' => $testUser->firebase_uid,
+                    'role' => $testUser->role
                 ]);
 
                 return $next($request);
@@ -150,7 +139,7 @@ class FirebaseAuth
         // 本格的な Firebase 認証
         try {
             if (!$this->auth) {
-                throw new \Exception('Firebase auth not initialized: ' . ($this->initializationError ? $this->initializationError->getMessage() : 'unknown error'));
+                throw new \Exception('Firebase auth not initialized');
             }
 
             // Firebase ID トークンを検証
@@ -163,42 +152,19 @@ class FirebaseAuth
             Log::info('🔥 Firebase token verified', [
                 'firebase_uid' => $firebaseUid,
                 'email' => $email,
-                'name' => $name
             ]);
 
-            // ユーザーをデータベースで検索または作成
-            $user = User::where('firebase_uid', $firebaseUid)->first();
-
-            if (!$user) {
-                // 新しいユーザーを作成
-                $user = User::create([
-                    'firebase_uid' => $firebaseUid,
+            $user = User::firstOrCreate(
+                ['firebase_uid' => $firebaseUid],
+                [
                     'name' => $name ?? 'Unknown User',
                     'email' => $email,
                     'avatar' => $avatar,
-                    'role' => 'user', // デフォルトはuser
+                    'role' => 'user',
                     'email_verified_at' => now(),
-                ]);
+                ]
+            );
 
-                Log::info('👤 New user created via Firebase', [
-                    'user_id' => $user->id,
-                    'firebase_uid' => $firebaseUid
-                ]);
-            } else {
-                // 既存ユーザーの情報を更新
-                $user->update([
-                    'name' => $name ?? $user->name,
-                    'email' => $email ?? $user->email,
-                    'avatar' => $avatar ?? $user->avatar,
-                ]);
-
-                Log::info('👤 Existing user updated via Firebase', [
-                    'user_id' => $user->id,
-                    'firebase_uid' => $firebaseUid
-                ]);
-            }
-
-            // リクエストにユーザー情報を添付
             $request->setUserResolver(function () use ($user) {
                 return $user;
             });
@@ -208,26 +174,14 @@ class FirebaseAuth
                 'role' => $user->role
             ]);
 
-        } catch (\Kreait\Firebase\Exception\Auth\InvalidToken $e) {
-            Log::error('🔥 Invalid Firebase token', [
-                'error' => $e->getMessage(),
-                'token_preview' => substr($idToken, 0, 20) . '...'
-            ]);
-            return response()->json([
-                'success' => false,
-                'error' => 'Invalid authentication token'
-            ], 401);
-
         } catch (\Exception $e) {
             Log::error('🔥 Firebase authentication error', [
-                'error' => $e->getMessage(),
-                'file' => $e->getFile(),
-                'line' => $e->getLine()
+                'error' => $e->getMessage()
             ]);
             return response()->json([
                 'success' => false,
-                'error' => 'Authentication failed: ' . $e->getMessage()
-            ], 500);
+                'error' => 'Authentication failed'
+            ], 401);
         }
 
         return $next($request);

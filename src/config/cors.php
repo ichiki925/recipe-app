@@ -8,13 +8,18 @@ return [
     |--------------------------------------------------------------------------
     */
 
-    'paths' => ['api/*', 'sanctum/csrf-cookie'],
+    'paths' => [
+        'api/*',
+        'user/*',           // ← 追加：お気に入りAPI用
+        'recipes/*',        // ← 追加：レシピAPI用
+        'sanctum/csrf-cookie'
+    ],
 
     'allowed_methods' => ['*'],
 
     'allowed_origins' => [
         'http://localhost:3000',  // Nuxt.js フロントエンド
-        'http://localhost',       // 念のため
+        'http://127.0.0.1:3000',
     ],
 
     'allowed_origins_patterns' => [],
@@ -25,6 +30,6 @@ return [
 
     'max_age' => 0,
 
-    'supports_credentials' => true,
+    'supports_credentials' => false,
 
 ];

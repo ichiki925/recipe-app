@@ -11,6 +11,14 @@
                 v-model="searchKeyword"
                 placeholder="料理名・食材で検索"
                 >
+                <button
+                    v-if="searchKeyword"
+                    type="button"
+                    @click="clearSearch"
+                    class="clear-button"
+                >
+                    ×
+                </button>
             </div>
             <button type="submit">検索</button>
             </form>
@@ -26,8 +34,11 @@
                     @click="handleRecipeClick(recipe)"
                 >
                     <div class="recipe-image">
-                        <div v-if="!recipe.image_url" class="no-image">No Image</div>
-                        <img v-else :src="recipe.image_url" :alt="recipe.title">
+                        <img
+                            :src="getImageUrl(recipe.image_url)"
+                            :alt="recipe.title"
+                            @error="handleImageError($event, recipe)"
+                        />
                     </div>
                     <div class="recipe-title">{{ recipe.title }}</div>
                     <div class="login-overlay">
@@ -66,11 +77,11 @@
             </button>
             </div>
         </section>
-        </div>
-    </template>
+    </div>
+</template>
 
-    <script setup>
-    import { ref, onMounted, watch } from 'vue'
+<script setup>
+import { ref, onMounted, watch } from 'vue'
 import { useRoute, useRouter, useHead } from '#app'
 
 definePageMeta({
@@ -98,6 +109,41 @@ const recipes = ref([])
 const route = useRoute()
 const router = useRouter()
 
+// 検索クリア機能
+const clearSearch = () => {
+    searchKeyword.value = ''
+    currentPage.value = 1
+    updateUrl()
+    fetchRecipes()
+}
+
+
+
+
+// 画像URL処理関数
+const getImageUrl = (imageUrl) => {
+    if (!imageUrl) return '/images/no-image.png'
+
+    if (imageUrl.startsWith('/storage/')) {
+        return `http://localhost${imageUrl}`
+    }
+
+    return imageUrl
+}
+
+// 画像エラーハンドリング（簡略版）
+const handleImageError = (event, recipe) => {
+    event.target.onerror = null
+    const parent = event.target.parentElement
+    event.target.style.display = 'none'
+    if (!parent.querySelector('.no-image-fallback')) {
+        const placeholder = document.createElement('div')
+        placeholder.className = 'no-image-fallback'
+        placeholder.innerHTML = '<div class="no-image-text">No Image</div>'
+        parent.appendChild(placeholder)
+    }
+}
+
 // 初期化
 onMounted(() => {
     searchKeyword.value = route.query.keyword || ''
@@ -124,7 +170,7 @@ const fetchRecipes = async () => {
         })
 
         console.log('📦 ゲスト検索API応答:', response)
-        
+
         // レシピデータを更新（ジャンル情報は除外）
         recipes.value = response.data.map(recipe => ({
             id: recipe.id,
@@ -133,20 +179,20 @@ const fetchRecipes = async () => {
             image_url: recipe.image_url,
             admin: recipe.admin
         }))
-        
+
         // ページネーション情報更新
         currentPage.value = response.current_page
         totalPages.value = response.last_page
-        
+
         console.log(`✅ ${recipes.value.length}件のレシピを取得しました`)
 
     } catch (error) {
         console.error('❌ レシピ検索エラー:', error)
-        
+
         // エラー時はモックデータを使用（ジャンル情報なし）
         console.log('📋 モックデータを使用します')
         const mockRecipes = []
-        
+
         if (searchKeyword.value) {
             // 検索キーワードがある場合はフィルタリング
             recipes.value = mockRecipes.filter(recipe => 
@@ -187,7 +233,7 @@ const updateUrl = () => {
 // レシピカードクリック時の処理（ログインページへリダイレクト）
 const handleRecipeClick = (recipe) => {
     console.log('🔒 未ログインのため詳細表示不可:', recipe.title)
-    
+
     // 現在のページ情報を保持してログインページへ
     navigateTo(`/auth/login?redirect=${encodeURIComponent(route.fullPath)}`)
 }
@@ -198,12 +244,12 @@ watch(() => route.query, (newQuery) => {
     currentPage.value = parseInt(newQuery.page) || 1
     fetchRecipes()
 })
-    </script>
+</script>
 
-    <style scoped>
-    @import "@/assets/css/common.css";
+<style scoped>
+@import "@/assets/css/common.css";
 
-    .recipe-page {
+.recipe-page {
     display: flex;
     padding: 20px;
     gap: 30px;
@@ -226,13 +272,6 @@ watch(() => route.query, (newQuery) => {
     margin-bottom: 15px;
 }
 
-.sidebar label {
-    font-size: 14px;
-    font-weight: bold;
-    display: block;
-    margin-top: 20px;
-    margin-bottom: 8px;
-}
 
 .search-wrapper {
     position: relative;
@@ -257,14 +296,19 @@ watch(() => route.query, (newQuery) => {
     box-sizing: border-box;
 }
 
-.sidebar input,
-.sidebar select {
-    width: 100%;
-    padding: 12px;
-    font-size: 14px;
-    border: 1px solid #999;
-    border-radius: 4px;
-    box-sizing: border-box;
+.clear-button {
+    position: absolute;
+    top: 50%;
+    right: 12px;
+    transform: translateY(-60%);
+    background: none;
+    border: none;
+    font-size: 20px;
+    font-family: sans-serif;
+    color: #999;
+    cursor: pointer;
+    padding: 0;
+    line-height: 1;
 }
 
 .search-wrapper input::placeholder {
@@ -272,7 +316,7 @@ watch(() => route.query, (newQuery) => {
     opacity: 1;
 }
 
-.sidebar button {
+.sidebar button[type="submit"] {
     width: 100%;
     background-color: #ddd;
     border: none;
@@ -284,13 +328,54 @@ watch(() => route.query, (newQuery) => {
     cursor: pointer;
 }
 
-.sidebar button:hover {
+.sidebar button[type="submit"]:hover {
     background-color: #e6e5e5;
 }
 
 .recipe-list {
     flex: 1;
     min-height: 300px;
+}
+
+.no-results {
+    text-align: center;
+    padding: 60px 20px;
+    color: #666;
+}
+
+.no-results-icon {
+    font-size: 48px;
+    color: #ccc;
+    margin-bottom: 20px;
+}
+
+.no-results h3 {
+    font-size: 24px;
+    font-weight: bold;
+    margin-bottom: 10px;
+    color: #333;
+}
+
+.no-results p {
+    font-size: 16px;
+    margin-bottom: 30px;
+    color: #666;
+}
+
+.show-all-button {
+    background-color: #ff7700;
+    color: white;
+    border: none;
+    padding: 12px 24px;
+    font-size: 16px;
+    font-weight: bold;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.show-all-button:hover {
+    background-color: #e66600;
 }
 
 .recipe-grid {
@@ -321,6 +406,7 @@ watch(() => route.query, (newQuery) => {
     text-align: center;
     background: white;
     box-sizing: border-box;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
 .no-image {
@@ -335,12 +421,6 @@ watch(() => route.query, (newQuery) => {
     border-radius: 6px;
 }
 
-.recipe-card img {
-    width: 100%;
-    height: 300px;
-    object-fit: cover;
-    border-radius: 6px;
-}
 
 .recipe-title {
     margin-top: 10px;
@@ -348,10 +428,60 @@ watch(() => route.query, (newQuery) => {
     color: #333;
 }
 
-.recipe-genre {
-    color: #555;
-    margin-bottom: 5px;
+.recipe-image {
+    width: 100%;
+    height: 300px;
+    border-radius: 6px;
+    overflow: hidden;
+    position: relative;
+    background-color: #f0f0f0;
 }
+
+.recipe-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+
+.no-image-fallback {
+    width: 100%;
+    height: 100%;
+    background-color: #f0f0f0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: #999;
+    border-radius: 6px;
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+}
+
+.no-image-text {
+    font-size: 14px;
+    font-weight: 500;
+    text-align: center;
+}
+
+.recipe-title {
+    margin-top: 10px;
+    font-weight: bold;
+    color: #333;
+    font-size: 16px;
+}
+
+.recipe-stats {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-top: 8px;
+    font-size: 12px;
+}
+
 
 .pagination {
     display: flex;
@@ -405,10 +535,6 @@ watch(() => route.query, (newQuery) => {
     opacity: 1;
 }
 
-.recipe-image {
-    position: relative;
-}
-
 .login-overlay {
     position: absolute;
     top: 0;
@@ -455,7 +581,19 @@ watch(() => route.query, (newQuery) => {
     .recipe-grid {
         grid-template-columns: 1fr;
     }
+
+    .no-results {
+        padding: 40px 15px;
+    }
+
+    .no-results h3 {
+        font-size: 20px;
+    }
+
+    .no-results p {
+        font-size: 14px;
+    }
 }
-    </style>
+</style>
 
 

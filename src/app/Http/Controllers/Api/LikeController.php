@@ -7,6 +7,7 @@ use App\Models\Recipe;
 use App\Models\RecipeLike;
 use App\Http\Resources\RecipeLikeResource;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 
 class LikeController extends Controller
 {
@@ -205,54 +206,60 @@ class LikeController extends Controller
 
     public function toggle(Request $request, Recipe $recipe)
     {
-        $user = auth()->user();
+        $user = $request->user();
 
-        // 管理者はいいねできない
-        if ($user->isAdmin()) {
+        Log::info('Toggle like request', [
+            'user_id' => $user->id,
+            'recipe_id' => $recipe->id,
+            'user_name' => $user->name
+        ]);
+
+        if (method_exists($user, 'isAdmin') && $user->isAdmin()) {
             return response()->json([
+                'success' => false,
                 'message' => '管理者はいいねできません'
             ], 403);
         }
 
-        // 公開されていないレシピにはいいねできない
-        if (!$recipe->is_published) {
-            return response()->json([
-                'message' => 'このレシピは公開されていません'
-            ], 404);
-        }
+        // 既存のいいねを検索
+        $existingLike = RecipeLike::where('user_id', $user->id)
+                            ->where('recipe_id', $recipe->id)
+                            ->first();
 
-        $like = RecipeLike::where('user_id', $user->id)
-                        ->where('recipe_id', $recipe->id)
-                        ->first();
-
-        if ($like) {
-            // いいね済み → 削除
-            $like->delete();
-            $recipe->refresh();
-
-            return response()->json([
-                'message' => 'いいねを取り消しました',
-                'is_liked' => false,
-                'likes_count' => $recipe->likes_count
-            ]);
-        } else {
-            // 未いいね → 追加
-            $like = RecipeLike::create([
+        if ($existingLike) {
+            // いいねを削除
+            $existingLike->delete();
+            $isLiked = false;
+            Log::info('Like removed', [
                 'user_id' => $user->id,
                 'recipe_id' => $recipe->id
             ]);
-            
-            // リレーションをロード
-            $like->load(['user', 'recipe']);
-            $recipe->refresh();
-
-            return response()->json([
-                'message' => 'いいねしました',
-                'data' => new RecipeLikeResource($like),
-                'is_liked' => true,
-                'likes_count' => $recipe->likes_count
+        } else {
+            // いいねを追加
+            RecipeLike::create([
+                'user_id' => $user->id,
+                'recipe_id' => $recipe->id
+            ]);
+            $isLiked = true;
+            Log::info('Like added', [
+                'user_id' => $user->id,
+                'recipe_id' => $recipe->id
             ]);
         }
-    }
 
+        // 🔧 いいね数を強制的に更新
+        $likesCount = $recipe->refreshLikesCount();
+
+        Log::info('Toggle like completed', [
+            'is_liked' => $isLiked,
+            'likes_count' => $likesCount
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'is_liked' => $isLiked,
+            'likes_count' => $likesCount,
+            'message' => $isLiked ? 'いいねしました' : 'いいねを取り消しました'
+        ]);
+    }
 }

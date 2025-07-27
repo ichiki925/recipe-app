@@ -131,11 +131,11 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, nextTick } from 'vue'
+import { ref, computed, onMounted, nextTick, watch } from 'vue'
 import { useRoute, useHead, navigateTo } from '#app'
 
 // 認証関連
-const { getCurrentUser, user, isLoggedIn, waitForAuth } = useAuth()
+const { user, isLoggedIn, initAuth } = useAuth()
 
 // Head設定
 useHead({
@@ -160,106 +160,133 @@ const showAllComments = ref(false)
 const commentError = ref('')
 const isSubmitting = ref(false)
 
+// 🔧 レシピデータを追加
+const recipe = ref({})
 
-// モックレシピデータ（実際はAPIから取得）
+// 🔧 デバッグ用のwatchを追加
+// デバッグ用：レシピデータの変更を監視
+watch(recipe, (newRecipe) => {
+  console.log('🔄 レシピデータが更新されました:', {
+    title: newRecipe.title,
+    genre: newRecipe.genre,
+    servings: newRecipe.servings,
+    body: newRecipe.body,
+    ingredients: newRecipe.ingredients
+  })
+}, { deep: true })
+
+
+// モックレシピデータ
 const recipeDatabase = {
   1: {
     id: 1,
-    title: 'チキンカレー',
-    genre: '和食',
-    servings: 4,
+    title: '基本のハンバーグ',
+    genre: '肉料理',
+    servings: '4人分',
     image: null,
-    body: '美味しいチキンカレーの作り方です。\n\n1. 玉ねぎを薄切りにします\n2. 鶏肉を一口大に切ります\n3. 鍋で玉ねぎを炒めます\n4. 鶏肉を加えて炒めます\n5. 水を加えて煮込みます\n6. カレールーを加えて完成です',
-    likes: 24,
+    body: '1. 玉ねぎをみじん切りにして炒め、冷ましておく\n2. ボウルにひき肉、卵、パン粉、牛乳を入れて混ぜる\n3. 炒めた玉ねぎ、塩こしょう、ナツメグを加えてよく混ぜる\n4. 4等分して楕円形に成形する\n5. フライパンで両面を焼き、蓋をして中まで火を通す',
+    likes: 23,
     isLiked: false,
     isFavorited: false,
     ingredients: [
-      { id: 1, name: '鶏もも肉', quantity: '300g' },
+      { id: 1, name: '牛ひき肉', quantity: '400g' },
       { id: 2, name: '玉ねぎ', quantity: '1個' },
-      { id: 3, name: 'カレールー', quantity: '1箱' },
-      { id: 4, name: 'じゃがいも', quantity: '2個' },
-      { id: 5, name: '人参', quantity: '1本' }
+      { id: 3, name: '卵', quantity: '1個' },
+      { id: 4, name: 'パン粉', quantity: '1/2カップ' },
+      { id: 5, name: '牛乳', quantity: '大さじ2' },
+      { id: 6, name: '塩こしょう', quantity: '適量' },
+      { id: 7, name: 'ナツメグ', quantity: '少々' }
     ]
   },
   2: {
     id: 2,
-    title: 'パスタボロネーゼ',
-    genre: 'イタリアン',
-    servings: 2,
+    title: 'チキンカレー',
+    genre: 'カレー',
+    servings: '3人分',
     image: null,
-    body: '本格的なボロネーゼパスタの作り方です。\n\n1. 玉ねぎ、人参、セロリをみじん切りにします\n2. ひき肉を炒めます\n3. 野菜を加えて炒めます\n4. トマト缶を加えて煮込みます\n5. パスタを茹でます\n6. ソースと絡めて完成です',
-    likes: 15,
+    body: '1. 鶏肉を一口大に切る\n2. 野菜を食べやすい大きさに切る\n3. 鍋で鶏肉を炒め、色が変わったら野菜を加える\n4. 水とトマト缶を加えて煮込む\n5. 野菜が柔らかくなったらカレールーを溶かし入れる\n6. 10分程度煮込んで完成',
+    likes: 35,
     isLiked: false,
     isFavorited: false,
     ingredients: [
-      { id: 1, name: 'パスタ', quantity: '200g' },
-      { id: 2, name: '合いびき肉', quantity: '200g' },
-      { id: 3, name: 'トマト缶', quantity: '1缶' },
-      { id: 4, name: '玉ねぎ', quantity: '1/2個' },
-      { id: 5, name: '人参', quantity: '1/2本' }
+      { id: 1, name: '鶏もも肉', quantity: '400g' },
+      { id: 2, name: '玉ねぎ', quantity: '2個' },
+      { id: 3, name: 'にんじん', quantity: '1本' },
+      { id: 4, name: 'じゃがいも', quantity: '2個' },
+      { id: 5, name: 'トマト缶', quantity: '1缶' },
+      { id: 6, name: 'カレールー', quantity: '1/2箱' },
+      { id: 7, name: '水', quantity: '400ml' },
+      { id: 8, name: 'サラダ油', quantity: '大さじ1' }
     ]
   },
   3: {
     id: 3,
-    title: '麻婆豆腐',
-    genre: '中華',
-    servings: 3,
+    title: '和風パスタ',
+    genre: '麺類',
+    servings: '2人分',
     image: null,
-    body: '本格的な麻婆豆腐の作り方です。\n\n1. 豆腐を一口大に切ります\n2. ひき肉を炒めます\n3. 豆板醤を加えて炒めます\n4. 豆腐を加えて煮込みます\n5. 水溶き片栗粉でとろみをつけます\n6. ネギを散らして完成です',
-    likes: 8,
+    body: '1. パスタを茹でる\n2. ベーコンを切って炒める\n3. しめじを加えて炒める\n4. 茹で上がったパスタを加える\n5. 醤油とバターで味付けし、大葉をトッピング',
+    likes: 12,
     isLiked: false,
     isFavorited: false,
     ingredients: [
-      { id: 1, name: '絹豆腐', quantity: '1丁' },
-      { id: 2, name: '豚ひき肉', quantity: '150g' },
-      { id: 3, name: '豆板醤', quantity: '大さじ1' },
-      { id: 4, name: '長ネギ', quantity: '1本' },
-      { id: 5, name: '片栗粉', quantity: '大さじ1' }
+      { id: 1, name: 'スパゲッティ', quantity: '200g' },
+      { id: 2, name: 'しめじ', quantity: '1パック' },
+      { id: 3, name: 'ベーコン', quantity: '3枚' },
+      { id: 4, name: '大葉', quantity: '5枚' },
+      { id: 5, name: '醤油', quantity: '大さじ2' },
+      { id: 6, name: 'バター', quantity: '15g' },
+      { id: 7, name: '塩こしょう', quantity: '適量' }
     ]
   },
   4: {
     id: 4,
-    title: 'ハンバーグ',
-    genre: '洋食',
-    servings: 4,
+    title: 'チョコレートケーキ',
+    genre: 'デザート',
+    servings: '5人分以上',
     image: null,
-    body: 'ジューシーなハンバーグの作り方です。\n\n1. 玉ねぎをみじん切りにして炒めます\n2. ひき肉と玉ねぎを混ぜます\n3. ハンバーグの形に成形します\n4. フライパンで焼きます\n5. ソースを作ります\n6. ハンバーグにかけて完成です',
-    likes: 32,
+    body: '1. オーブンを180度に予熱する\n2. バターを溶かす\n3. 卵と砂糖を混ぜる\n4. 粉類をふるって加える\n5. バターと牛乳を加えて混ぜる\n6. 型に入れて30分焼く',
+    likes: 28,
     isLiked: false,
     isFavorited: false,
     ingredients: [
-      { id: 1, name: '合いびき肉', quantity: '400g' },
-      { id: 2, name: '玉ねぎ', quantity: '1個' },
-      { id: 3, name: 'パン粉', quantity: '1/2カップ' },
-      { id: 4, name: '卵', quantity: '1個' },
-      { id: 5, name: 'ケチャップ', quantity: '大さじ3' }
+      { id: 1, name: '薄力粉', quantity: '100g' },
+      { id: 2, name: 'ココアパウダー', quantity: '30g' },
+      { id: 3, name: '卵', quantity: '2個' },
+      { id: 4, name: '砂糖', quantity: '80g' },
+      { id: 5, name: 'バター', quantity: '50g' },
+      { id: 6, name: '牛乳', quantity: '50ml' },
+      { id: 7, name: 'ベーキングパウダー', quantity: '小さじ1' }
     ]
   },
   5: {
     id: 5,
-    title: '親子丼',
-    genre: '和食',
-    servings: 2,
+    title: '野菜炒め',
+    genre: '野菜料理',
+    servings: '2人分',
     image: null,
-    body: '美味しい親子丼の作り方です。\n\n1. 鶏肉を一口大に切ります\n2. 玉ねぎを薄切りにします\n3. 鍋で鶏肉と玉ねぎを煮ます\n4. 卵を溶きほぐします\n5. 卵を回し入れます\n6. ご飯にのせて完成です',
-    likes: 5,
+    body: '1. 野菜を食べやすい大きさに切る\n2. フライパンで豚肉を炒める\n3. 野菜を加えて炒める\n4. 醤油と塩こしょうで味付け\n5. 最後にごま油を回しかける',
+    likes: 9,
     isLiked: false,
     isFavorited: false,
     ingredients: [
-      { id: 1, name: '鶏もも肉', quantity: '200g' },
-      { id: 2, name: '卵', quantity: '3個' },
-      { id: 3, name: '玉ねぎ', quantity: '1/2個' },
-      { id: 4, name: 'ご飯', quantity: '2杯' },
-      { id: 5, name: 'だし汁', quantity: '200ml' }
+      { id: 1, name: 'キャベツ', quantity: '1/4個' },
+      { id: 2, name: 'にんじん', quantity: '1/2本' },
+      { id: 3, name: 'ピーマン', quantity: '2個' },
+      { id: 4, name: 'もやし', quantity: '1袋' },
+      { id: 5, name: '豚こま肉', quantity: '150g' },
+      { id: 6, name: '醤油', quantity: '大さじ1' },
+      { id: 7, name: '塩こしょう', quantity: '適量' },
+      { id: 8, name: 'ごま油', quantity: '大さじ1' }
     ]
   },
   6: {
     id: 6,
     title: 'グラタン',
     genre: '洋食',
-    servings: 4,
+    servings: '4人分',
     image: null,
-    body: 'クリーミーなグラタンの作り方です。\n\n1. 玉ねぎを薄切りにします\n2. マカロニを茹でます\n3. ホワイトソースを作ります\n4. 具材を混ぜ合わせます\n5. チーズをのせます\n6. オーブンで焼いて完成です',
+    body: '1. マカロニを茹でる\n2. 玉ねぎを薄切りにする\n3. ホワイトソースを作る\n4. 具材を混ぜ合わせる\n5. チーズをのせる\n6. オーブンで焼いて完成',
     likes: 19,
     isLiked: false,
     isFavorited: false,
@@ -268,13 +295,128 @@ const recipeDatabase = {
       { id: 2, name: '鶏肉', quantity: '150g' },
       { id: 3, name: '玉ねぎ', quantity: '1個' },
       { id: 4, name: 'バター', quantity: '30g' },
-      { id: 5, name: 'チーズ', quantity: '100g' }
+      { id: 5, name: '小麦粉', quantity: '大さじ3' },
+      { id: 6, name: '牛乳', quantity: '400ml' },
+      { id: 7, name: 'チーズ', quantity: '100g' },
+      { id: 8, name: '塩こしょう', quantity: '適量' }
+    ]
+  },
+  7: {
+    id: 7,
+    title: 'ゆかりおにぎり',
+    genre: '和食',
+    servings: '2人分',
+    image: null,
+    body: '1. ご飯を炊く\n2. ゆかりをご飯に混ぜ込む\n3. 手を軽く濡らす\n4. ご飯を三角形に握る\n5. 海苔を巻いて完成',
+    likes: 12,
+    isLiked: false,
+    isFavorited: false,
+    ingredients: [
+      { id: 1, name: 'ご飯', quantity: '2杯' },
+      { id: 2, name: 'ゆかり', quantity: '大さじ1' },
+      { id: 3, name: '海苔', quantity: '2枚' },
+      { id: 4, name: '塩', quantity: '少々' }
+    ]
+  },
+  8: {
+    id: 8,
+    title: '唐揚げ',
+    genre: '和食',
+    servings: '3人分',
+    image: null,
+    body: '1. 鶏肉を一口大に切る\n2. 醤油、酒、生姜で下味をつける\n3. 片栗粉をまぶす\n4. 170度の油で揚げる\n5. 一度取り出して2度揚げする\n6. 油を切って完成',
+    likes: 28,
+    isLiked: false,
+    isFavorited: false,
+    ingredients: [
+      { id: 1, name: '鶏もも肉', quantity: '400g' },
+      { id: 2, name: '醤油', quantity: '大さじ2' },
+      { id: 3, name: '酒', quantity: '大さじ1' },
+      { id: 4, name: '生姜', quantity: '1片' },
+      { id: 5, name: '片栗粉', quantity: '適量' },
+      { id: 6, name: 'サラダ油', quantity: '適量' }
+    ]
+  },
+  9: {
+    id: 9,
+    title: '味噌汁',
+    genre: '和食',
+    servings: '4人分',
+    image: null,
+    body: '1. だしを取る\n2. 豆腐とわかめを用意する\n3. だしを沸騰させる\n4. 具材を入れて煮る\n5. 味噌を溶き入れる\n6. ネギを散らして完成',
+    likes: 7,
+    isLiked: false,
+    isFavorited: false,
+    ingredients: [
+      { id: 1, name: 'だし', quantity: '800ml' },
+      { id: 2, name: '味噌', quantity: '大さじ3' },
+      { id: 3, name: '豆腐', quantity: '1/2丁' },
+      { id: 4, name: 'わかめ', quantity: '適量' },
+      { id: 5, name: 'ネギ', quantity: '1本' }
+    ]
+  },
+  10: {
+    id: 10,
+    title: '焼きそば',
+    genre: '中華',
+    servings: '2人分',
+    image: null,
+    body: '1. 野菜を切る\n2. 麺を茹でる\n3. フライパンで野菜を炒める\n4. 麺を加えて炒める\n5. ソースを絡める\n6. 青のりをかけて完成',
+    likes: 18,
+    isLiked: false,
+    isFavorited: false,
+    ingredients: [
+      { id: 1, name: '焼きそば麺', quantity: '2玉' },
+      { id: 2, name: 'キャベツ', quantity: '1/4個' },
+      { id: 3, name: '人参', quantity: '1/2本' },
+      { id: 4, name: 'もやし', quantity: '1袋' },
+      { id: 5, name: '豚こま肉', quantity: '100g' },
+      { id: 6, name: '焼きそばソース', quantity: '1袋' },
+      { id: 7, name: '青のり', quantity: '適量' }
+    ]
+  },
+  11: {
+    id: 11,
+    title: 'チャーハン',
+    genre: '中華',
+    servings: '2人分',
+    image: null,
+    body: '1. ご飯を冷ます\n2. 卵を溶きほぐす\n3. フライパンで卵を炒める\n4. ご飯を加えて炒める\n5. 調味料で味付けする\n6. ネギを散らして完成',
+    likes: 22,
+    isLiked: false,
+    isFavorited: false,
+    ingredients: [
+      { id: 1, name: 'ご飯', quantity: '2杯' },
+      { id: 2, name: '卵', quantity: '2個' },
+      { id: 3, name: 'ハム', quantity: '2枚' },
+      { id: 4, name: 'ネギ', quantity: '1本' },
+      { id: 5, name: '醤油', quantity: '大さじ1' },
+      { id: 6, name: '塩こしょう', quantity: '適量' },
+      { id: 7, name: 'ごま油', quantity: '小さじ1' }
+    ]
+  },
+  12: {
+    id: 12,
+    title: 'オムライス',
+    genre: '洋食',
+    servings: '2人分',
+    image: null,
+    body: '1. チキンライスを作る\n2. 卵を溶きほぐす\n3. フライパンで卵を焼く\n4. チキンライスを包む\n5. ケチャップをかける\n6. パセリを散らして完成',
+    likes: 35,
+    isLiked: false,
+    isFavorited: false,
+    ingredients: [
+      { id: 1, name: 'ご飯', quantity: '2杯' },
+      { id: 2, name: '卵', quantity: '4個' },
+      { id: 3, name: '鶏肉', quantity: '100g' },
+      { id: 4, name: '玉ねぎ', quantity: '1/2個' },
+      { id: 5, name: 'ケチャップ', quantity: '大さじ4' },
+      { id: 6, name: 'バター', quantity: '20g' },
+      { id: 7, name: '塩こしょう', quantity: '適量' },
+      { id: 8, name: 'パセリ', quantity: '少々' }
     ]
   }
 }
-
-// レシピデータ
-const recipe = ref({})
 
 // お気に入り状態管理用のグローバルストア（一覧ページと同じ）
 const favoriteStore = useState('favorites', () => new Set())
@@ -354,33 +496,95 @@ const handleCommentInput = () => {
 }
 
 
-// いいねボタンの切り替え
-const toggleLike = () => {
+// いいねボタンの切り替え（API対応版）
+// 詳細ページ（show/[id].vue）のtoggleLike関数を以下に完全に置き換えてください
+
+const toggleLike = async () => {
   if (!user.value) {
     console.log('⚠️ ログインが必要です')
     return
   }
 
-  recipe.value.isLiked = !recipe.value.isLiked
-  
-  if (recipe.value.isLiked) {
-    // お気に入りに追加
-    favoriteStore.value.add(recipe.value.id)
-    recipe.value.likes++
-    console.log(`💖 ${user.value.displayName || user.value.email} がレシピ${recipe.value.id}「${recipe.value.title}」をお気に入りに追加`)
-  } else {
-    // お気に入りから削除
-    favoriteStore.value.delete(recipe.value.id)
-    recipe.value.likes = Math.max(0, recipe.value.likes - 1)
-    console.log(`💔 ${user.value.displayName || user.value.email} がレシピ${recipe.value.id}「${recipe.value.title}」をお気に入りから削除`)
-  }
+  // 元の状態を保存（エラー時の復元用）
+  const originalLiked = recipe.value.isLiked
+  const originalLikes = recipe.value.likes
 
-  console.log(`現在のお気に入り:`, Array.from(favoriteStore.value))
-  // 実際のAPI呼び出し
-  // await $fetch(`/api/recipes/${recipe.value.id}/like`, { method: 'POST' })
+  // 🔧 楽観的更新（即座にUIを更新）
+  recipe.value.isLiked = !originalLiked
+  recipe.value.likes = originalLiked ? recipe.value.likes - 1 : recipe.value.likes + 1
+
+  try {
+    console.log('💖 いいね切り替え開始...')
+    
+    const config = useRuntimeConfig()
+    const { $auth } = useNuxtApp()
+    const token = await $auth.currentUser.getIdToken()
+    
+    const response = await $fetch(`${config.public.apiBase}/api/recipes/${recipe.value.id}/toggle-like`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    })
+    
+    console.log('💖 いいね API応答:', response)
+    
+    // 🔧 APIレスポンスで最終的な状態を確定
+    const newLikedState = Boolean(response.is_liked)
+    const newLikesCount = response.likes_count || 0
+
+    // UI更新（APIレスポンスに基づく最終更新）
+    recipe.value.isLiked = newLikedState
+    recipe.value.likes = newLikesCount
+
+    // 🔧 重要: グローバルストア更新
+    if (newLikedState) {
+      favoriteStore.value.add(recipe.value.id)
+      console.log(`💖 レシピ${recipe.value.id}「${recipe.value.title}」をお気に入りに追加（ストア更新）`)
+    } else {
+      favoriteStore.value.delete(recipe.value.id)
+      console.log(`💔 レシピ${recipe.value.id}「${recipe.value.title}」をお気に入りから削除（ストア更新）`)
+    }
+
+    // 🔧 追加: お気に入りページへの変更通知
+    console.log('📢 お気に入りページへ変更を通知')
+    
+    // ストア変更を強制的にトリガー（他のページが監視している）
+    favoriteStore.value = new Set(favoriteStore.value)
+
+    console.log('💖 現在のお気に入り:', Array.from(favoriteStore.value))
+    console.log('💖 現在のいいね数:', recipe.value.likes)
+      
+  } catch (error) {
+    console.error('❌ いいね切り替えエラー:', error)
+    
+    // 🔧 エラー時は元の状態に戻す（楽観的更新のロールバック）
+    recipe.value.isLiked = originalLiked
+    recipe.value.likes = originalLikes
+    
+    // ストアも元の状態に戻す
+    if (originalLiked) {
+      favoriteStore.value.add(recipe.value.id)
+    } else {
+      favoriteStore.value.delete(recipe.value.id)
+    }
+    
+    if (error.status === 401) {
+      console.log('⚠️ 認証エラー - ログインページにリダイレクト')
+      await navigateTo('/auth/login')
+    } else {
+      console.log('⚠️ いいね機能でエラーが発生しました')
+      alert('いいねの更新に失敗しました。もう一度お試しください。')
+    }
+  }
 }
 
-// ⭐ コメント送信関数を修正（バリデーション付き）
+
+
+
+
+// ⭐ コメント送信関数（API対応版）
 const submitComment = async () => {
   if (!user.value) {
     console.log('⚠️ ログインが必要です')
@@ -399,50 +603,73 @@ const submitComment = async () => {
   isSubmitting.value = true
 
   try {
-    // 現在のレシピのコメント一覧を取得
+    console.log('💬 コメント投稿開始:', newComment.value.trim())
+    
+    // 🔧 APIにコメントを投稿
+    const config = useRuntimeConfig()
+    const { $auth } = useNuxtApp()
+    const token = await $auth.currentUser.getIdToken()
+    
+    const response = await $fetch(`${config.public.apiBase}/api/recipes/${recipeId}/comments`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: {
+        content: newComment.value.trim() // APIでは'content'フィールド
+      }
+    })
+    
+    console.log('💬 コメント投稿応答:', response)
+    
+    // 現在のコメント一覧を取得
     const currentComments = commentsStore.value.get(recipeId) || []
     
-    const comment = {
-      id: Date.now(),
-      user: { 
-        name: user.value.displayName || user.value.email.split('@')[0] || '匿名ユーザー',
-        avatar_path: null 
+    // 新しいコメントを変換してリストに追加
+    const newCommentData = {
+      id: response.data.id,
+      user: {
+        name: response.data.user?.name || user.value.displayName || user.value.email.split('@')[0] || '匿名ユーザー',
+        avatar_path: response.data.user?.avatar_url || null
       },
-      body: newComment.value.trim(), // trimした値を使用
-      createdAt: new Date().toISOString()
+      body: response.data.content, // APIでは'content'、フロントでは'body'
+      createdAt: response.data.created_at
     }
 
-    // 新しいコメントを追加
-    const updatedComments = [...currentComments, comment]
+    // 新しいコメントを先頭に追加（最新が上）
+    const updatedComments = [newCommentData, ...currentComments]
     commentsStore.value.set(recipeId, updatedComments)
     
     newComment.value = ''
     commentError.value = ''
-
 
     // 新しいコメントが追加されたらすべて表示する
     if (updatedComments.length > 3) {
       showAllComments.value = true
     }
 
-    console.log('💬 コメント送信:', comment.body)
+    console.log('✅ コメント投稿成功:', response.message)
     console.log('📝 現在のコメント数:', updatedComments.length)
 
     // textareaをリセット
     autoResize()
       
   } catch (error) {
-    console.error('コメント送信エラー:', error)
-    commentError.value = 'コメントの送信に失敗しました'
+    console.error('❌ コメント投稿エラー:', error)
+    
+    if (error.status === 403) {
+      commentError.value = '管理者はコメントできません'
+    } else if (error.status === 429) {
+      commentError.value = '1分以内の連続投稿はできません'
+    } else if (error.data?.errors?.content) {
+      commentError.value = error.data.errors.content[0]
+    } else {
+      commentError.value = 'コメントの送信に失敗しました'
+    }
   } finally {
     isSubmitting.value = false
   }
-  
-  // 実際のAPI呼び出し
-  // await $fetch(`/api/recipes/${recipe.value.id}/comments`, {
-  //   method: 'POST',
-  //   body: { body: comment.body }
-  // })
 }
 
 // textareaの自動リサイズ
@@ -455,101 +682,234 @@ const autoResize = () => {
   })
 }
 
+// onMounted関数を以下に完全に置き換えてください
+
 onMounted(async () => {
-  console.log('🔍 レシピ詳細ページの認証チェック開始...')
-  
-  // Firebase認証の状態確立を待機
-  const currentUser = await waitForAuth()
-  
-  if (!currentUser) {
-    console.log('⚠️ 認証失敗 - ログインページにリダイレクト')
-    await navigateTo('/auth/login')
-    return
-  }
-  
-  console.log('✅ 認証成功:', currentUser.email)
+  console.log('🔍 /user/show ページの認証チェック開始...')
 
-  // レシピデータの取得
-  console.log('📖 レシピID:', recipeId)
-  
-  // モックデータから取得
-  const recipeData = recipeDatabase[recipeId]
-  if (!recipeData) {
-    console.log('❌ レシピが見つかりません')
-    await navigateTo('/user')
-    return
-  }
-  
-  recipe.value = { ...recipeData }
-  
-  // お気に入り状態を同期
-  recipe.value.isLiked = favoriteStore.value.has(recipe.value.id)
-  
-  // 初期コメントデータの設定（まだ設定されていない場合のみ）
-  if (!commentsStore.value.has(recipeId)) {
-    const initialComments = [
-      {
-        id: 1,
-        user: { name: 'ユーザーA', avatar_path: null },
-        body: 'めっちゃ美味しかったです！',
-        createdAt: new Date('2025-01-01').toISOString()
-      },
-      {
-        id: 2,
-        user: { name: 'ユーザーB', avatar_path: null },
-        body: '今度作ってみます〜',
-        createdAt: new Date('2025-01-02').toISOString()
-      },
-      {
-        id: 3,
-        user: { name: 'ユーザーC', avatar_path: null },
-        body: '今日の献立に取り入れようと思います。',
-        createdAt: new Date('2025-01-03').toISOString()
-      },
-      {
-        id: 4,
-        user: { name: 'VeryLongUserNameExample', avatar_path: null },
-        body: '材料も揃えやすくて助かります！',
-        createdAt: new Date('2025-01-04').toISOString()
-      },
-      {
-        id: 5,
-        user: { name: 'CookingLover2024', avatar_path: null },
-        body: '家族みんな大絶賛でした！リピート確定です',
-        createdAt: new Date('2025-01-05').toISOString()
-      },
-      {
-        id: 6,
-        user: { name: 'ママの料理', avatar_path: null },
-        body: '子供たちがおかわりしてくれました♪',
-        createdAt: new Date('2025-01-06').toISOString()
-      },
-      {
-        id: 7,
-        user: { name: 'グルメ太郎', avatar_path: null },
-        body: 'プロ級の仕上がりになりました！ありがとうございます',
-        createdAt: new Date('2025-01-07').toISOString()
+  try {
+    // Firebase認証の状態確立を待機
+    await initAuth()
+    console.log('👤 認証チェック結果:', user.value ? user.value.email : 'null')
+    console.log('👤 isLoggedIn:', isLoggedIn.value)
+
+    if (!isLoggedIn.value || !user.value) {
+      console.log('⚠️ 認証失敗 - ログインページにリダイレクト')
+      await navigateTo('/auth/login')
+      return
+    }
+
+    console.log('✅ 認証成功:', user.value.email, 'レシピ詳細ページを表示')
+
+    // 🔧 共通の設定を先に取得
+    const config = useRuntimeConfig()
+    const { $auth } = useNuxtApp()
+    const token = await $auth.currentUser.getIdToken()
+
+    // レシピデータの取得
+    console.log('📖 レシピID:', recipeId)
+
+    try {
+      // 🔧 APIを使用してSeederデータを取得
+      const response = await $fetch(`${config.public.apiBase}/api/recipes/${recipeId}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      })
+
+      console.log('📦 完全なAPI応答:', response)
+      console.log('📦 レスポンスのキー:', Object.keys(response))
+
+      // 🔧 重要：responseの中のdataプロパティにアクセス
+      const recipeData = response.data || response
+      console.log('📦 実際のレシピデータ:', recipeData)
+      console.log('📦 レシピデータのキー:', Object.keys(recipeData))
+
+      // 各フィールドを個別にログ出力
+      console.log('🔍 title:', recipeData.title)
+      console.log('🔍 genre:', recipeData.genre)
+      console.log('🔍 servings:', recipeData.servings)
+      console.log('🔍 instructions:', recipeData.instructions)
+      console.log('🔍 ingredients:', recipeData.ingredients)
+      console.log('🔍 image_url:', recipeData.image_url)
+      console.log('🔍 likes_count:', recipeData.likes_count)
+      console.log('🔍 is_liked:', recipeData.is_liked)
+
+      // 🔧 dataプロパティの中身を使用して設定
+      recipe.value = {
+        id: recipeData.id,
+        title: recipeData.title,
+        genre: recipeData.genre,
+        servings: recipeData.servings,
+        image: recipeData.image_url,
+        body: recipeData.instructions,
+        likes: recipeData.likes_count,
+        isLiked: recipeData.is_liked || false,
+        ingredients: parseIngredients(recipeData.ingredients || '')
       }
-    ]
-    commentsStore.value.set(recipeId, initialComments)
-  }
-  
-  console.log('📖 レシピデータ読み込み完了:', recipe.value.title)
-  console.log('💖 お気に入り状態:', recipe.value.isLiked)
-  console.log('💬 コメント数:', comments.value.length)
-  
-  // 実際のAPI呼び出し
-  // try {
-  //   const data = await $fetch(`/api/recipes/${recipeId}`)
-  //   recipe.value = data
-  // } catch (error) {
-  //   console.error('❌ レシピ取得エラー:', error)
-  //   await navigateTo('/user')
-  // }
 
-  // 初期のtextareaリサイズ
-  autoResize()
+      console.log('✅ API データ設定完了:', recipe.value)
+      console.log('✅ 設定後のタイトル:', recipe.value.title)
+      console.log('✅ 設定後のジャンル:', recipe.value.genre)
+      console.log('✅ 設定後の作り方:', recipe.value.body)
+
+    } catch (apiError) {
+      console.error('❌ レシピAPI取得エラー:', apiError)
+      console.error('❌ エラーの詳細:', {
+        message: apiError.message,
+        status: apiError.status,
+        statusText: apiError.statusText,
+        data: apiError.data
+      })
+
+      // APIエラー時はモックデータにフォールバック
+      console.log('📋 フォールバック：モックデータを使用')
+      const recipeData = recipeDatabase[recipeId]
+
+      if (!recipeData) {
+        console.log('❌ レシピが見つかりません（ID:', recipeId, '）')
+        alert(`レシピ（ID: ${recipeId}）が見つかりません`)
+        await navigateTo('/user')
+        return
+      }
+
+      recipe.value = { ...recipeData }
+      console.log('📖 モックデータ読み込み完了:', recipe.value.title)
+    }
+
+    // 🔧 コメントデータの取得
+    try {
+      console.log('💬 コメントデータを読み込み中...')
+
+      const commentsResponse = await $fetch(`${config.public.apiBase}/api/recipes/${recipeId}/comments`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      })
+
+      console.log('💬 コメントAPI応答:', commentsResponse)
+
+      // APIレスポンスからコメントデータを変換
+      const apiComments = commentsResponse.data || []
+      console.log('💬 取得したコメント数:', apiComments.length)
+
+      const convertedComments = apiComments.map(comment => ({
+        id: comment.id,
+        user: {
+          name: comment.user?.name || 'ユーザー',
+          avatar_path: comment.user?.avatar_url || null
+        },
+        body: comment.content, // APIでは'content'、フロントでは'body'
+        createdAt: comment.created_at
+      }))
+
+      // Seederコメントをストアに設定
+      commentsStore.value.set(recipeId, convertedComments)
+      console.log('✅ Seederコメント読み込み完了:', convertedComments.length, '件')
+
+    } catch (commentError) {
+      console.error('❌ コメント取得エラー:', commentError)
+
+      // エラー時はモックコメントを使用
+      console.log('📋 フォールバック：モックコメントを使用')
+      const initialComments = [
+        {
+          id: 1,
+          user: { name: 'ユーザーA', avatar_path: null },
+          body: 'めっちゃ美味しかったです！',
+          createdAt: new Date('2025-01-01').toISOString()
+        },
+        {
+          id: 2,
+          user: { name: 'ユーザーB', avatar_path: null },
+          body: '今度作ってみます〜',
+          createdAt: new Date('2025-01-02').toISOString()
+        },
+        {
+          id: 3,
+          user: { name: 'ユーザーC', avatar_path: null },
+          body: '今日の献立に取り入れようと思います。',
+          createdAt: new Date('2025-01-03').toISOString()
+        }
+      ]
+      commentsStore.value.set(recipeId, initialComments)
+    }
+
+    // お気に入り状態を同期
+    recipe.value.isLiked = favoriteStore.value.has(recipe.value.id)
+
+    console.log('💖 お気に入り状態:', recipe.value.isLiked)
+    console.log('💬 コメント数:', comments.value.length)
+
+    // 初期のtextareaリサイズ
+    autoResize()
+
+  } catch (error) {
+    console.error('❌ 認証処理エラー:', error)
+    await navigateTo('/auth/login')
+  }
 })
+
+// お気に入りストアの変更を監視（他のページからの変更を反映）
+watch(favoriteStore, (newFavorites) => {
+  if (recipe.value.id) {
+    const shouldBeLiked = newFavorites.has(recipe.value.id)
+    if (recipe.value.isLiked !== shouldBeLiked) {
+      console.log(`🔄 詳細ページ: レシピ${recipe.value.id}の状態を同期: ${recipe.value.isLiked} → ${shouldBeLiked}`)
+      recipe.value.isLiked = shouldBeLiked
+    }
+  }
+}, { deep: true })
+
+
+
+// 🔧 改善版：材料文字列を配列に変換する関数
+const parseIngredients = (ingredientsString) => {
+  if (!ingredientsString || typeof ingredientsString !== 'string') {
+    console.log('⚠️ parseIngredients: 無効な入力:', ingredientsString)
+    return []
+  }
+
+  console.log('🔍 parseIngredients 入力:', ingredientsString)
+
+  const lines = ingredientsString.split('\n').filter(line => line.trim())
+  
+  const result = lines.map((line, index) => {
+    const trimmedLine = line.trim()
+    
+    // "材料名 分量" の形式を想定してスペースで分割
+    const lastSpaceIndex = trimmedLine.lastIndexOf(' ')
+    
+    if (lastSpaceIndex > 0) {
+      const name = trimmedLine.substring(0, lastSpaceIndex).trim()
+      const quantity = trimmedLine.substring(lastSpaceIndex + 1).trim()
+      
+      console.log(`🔍 材料${index + 1}: "${name}" - "${quantity}"`)
+      
+      return {
+        id: index + 1,
+        name: name,
+        quantity: quantity
+      }
+    } else {
+      // スペースがない場合はそのまま材料名として扱う
+      console.log(`🔍 材料${index + 1}: "${trimmedLine}" - 分量なし`)
+      
+      return {
+        id: index + 1,
+        name: trimmedLine,
+        quantity: ''
+      }
+    }
+  })
+  
+  console.log('🔍 parseIngredients 結果:', result)
+  return result
+}
 </script>
 
 <style scoped>

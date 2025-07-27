@@ -198,13 +198,32 @@ Route::prefix('recipes')->group(function () {
 // ========================================
 
 Route::middleware('firebase.auth')->group(function () {
+
+    Route::get('/auth/check', function (Request $request) {
+        $user = $request->user();
+        return response()->json([
+            'success' => true,
+            'authenticated' => true,
+            'user' => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'role' => $user->role,
+                'firebase_uid' => $user->firebase_uid
+            ]
+        ]);
+    });
+
+    Route::get('/user/recipes', [RecipeController::class, 'userIndex']);
+
     Route::get('/recipes/{recipe}', [RecipeController::class, 'show']);
+
+    Route::post('/recipes/{recipe}/toggle-like', [LikeController::class, 'toggle']);
 
     Route::prefix('recipes/{recipe}')->group(function () {
         Route::get('/likes', [LikeController::class, 'index']);
         Route::post('/likes', [LikeController::class, 'store']);
         Route::delete('/likes', [LikeController::class, 'destroyByRecipe']);
-        Route::post('/toggle-like', [LikeController::class, 'toggle']);
     });
 
     Route::get('/likes/{like}', [LikeController::class, 'show']);

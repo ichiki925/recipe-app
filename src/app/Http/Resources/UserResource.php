@@ -16,7 +16,7 @@ class UserResource extends JsonResource
             'username' => $this->username,
             'avatar' => $this->avatar,
             'created_at' => $this->created_at,
-            'member_since' => $this->created_at->format('Y年m月'),
+            'member_since' => $this->created_at ? $this->created_at->format('Y年m月') : null,
         ];
     }
 

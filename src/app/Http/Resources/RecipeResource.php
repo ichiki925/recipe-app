@@ -35,9 +35,17 @@ class RecipeResource extends JsonResource
                 return $this->comments->count();
             }),
 
-            // 認証ユーザー用の情報
+            // 🔧 認証ユーザー用の情報（改善版）
             'is_liked' => $this->when($request->user(), function () use ($request) {
-                return $this->isLikedBy($request->user());
+                $user = $request->user();
+
+                // 管理者の場合は常にfalse
+                if (method_exists($user, 'isAdmin') && $user->isAdmin()) {
+                    return false;
+                }
+
+                // ユーザーの場合はいいね状態を確認
+                return $this->isLikedBy($user);
             }),
         ];
     }

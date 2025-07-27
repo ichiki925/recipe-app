@@ -31,13 +31,15 @@ class Recipe extends Model
         'is_published' => 'boolean',
         'views_count' => 'integer',
         'likes_count' => 'integer',
+        'created_at' => 'datetime',
+        'updated_at' => 'datetime'
     ];
 
     protected $dates = [
         'deleted_at',
     ];
 
-    // ==================== Relationships ====================
+    // リレーション
 
     /**
      * レシピの投稿者（管理者）
@@ -79,6 +81,20 @@ class Recipe extends Model
     public function getImageAttribute()
     {
         return $this->image_url ?: '/images/no-image.png';
+    }
+
+    /**
+     * 🔧 いいね数を取得（リアルタイム計算 + キャッシュ併用）
+     */
+    public function getLikesCountAttribute($value)
+    {
+        // DBのlikes_countカラムがnullまたは0の場合のみリアルタイム計算
+        if (is_null($value) || $value === 0) {
+            return $this->likes()->count();
+        }
+
+        // それ以外はDBの値を使用（パフォーマンス重視）
+        return $value;
     }
 
     /**
@@ -134,8 +150,8 @@ class Recipe extends Model
 
         return $query->where(function ($q) use ($keyword) {
             $q->where('title', 'LIKE', "%{$keyword}%")
-              ->orWhere('ingredients', 'LIKE', "%{$keyword}%")
-              ->orWhere('genre', 'LIKE', "%{$keyword}%");
+                ->orWhere('ingredients', 'LIKE', "%{$keyword}%")
+                ->orWhere('genre', 'LIKE', "%{$keyword}%");
         });
     }
 
@@ -158,8 +174,9 @@ class Recipe extends Model
      */
     public function updateLikesCount()
     {
-        $this->likes_count = $this->likes()->count();
-        $this->save();
+        $count = $this->likes()->count();
+        $this->update(['likes_count' => $count]);
+        return $count;
     }
 
     /**
@@ -181,4 +198,15 @@ class Recipe extends Model
 
         return $this->likes()->where('user_id', $user->id)->exists();
     }
+
+    /**
+     * 🔧 いいね数を強制的に再計算
+     */
+    public function refreshLikesCount()
+    {
+        $this->likes_count = $this->likes()->count();
+        $this->saveQuietly(); // イベントを発火させずに保存
+        return $this->likes_count;
+    }
+
 }

@@ -48,7 +48,7 @@
           <div class="recipe-genre">{{ recipe.genre }}</div>
           <div class="recipe-stats">
             <button
-              @click.stop="removeFavorite(recipe)"
+              @click.stop="toggleLike(recipe)"
               class="like-button liked"
               title="お気に入りから削除"
             >
@@ -106,7 +106,7 @@ useHead({
 })
 
 // 認証関連
-const { getCurrentUser, waitForAuth, user, getIdToken } = useAuth()
+const { user, isLoggedIn, initAuth, getIdToken } = useAuth()
 
 // データ定義
 const searchKeyword = ref('')
@@ -156,22 +156,26 @@ const fetchFavoriteRecipes = async () => {
     console.log('💖 お気に入りレシピを取得中...')
 
     const config = useRuntimeConfig()
-    const token = await getIdToken()
+    const { $auth } = useNuxtApp()
+    const token = await $auth.currentUser.getIdToken()
 
     const response = await $fetch('/user/liked-recipes', {
-      baseURL: config.public.apiBaseUrl,
+      baseURL: config.public.apiBase,
       headers: {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json'
       },
       query: {
         keyword: searchKeyword.value,
-        page: 1, // お気に入りページでは全件取得してフロントでページング
-        per_page: 100 // 大きめの値で全件取得
+        page: 1,
+        per_page: 100
       }
     })
 
     console.log('📦 お気に入りAPI応答:', response)
+
+    console.log('📦 レスポンス構造:', Object.keys(response))
+    console.log('📦 データ配列:', response.data)
 
     // レシピデータを更新
     favoriteRecipes.value = response.data.map(recipe => ({
@@ -179,30 +183,59 @@ const fetchFavoriteRecipes = async () => {
       title: recipe.title,
       genre: recipe.genre,
       likes: recipe.likes_count,
-      isFavorited: true, // お気に入り一覧なので全てtrue
+      isFavorited: true,
       image_url: recipe.image_url,
       admin: recipe.admin
     }))
 
-    // お気に入りストアを同期
     favoriteStore.value.clear()
     favoriteRecipes.value.forEach(recipe => {
       favoriteStore.value.add(recipe.id)
     })
 
+    // 🔧 ストア変更を強制的にトリガー（他のページに通知）
+    favoriteStore.value = new Set(favoriteStore.value)
+
     console.log(`💖 お気に入りレシピ ${favoriteRecipes.value.length}件を取得しました`)
+    console.log('💖 同期後のストア:', Array.from(favoriteStore.value))
 
   } catch (error) {
     console.error('❌ お気に入りレシピ取得エラー:', error)
 
-    // エラー時はモックデータを使用
-    console.log('📋 モックデータを使用します')
-    const mockFavorites = [
-      { id: 1, title: 'チキンカレー', genre: '和食', likes: 24, isFavorited: true },
-      { id: 6, title: 'グラタン', genre: '洋食', likes: 19, isFavorited: true }
-    ].filter(recipe => favoriteStore.value.has(recipe.id))
+    // エラー詳細をログ出力
+    console.error('❌ エラーの詳細:', {
+      message: error.message,
+      status: error.status,
+      statusText: error.statusText,
+      data: error.data
+    })
 
-    favoriteRecipes.value = mockFavorites
+    // エラー時はストアベースでモックデータを作成
+    console.log('📋 ストアベースでモックデータを作成')
+    const favoriteIds = Array.from(favoriteStore.value)
+    console.log('📋 お気に入りID一覧:', favoriteIds)
+
+    // モックレシピデータベース（簡略版）
+    const mockRecipeData = {
+      1: { id: 1, title: '基本のハンバーグ', genre: '肉料理', likes: 23 },
+      2: { id: 2, title: 'チキンカレー', genre: 'カレー', likes: 35 },
+      3: { id: 3, title: '和風パスタ', genre: '麺類', likes: 12 },
+      6: { id: 6, title: 'グラタン', genre: '洋食', likes: 19 },
+      7: { id: 7, title: 'ゆかりおにぎり', genre: '和食', likes: 12 },
+      9: { id: 9, title: '味噌汁', genre: '和食', likes: 7 }
+    }
+
+    favoriteRecipes.value = favoriteIds
+      .filter(id => mockRecipeData[id]) // 存在するIDのみ
+      .map(id => ({
+        ...mockRecipeData[id],
+        isFavorited: true,
+        image_url: null,
+        admin: null
+      }))
+
+    console.log('📋 モックお気に入りレシピ:', favoriteRecipes.value)
+
   } finally {
     isLoading.value = false
   }
@@ -218,41 +251,52 @@ const goToRecipeDetail = (recipeId) => {
 onMounted(async () => {
   console.log('🔍 お気に入りページの認証チェック開始...')
 
-  // Firebase認証の状態確立を待機
-  const currentUser = await waitForAuth()
+  try {
+    // 🔧 修正：waitForAuthではなく、他のページと同じ方法を使用
+    await initAuth()
+    console.log('👤 認証チェック結果:', user.value ? user.value.email : 'null')
 
-  console.log('👤 認証チェック結果:', currentUser ? currentUser.email : 'null')
+    if (!user.value) {
+      console.log('⚠️ 認証失敗 - ログインページにリダイレクト')
+      await navigateTo('/auth/login')
+      return
+    }
 
-  if (!currentUser) {
-    console.log('⚠️ 認証失敗 - ログインページにリダイレクト')
+    console.log('✅ 認証成功:', user.value.email, 'お気に入りページを表示')
+
+    // 初期データ読み込み
+    searchKeyword.value = route.query.keyword || ''
+    currentPage.value = parseInt(route.query.page) || 1
+
+    // お気に入りレシピを取得
+    await fetchFavoriteRecipes()
+
+  } catch (error) {
+    console.error('❌ 認証処理エラー:', error)
     await navigateTo('/auth/login')
-    return
   }
-
-  console.log('✅ 認証成功:', currentUser.email, 'お気に入りページを表示')
-
-  // 初期データ読み込み
-  searchKeyword.value = route.query.keyword || ''
-  currentPage.value = parseInt(route.query.page) || 1
-
-  // お気に入りレシピを取得
-  await fetchFavoriteRecipes()
 })
 
 // お気に入りから削除する機能（API連携版）
-const removeFavorite = async (recipe) => {
+const toggleLike = async (recipe) => {
   if (!user.value) return
 
   try {
     console.log(`💔 レシピ${recipe.id}「${recipe.title}」をお気に入りから削除中...`)
 
-    // アニメーション効果
+    // 🔧 楽観的更新: UIから即座に削除
     const recipeElement = document.querySelector(`[data-recipe-id="${recipe.id}"]`)
     if (recipeElement) {
       recipeElement.style.transition = 'opacity 0.3s ease, transform 0.3s ease'
       recipeElement.style.opacity = '0'
       recipeElement.style.transform = 'scale(0.8)'
     }
+
+    // 🔧 楽観的更新: ストアから即座に削除
+    favoriteStore.value.delete(recipe.id)
+    
+    // 🔧 楽観的更新: リストからも即座に削除
+    favoriteRecipes.value = favoriteRecipes.value.filter(r => r.id !== recipe.id)
 
     // Laravel API へのリクエスト
     const config = useRuntimeConfig()
@@ -269,27 +313,35 @@ const removeFavorite = async (recipe) => {
 
     console.log('✅ お気に入り削除API応答:', response)
 
-    // 少し遅延してからUI更新
-    setTimeout(() => {
-      // レシピリストから削除
-      favoriteRecipes.value = favoriteRecipes.value.filter(r => r.id !== recipe.id)
-
-      // お気に入りストアからも削除
-      favoriteStore.value.delete(recipe.id)
-
-      console.log(`💔 レシピ${recipe.id}「${recipe.title}」をお気に入りから削除しました`)
-
+    // 🔧 APIが成功した場合の最終確認
+    if (response && !response.is_liked) {
+      console.log(`💔 レシピ${recipe.id}「${recipe.title}」をお気に入りから削除しました（API確認済み）`)
+      
+      // 🔧 ストア変更を強制的にトリガー（他のページに通知）
+      favoriteStore.value = new Set(favoriteStore.value)
+      
       // ページが空になった場合は前のページに戻る
-      if (paginatedRecipes.value.length === 0 && currentPage.value > 1) {
+      if (favoriteRecipes.value.length === 0 && currentPage.value > 1) {
         currentPage.value = currentPage.value - 1
         updateUrl()
       }
-    }, 300)
+    } else {
+      // APIレスポンスが期待と異なる場合はロールバック
+      throw new Error('APIレスポンスが期待と異なります')
+    }
 
   } catch (error) {
     console.error('❌ お気に入り削除エラー:', error)
 
-    // エラーの場合はアニメーションを元に戻す
+    // 🔧 エラー時は楽観的更新をロールバック
+    favoriteStore.value.add(recipe.id)
+    
+    // レシピをリストに戻す
+    if (!favoriteRecipes.value.find(r => r.id === recipe.id)) {
+      favoriteRecipes.value.push(recipe)
+    }
+
+    // アニメーションを元に戻す
     const recipeElement = document.querySelector(`[data-recipe-id="${recipe.id}"]`)
     if (recipeElement) {
       recipeElement.style.opacity = '1'
@@ -299,6 +351,7 @@ const removeFavorite = async (recipe) => {
     alert('お気に入りの削除に失敗しました。もう一度お試しください。')
   }
 }
+
 
 const searchRecipes = () => {
   currentPage.value = 1
@@ -319,20 +372,29 @@ const updateUrl = () => {
   router.push({ path: '/user/favorite', query })
 }
 
-// URLクエリの監視
-watch(() => route.query, (newQuery) => {
-  searchKeyword.value = newQuery.keyword || ''
-  currentPage.value = parseInt(newQuery.page) || 1
-})
-
-// 検索キーワード変更時にページをリセット
-watch(searchKeyword, () => {
-  currentPage.value = 1
-})
-
 // お気に入りストアの変更を監視してデータを再取得
-watch(favoriteStore, () => {
-  fetchFavoriteRecipes()
+watch(favoriteStore, async (newFavorites, oldFavorites) => {
+  // 初回実行や同じ参照の場合はスキップ
+  if (!oldFavorites || newFavorites === oldFavorites) return
+  
+  console.log('🔄 お気に入りページ: ストア変更を検知')
+  console.log('新しいストア:', Array.from(newFavorites))
+  console.log('古いストア:', Array.from(oldFavorites))
+  
+  // サイズが変わった場合のみ再取得
+  if (newFavorites.size !== oldFavorites.size) {
+    console.log('📊 ストアサイズ変更を検知、データ再取得')
+    await fetchFavoriteRecipes()
+  } else {
+    // サイズが同じでも中身が違う場合があるのでチェック
+    const newArray = Array.from(newFavorites).sort()
+    const oldArray = Array.from(oldFavorites).sort()
+    
+    if (JSON.stringify(newArray) !== JSON.stringify(oldArray)) {
+      console.log('📊 ストア内容変更を検知、データ再取得')
+      await fetchFavoriteRecipes()
+    }
+  }
 }, { deep: true })
 </script>
 
