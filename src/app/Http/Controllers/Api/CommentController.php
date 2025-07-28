@@ -39,68 +39,69 @@ class CommentController extends Controller
 
     public function store(Request $request, Recipe $recipe)
     {
-        $user = auth()->user();
+        try {
+            \Log::info('=== Comment Store START ===', [
+                'request_content' => $request->input('content'),
+                'recipe_id' => $recipe->id,
+            ]);
 
-        // 管理者はコメント投稿不可
-        if ($user->isAdmin()) {
+            $user = $request->user();
+
+            if (!$user) {
+                return response()->json(['message' => '認証が必要です'], 401);
+            }
+
+            if ($user->isAdmin()) {
+                return response()->json(['message' => '管理者はコメントできません'], 403);
+            }
+
+            if (!$recipe->is_published) {
+                return response()->json(['message' => 'このレシピは公開されていません'], 404);
+            }
+
+            $request->validate([
+                'content' => 'required|string|min:1|max:500'
+            ]);
+
+            // 連続投稿制限（1分以内）
+            $recentComment = RecipeComment::where('user_id', $user->id)
+                ->where('recipe_id', $recipe->id)
+                ->where('created_at', '>=', now()->subMinute())
+                ->first();
+
+            if ($recentComment) {
+                return response()->json(['message' => '1分以内の連続投稿はできません'], 429);
+            }
+
+            // コメント作成
+            $comment = RecipeComment::create([
+                'content' => trim($request->content),
+                'user_id' => $user->id,
+                'recipe_id' => $recipe->id,
+            ]);
+
+            \Log::info('Comment created successfully', ['comment_id' => $comment->id]);
+
+            // 🔧 userリレーションを事前にロード（Resourceで使うため）
+            $comment->load('user');
+
+            // ✅ Resourceで整形して返却
             return response()->json([
-                'message' => '管理者はコメントできません'
-            ], 403);
-        }
+                'message' => 'コメントを投稿しました',
+                'data' => new CommentResource($comment)
+            ], 201);
 
-        // 公開されていないレシピにはコメント不可
-        if (!$recipe->is_published) {
+        } catch (\Exception $e) {
+            \Log::error('Comment creation failed', [
+                'error' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine()
+            ]);
+
             return response()->json([
-                'message' => 'このレシピは公開されていません'
-            ], 404);
+                'message' => 'コメントの投稿に失敗しました'
+            ], 500);
         }
-
-        $request->validate([
-            'content' => 'required|string|min:1|max:500'
-        ], [
-            'content.required' => 'コメント内容は必須です',
-            'content.min' => 'コメントは1文字以上で入力してください',
-            'content.max' => 'コメントは500文字以内で入力してください'
-        ]);
-
-        // スパム対策：同じユーザーが短時間で連続投稿を防ぐ
-        $recentComment = RecipeComment::where('user_id', $user->id)
-                                    ->where('recipe_id', $recipe->id)
-                                    ->where('created_at', '>=', now()->subMinutes(1))
-                                    ->first();
-
-        if ($recentComment) {
-            return response()->json([
-                'message' => '1分以内の連続投稿はできません'
-            ], 429);
-        }
-
-        $comment = RecipeComment::create([
-            'content' => trim($request->content),
-            'user_id' => $user->id,
-            'recipe_id' => $recipe->id
-        ]);
-
-        // 作成したコメントをユーザー情報と一緒に返す
-        $comment->load('user:id,name,username,avatar_url');
-
-        return response()->json([
-            'message' => 'コメントを投稿しました',
-            'data' => new CommentResource($comment)
-        ], 201);
-    }
-
-    /**
-     * コメント詳細取得（管理者用・デバッグ用）
-     * GET /api/comments/{comment}
-     */
-    public function show(RecipeComment $comment)
-    {
-        $comment->load(['user:id,name,username,avatar_url,email', 'recipe:id,title']);
-
-        return response()->json([
-            'data' => new CommentResource($comment)
-        ]);
     }
 
     /**

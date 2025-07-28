@@ -433,9 +433,9 @@ const comments = computed(() => {
 // 表示するコメントを制御
 const displayedComments = computed(() => {
   if (showAllComments.value) {
-    return [...comments.value].reverse()
+    return [...comments.value]
   } else {
-    return [...comments.value].reverse().slice(0, 3)
+    return [...comments.value].slice(0, 3)
   }
 })
 
@@ -682,7 +682,7 @@ const autoResize = () => {
   })
 }
 
-// onMounted関数を以下に完全に置き換えてください
+
 
 onMounted(async () => {
   console.log('🔍 /user/show ページの認証チェック開始...')
@@ -703,8 +703,11 @@ onMounted(async () => {
 
     // 🔧 共通の設定を先に取得
     const config = useRuntimeConfig()
+    console.log('🔧 API Base URL:', config.public.apiBase) 
+
     const { $auth } = useNuxtApp()
     const token = await $auth.currentUser.getIdToken()
+    console.log('🔑 Firebase Token取得成功')
 
     // レシピデータの取得
     console.log('📖 レシピID:', recipeId)
@@ -720,22 +723,11 @@ onMounted(async () => {
       })
 
       console.log('📦 完全なAPI応答:', response)
-      console.log('📦 レスポンスのキー:', Object.keys(response))
+
 
       // 🔧 重要：responseの中のdataプロパティにアクセス
       const recipeData = response.data || response
       console.log('📦 実際のレシピデータ:', recipeData)
-      console.log('📦 レシピデータのキー:', Object.keys(recipeData))
-
-      // 各フィールドを個別にログ出力
-      console.log('🔍 title:', recipeData.title)
-      console.log('🔍 genre:', recipeData.genre)
-      console.log('🔍 servings:', recipeData.servings)
-      console.log('🔍 instructions:', recipeData.instructions)
-      console.log('🔍 ingredients:', recipeData.ingredients)
-      console.log('🔍 image_url:', recipeData.image_url)
-      console.log('🔍 likes_count:', recipeData.likes_count)
-      console.log('🔍 is_liked:', recipeData.is_liked)
 
       // 🔧 dataプロパティの中身を使用して設定
       recipe.value = {
@@ -751,9 +743,6 @@ onMounted(async () => {
       }
 
       console.log('✅ API データ設定完了:', recipe.value)
-      console.log('✅ 設定後のタイトル:', recipe.value.title)
-      console.log('✅ 設定後のジャンル:', recipe.value.genre)
-      console.log('✅ 設定後の作り方:', recipe.value.body)
 
     } catch (apiError) {
       console.error('❌ レシピAPI取得エラー:', apiError)
