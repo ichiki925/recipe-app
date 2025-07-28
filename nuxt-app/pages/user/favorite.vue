@@ -159,14 +159,14 @@ const fetchFavoriteRecipes = async () => {
     const { $auth } = useNuxtApp()
     const token = await $auth.currentUser.getIdToken()
 
-    const response = await $fetch('/user/liked-recipes', {
-      baseURL: config.public.apiBase,
+    const response = await $fetch(`${config.public.apiBase}/api/user/liked-recipes`, {
+      method: 'GET',
       headers: {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json'
       },
       query: {
-        keyword: searchKeyword.value,
+        keyword: searchKeyword.value || '',
         page: 1,
         per_page: 100
       }
@@ -174,15 +174,16 @@ const fetchFavoriteRecipes = async () => {
 
     console.log('📦 お気に入りAPI応答:', response)
 
-    console.log('📦 レスポンス構造:', Object.keys(response))
-    console.log('📦 データ配列:', response.data)
+    if (!response.data || !Array.isArray(response.data)) {
+      console.error('❌ APIレスポンスの形式が不正:', response)
+      throw new Error('APIレスポンスの形式が不正です')
+    }
 
-    // レシピデータを更新
     favoriteRecipes.value = response.data.map(recipe => ({
       id: recipe.id,
       title: recipe.title,
       genre: recipe.genre,
-      likes: recipe.likes_count,
+      likes: recipe.likes_count || 0,
       isFavorited: true,
       image_url: recipe.image_url,
       admin: recipe.admin
@@ -193,7 +194,6 @@ const fetchFavoriteRecipes = async () => {
       favoriteStore.value.add(recipe.id)
     })
 
-    // 🔧 ストア変更を強制的にトリガー（他のページに通知）
     favoriteStore.value = new Set(favoriteStore.value)
 
     console.log(`💖 お気に入りレシピ ${favoriteRecipes.value.length}件を取得しました`)
@@ -202,7 +202,6 @@ const fetchFavoriteRecipes = async () => {
   } catch (error) {
     console.error('❌ お気に入りレシピ取得エラー:', error)
 
-    // エラー詳細をログ出力
     console.error('❌ エラーの詳細:', {
       message: error.message,
       status: error.status,
@@ -210,31 +209,10 @@ const fetchFavoriteRecipes = async () => {
       data: error.data
     })
 
-    // エラー時はストアベースでモックデータを作成
-    console.log('📋 ストアベースでモックデータを作成')
-    const favoriteIds = Array.from(favoriteStore.value)
-    console.log('📋 お気に入りID一覧:', favoriteIds)
+    favoriteRecipes.value = []
+    favoriteStore.value.clear()
 
-    // モックレシピデータベース（簡略版）
-    const mockRecipeData = {
-      1: { id: 1, title: '基本のハンバーグ', genre: '肉料理', likes: 23 },
-      2: { id: 2, title: 'チキンカレー', genre: 'カレー', likes: 35 },
-      3: { id: 3, title: '和風パスタ', genre: '麺類', likes: 12 },
-      6: { id: 6, title: 'グラタン', genre: '洋食', likes: 19 },
-      7: { id: 7, title: 'ゆかりおにぎり', genre: '和食', likes: 12 },
-      9: { id: 9, title: '味噌汁', genre: '和食', likes: 7 }
-    }
-
-    favoriteRecipes.value = favoriteIds
-      .filter(id => mockRecipeData[id]) // 存在するIDのみ
-      .map(id => ({
-        ...mockRecipeData[id],
-        isFavorited: true,
-        image_url: null,
-        admin: null
-      }))
-
-    console.log('📋 モックお気に入りレシピ:', favoriteRecipes.value)
+    alert('お気に入りレシピの取得に失敗しました。ページを再読み込みしてください。')
 
   } finally {
     isLoading.value = false
@@ -294,16 +272,41 @@ const toggleLike = async (recipe) => {
 
     // 🔧 楽観的更新: ストアから即座に削除
     favoriteStore.value.delete(recipe.id)
-    
+
     // 🔧 楽観的更新: リストからも即座に削除
     favoriteRecipes.value = favoriteRecipes.value.filter(r => r.id !== recipe.id)
 
-    // Laravel API へのリクエスト
-    const config = useRuntimeConfig()
-    const token = await getIdToken()
+    // 🔧 追加: ページネーション自動調整
+    const remainingRecipes = favoriteRecipes.value.length
+    const maxPages = Math.ceil(remainingRecipes / recipesPerPage)
+    
+    console.log(`📊 削除後の状況:`, {
+      remainingRecipes,
+      currentPage: currentPage.value,
+      maxPages,
+      recipesPerPage
+    })
 
-    const response = await $fetch(`/recipes/${recipe.id}/toggle-like`, {
-      baseURL: config.public.apiBaseUrl,
+    // 現在のページが最大ページを超えている場合、前のページに戻る
+    if (currentPage.value > maxPages && maxPages > 0) {
+      console.log(`🔄 ページ調整: ${currentPage.value} → ${maxPages}`)
+      currentPage.value = maxPages
+      updateUrl() // URLも更新
+    }
+    
+    // 全部削除された場合は1ページ目に戻る
+    if (remainingRecipes === 0) {
+      console.log(`🔄 全削除のため1ページ目に戻る`)
+      currentPage.value = 1
+      updateUrl()
+    }
+
+    const config = useRuntimeConfig()
+    const { $auth } = useNuxtApp()
+    const token = await $auth.currentUser.getIdToken()
+
+
+    const response = await $fetch(`${config.public.apiBase}/api/recipes/${recipe.id}/toggle-like`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -320,11 +323,6 @@ const toggleLike = async (recipe) => {
       // 🔧 ストア変更を強制的にトリガー（他のページに通知）
       favoriteStore.value = new Set(favoriteStore.value)
       
-      // ページが空になった場合は前のページに戻る
-      if (favoriteRecipes.value.length === 0 && currentPage.value > 1) {
-        currentPage.value = currentPage.value - 1
-        updateUrl()
-      }
     } else {
       // APIレスポンスが期待と異なる場合はロールバック
       throw new Error('APIレスポンスが期待と異なります')

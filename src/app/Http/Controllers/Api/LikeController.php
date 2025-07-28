@@ -149,21 +149,79 @@ class LikeController extends Controller
 
     public function userLikes(Request $request)
     {
-        $user = auth()->user();
+        try {
+            Log::info('userLikes メソッドが呼び出されました');
 
-        $likedRecipes = $user->likedRecipes()
-                        ->published()
-                        ->with('admin')
-                        ->latest('recipe_likes.created_at')
-                        ->paginate(6);
+            $user = $request->user();
 
-        // 各レシピにいいね状態を追加
-        $likedRecipes->getCollection()->transform(function ($recipe) {
-            $recipe->is_liked = true; // 全部いいね済み
-            return $recipe;
-        });
+            Log::info('認証ユーザー情報: ' . ($user ? 'ID:' . $user->id . ', Email:' . $user->email : 'null'));
 
-        return response()->json($likedRecipes);
+            if (!$user) {
+                Log::error('ユーザーが認証されていません');
+                return response()->json([
+                    'success' => false,
+                    'message' => 'ユーザーが認証されていません',
+                    'data' => [],
+                    'current_page' => 1,
+                    'last_page' => 1,
+                    'total' => 0
+                ], 401);
+            }
+
+            $likedRecipeIds = RecipeLike::where('user_id', $user->id)
+                                        ->pluck('recipe_id')
+                                        ->toArray();
+            
+            Log::info('ユーザーがいいねしたレシピID: ' . json_encode($likedRecipeIds));
+
+            if (empty($likedRecipeIds)) {
+                return response()->json([
+                    'success' => true,
+                    'data' => [],
+                    'current_page' => 1,
+                    'last_page' => 1,
+                    'total' => 0
+                ]);
+            }
+
+            // レシピ情報を取得
+            $likedRecipes = Recipe::whereIn('id', $likedRecipeIds)
+                                ->where('is_published', true)
+                                ->with('admin')
+                                ->withCount('likes')
+                                ->orderByRaw('FIELD(id, ' . implode(',', $likedRecipeIds) . ')')
+                                ->get();
+
+            Log::info('取得したレシピ数: ' . $likedRecipes->count());
+
+            // 各レシピにいいね状態を追加
+            $likedRecipes->transform(function ($recipe) {
+                $recipe->is_liked = true;
+                return $recipe;
+            });
+
+            return response()->json([
+                'success' => true,
+                'data' => $likedRecipes->toArray(),
+                'current_page' => 1,
+                'last_page' => 1,
+                'per_page' => $likedRecipes->count(),
+                'total' => $likedRecipes->count()
+            ]);
+        } catch (\Exception $e) {
+            Log::error('userLikes エラー: ' . $e->getMessage());
+            Log::error('スタックトレース: ' . $e->getTraceAsString());
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'お気に入りレシピの取得に失敗しました',
+                'error' => $e->getMessage(),
+                'data' => [],
+                'current_page' => 1,
+                'last_page' => 1,
+                'total' => 0
+            ], 500);
+        }
     }
 
     public function stats()
