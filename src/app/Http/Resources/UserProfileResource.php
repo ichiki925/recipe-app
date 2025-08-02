@@ -16,11 +16,11 @@ class UserProfileResource extends JsonResource
             'username' => $this->username,
             'email' => $this->email,
             'avatar_url' => $this->avatar_url,
-            'avatar' => $this->avatar,
+            'avatar' => $this->avatar_url,
             'role' => $this->role,
             'created_at' => $this->created_at->toISOString(),
             'updated_at' => $this->updated_at->toISOString(),
-            'email_verified_at' => $this->email_verified_at->toISOString(),
+            'email_verified_at' => $this->email_verified_at ? $this->email_verified_at->toISOString() : null,
             'member_since' => $this->created_at->format('Y年m月'),
             'formatted_created_at' => $this->created_at->format('Y年m月d日'),
 

@@ -4,9 +4,13 @@ namespace App\Http\Controllers\User;
 
 use App\Http\Controllers\Controller;
 use App\Http\Resources\UserProfileResource;
+use App\Http\Requests\ProfileUpdateRequest;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Intervention\Image\ImageManagerStatic as Image;
+use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Response;
+
 
 class ProfileController extends Controller
 {
@@ -15,6 +19,15 @@ class ProfileController extends Controller
      */
     public function show(Request $request)
     {
+        \Log::info('=== ProfileController show method called ===', [
+        'method' => $request->method(),
+        'url' => $request->fullUrl(),
+        'headers' => $request->headers->all(),
+        'auth_check' => auth()->check(),
+        'auth_user' => auth()->user() ? auth()->user()->toArray() : null,
+        'has_bearer_token' => !empty($request->bearerToken())
+    ]);
+
         $user = auth()->user();
 
         if (!$user) {
@@ -34,7 +47,7 @@ class ProfileController extends Controller
     /**
      * ユーザープロフィール更新
      */
-    public function update(Request $request)
+    public function update(ProfileUpdateRequest $request)
     {
         $user = auth()->user();
 
@@ -44,115 +57,142 @@ class ProfileController extends Controller
             ], 401);
         }
 
-        // バリデーション
-        $request->validate([
-            'name' => 'required|string|min:2|max:20',
-            'username' => 'nullable|string|min:2|max:20|unique:users,username,' . $user->id,
-            'avatar' => 'nullable|image|mimes:jpeg,jpg,png,gif,webp|max:5120', // 5MB制限
-        ], [
-            'name.required' => 'ユーザーネームを入力してください',
-            'name.min' => 'ユーザーネームは2文字以上で入力してください',
-            'name.max' => 'ユーザーネームは20文字以内で入力してください',
-            'username.min' => 'ユーザーネームは2文字以上で入力してください',
-            'username.max' => 'ユーザーネームは20文字以内で入力してください',
-            'username.unique' => 'このユーザーネームは既に使用されています',
-            'avatar.image' => '画像ファイルを選択してください',
-            'avatar.mimes' => '対応している形式: JPEG, PNG, GIF, WebP',
-            'avatar.max' => 'ファイルサイズは5MB以下にしてください',
+        $validatedData = $request->validated();
+
+        \Log::info('✅ バリデーション通過:', [
+            'validated_data' => $validatedData,
+            'name_character_count' => isset($validatedData['name']) ? mb_strlen($validatedData['name'], 'UTF-8') : 'N/A',
         ]);
 
-        // 追加のユーザーネームバリデーション
-        if ($request->has('name')) {
-            $name = trim($request->name);
-
-            // 使用可能文字のチェック
-            if (!preg_match('/^[a-zA-Z0-9\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF_\-\s]+$/u', $name)) {
-                return response()->json([
-                    'message' => '使用できない文字が含まれています',
-                    'errors' => [
-                        'name' => ['使用できない文字が含まれています']
-                    ]
-                ], 422);
-            }
-
-            // 連続するスペースのチェック
-            if (preg_match('/\s{2,}/', $name)) {
-                return response()->json([
-                    'message' => '連続するスペースは使用できません',
-                    'errors' => [
-                        'name' => ['連続するスペースは使用できません']
-                    ]
-                ], 422);
-            }
-        }
-
-        // アバター画像のアップロード処理
+        // 🔧 アバター画像のアップロード処理
         $avatarUrl = $user->avatar_url;
         if ($request->hasFile('avatar')) {
             try {
+                \Log::info('📷 アバター画像アップロード開始');
+                
                 // 古いアバター画像を削除
                 if ($user->avatar_url && $user->avatar_url !== '/images/default-avatar.png') {
                     $oldImagePath = str_replace('/storage/', '', $user->avatar_url);
-                    Storage::disk('public')->delete($oldImagePath);
+                    if (Storage::disk('public')->exists($oldImagePath)) {
+                        Storage::disk('public')->delete($oldImagePath);
+                        \Log::info('🗑️ 古いアバター画像を削除:', ['path' => $oldImagePath]);
+                    }
                 }
 
                 // 新しいアバター画像をアップロード
                 $avatarUrl = $this->handleAvatarUpload($request->file('avatar'));
+                \Log::info('📷 新しいアバター画像をアップロード:', ['url' => $avatarUrl]);
+                
             } catch (\Exception $e) {
+                \Log::error('❌ アバター画像アップロードエラー:', [
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString()
+                ]);
+                
                 return response()->json([
                     'message' => 'アバター画像のアップロードに失敗しました',
                     'errors' => [
-                        'avatar' => ['画像のアップロードに失敗しました']
+                        'avatar' => ['画像のアップロードに失敗しました: ' . $e->getMessage()]
                     ]
                 ], 422);
             }
         }
 
-        // ユーザー情報を更新
-        $updateData = [
-            'name' => trim($request->name),
-        ];
+
+        // ✅ ユーザー情報を更新
+        $updateData = [];
+
+        if ($request->has('name')) {
+            $updateData['name'] = trim($request->name);
+            \Log::info('🔧 名前を更新:', ['new_name' => $updateData['name']]);
+        }
 
         if ($request->has('username')) {
-            $updateData['username'] = $request->username ? trim($request->username) : null;
-        }
+        $updateData['username'] = $request->username ? trim($request->username) : null;
+    }
 
         if ($avatarUrl !== $user->avatar_url) {
             $updateData['avatar_url'] = $avatarUrl;
         }
 
-        $user->update($updateData);
+        // 🔍 デバッグ: 更新データを確認
+        \Log::info('🔍 更新データ:', $updateData);
+
+        if (!empty($updateData)) {
+            $user->update($updateData);
+            
+            // 🔧 更新後のデータを確認
+            $user->refresh(); // データベースから最新データを再読み込み
+            \Log::info('✅ ユーザー更新完了:', [
+                'updated_fields' => array_keys($updateData),
+                'current_name' => $user->name,
+                'current_avatar' => $user->avatar_url
+            ]);
+        } else {
+            \Log::info('⚠️ 更新データなし');
+        }
+
+        // 統計情報を再読み込み
+        $user->loadCount(['recipeLikes', 'recipeComments', 'likedRecipes', 'recipes']);
 
         return response()->json([
             'message' => 'プロフィールを更新しました',
-            'data' => new UserProfileResource($user),
+            'data' => new UserProfileResource($user), // refreshされた最新データを返す
         ]);
     }
 
     /**
-     * アバター画像のアップロード処理
+     * 🔧 アバター画像アップロード処理（シンプル版・Intervention Image不要）
      */
-    private function handleAvatarUpload($uploadedFile)
+    private function handleAvatarUpload($file)
     {
         try {
-            // ファイル名生成
-            $filename = 'avatar_' . auth()->id() . '_' . time() . '.jpg';
+            // ファイル情報をログに記録
+            \Log::info('📷 handleAvatarUpload 開始:', [
+                'original_name' => $file->getClientOriginalName(),
+                'mime_type' => $file->getMimeType(),
+                'size' => $file->getSize(),
+                'temp_path' => $file->getPathname()
+            ]);
 
-            // 画像を読み込み、リサイズ、圧縮
-            $image = Image::make($uploadedFile)
-                ->orientate() // EXIF回転情報を適用
-                ->fit(200, 200) // 正方形にクロップ＆リサイズ
-                ->encode('jpg', 90); // JPEG 90%品質で圧縮
+            // セキュアなファイル名を生成
+            $extension = $file->getClientOriginalExtension();
+            $filename = time() . '_' . Str::random(10) . '.' . $extension;
+            
+            // avatarsディレクトリに保存
+            $path = $file->storeAs('avatars', $filename, 'public');
+            
+            if (!$path) {
+                throw new \Exception('ファイルの保存に失敗しました');
+            }
 
-            // ストレージに保存
-            $path = 'avatars/' . $filename;
-            Storage::disk('public')->put($path, $image);
+            // 保存されたファイルの存在確認
+            if (!Storage::disk('public')->exists($path)) {
+                throw new \Exception('ファイルが正常に保存されませんでした');
+            }
 
-            return '/storage/' . $path;
-
+            // 公開URLを生成
+            $avatarUrl = '/storage/' . $path;
+            
+            \Log::info('📷 アバター画像処理完了:', [
+                'original_name' => $file->getClientOriginalName(),
+                'saved_path' => $path,
+                'public_url' => $avatarUrl,
+                'file_size' => $file->getSize(),
+                'saved_file_size' => Storage::disk('public')->size($path)
+            ]);
+            
+            return $avatarUrl;
+            
         } catch (\Exception $e) {
-            \Log::error('Avatar upload failed: ' . $e->getMessage());
-            throw new \Exception('アバター画像のアップロードに失敗しました');
+            \Log::error('❌ handleAvatarUpload エラー:', [
+                'error' => $e->getMessage(),
+                'file_name' => $file->getClientOriginalName(),
+                'file_size' => $file->getSize(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            
+            throw new \Exception('画像のアップロード処理中にエラーが発生しました: ' . $e->getMessage());
         }
     }
 
@@ -210,7 +250,9 @@ class ProfileController extends Controller
             // アバター画像を削除
             if ($user->avatar_url && $user->avatar_url !== '/images/default-avatar.png') {
                 $imagePath = str_replace('/storage/', '', $user->avatar_url);
-                Storage::disk('public')->delete($imagePath);
+                if (Storage::disk('public')->exists($imagePath)) {
+                    Storage::disk('public')->delete($imagePath);
+                }
             }
 
             // ユーザー情報を匿名化して論理削除
@@ -232,5 +274,22 @@ class ProfileController extends Controller
                 'message' => 'アカウントの削除に失敗しました'
             ], 500);
         }
+    }
+
+    // 既存のクラス内に以下のメソッドを追加
+    public function avatar($filename)
+    {
+        $path = storage_path('app/public/avatars/' . $filename);
+        
+        if (!file_exists($path)) {
+            abort(404, 'Image not found');
+        }
+        
+        $mimeType = mime_content_type($path);
+        
+        return Response::file($path, [
+            'Content-Type' => $mimeType,
+            'Cache-Control' => 'public, max-age=3600'
+        ]);
     }
 }

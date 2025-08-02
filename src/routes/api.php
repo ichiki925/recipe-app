@@ -4,6 +4,7 @@
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Response;
 use App\Models\User;
 use App\Models\Recipe;
 use App\Http\Controllers\Api\RecipeController;
@@ -19,6 +20,15 @@ use App\Http\Resources\RecipeResource;
 use App\Http\Controllers\Admin\UserController;
 
 
+Route::get('/avatars/{filename}', function ($filename) {
+    $path = storage_path('app/public/avatars/' . $filename);
+
+    if (!file_exists($path)) {
+        abort(404);
+    }
+
+    return Response::file($path);
+});
 
 // ========================================
 // 🔥 認証関連

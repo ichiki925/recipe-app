@@ -680,7 +680,6 @@ watch(favoriteStore, async (newFavorites, oldFavorites) => {
     color: white;
 }
 
-/* お気に入りページ専用のスタイル */
 .like-button.clickable {
   cursor: pointer;
   transition: transform 0.2s, opacity 0.2s;
@@ -702,7 +701,6 @@ watch(favoriteStore, async (newFavorites, oldFavorites) => {
   transition: opacity 0.3s, transform 0.3s;
 }
 
-/* レスポンシブ対応 */
 @media (max-width: 768px) {
     .recipe-page {
       flex-direction: column;

@@ -5,14 +5,14 @@
     <form @submit.prevent="saveProfile">
       <!-- アイコン -->
       <div class="avatar-section">
-        <img 
-          v-if="user.avatar" 
-          :src="user.avatar" 
-          alt="アイコン" 
+        <img
+          v-if="avatarUrl"
+          :src="avatarUrl"
+          alt="アイコン"
           class="avatar-img"
         >
-        <div 
-          v-else 
+        <div
+          v-else
           class="avatar-icon"
         >
           <i class="fas fa-user material-symbols-outlined"></i>
@@ -47,11 +47,13 @@
           type="text" 
           name="name" 
           v-model="user.name"
+
           :class="{ 'error': nameError }"
           @input="handleNameInput"
           :disabled="isSubmitting"
           maxlength="20"
           required
+          :key="user.id || 'default'"
         >
 
         <!-- 文字数カウンター -->
@@ -83,10 +85,60 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
-import { useHead } from '#app'
+import { useHead, useRuntimeConfig } from '#app'
+import { onAuthStateChanged } from 'firebase/auth'
+
 
 // 認証関連
-const { getCurrentUser, waitForAuth, user: authUser, getIdToken } = useAuth()
+const { user: authUser, isLoggedIn, getIdToken } = useAuth()
+const { $auth } = useNuxtApp()
+const config = useRuntimeConfig()
+
+
+const avatarUrl = computed(() => {
+  if (!user.avatar) return null
+
+  if (user.avatar.startsWith('data:image/')) {
+    return user.avatar
+  }
+  
+  // ✅ サーバーからの画像URL（既存画像）
+  if (user.avatar.startsWith('http://') || user.avatar.startsWith('https://')) {
+    return user.avatar
+  }
+  
+  // ✅ 相対パス（サーバーからの画像）
+  if (user.avatar.startsWith('/storage/')) {
+    const fileName = user.avatar.split('/').pop()
+    return `http://localhost/storage/avatars/${fileName}`
+  }
+  
+  // フォールバック
+  const fileName = user.avatar.includes('/') ? user.avatar.split('/').pop() : user.avatar
+  return `http://localhost/storage/avatars/${fileName}`
+})
+
+
+// デバッグモード（開発環境でのみ有効）
+const debugMode = ref(process.env.NODE_ENV === 'development')
+const tokenStatus = ref('未確認')
+
+// 必要な認証関数を直接定義
+const getCurrentUser = () => $auth.currentUser
+
+const waitForAuth = () => {
+  return new Promise((resolve) => {
+    if ($auth.currentUser) {
+      resolve($auth.currentUser)
+    } else {
+      const unsubscribe = onAuthStateChanged($auth, (user) => {
+        unsubscribe()
+        resolve(user)
+      })
+    }
+  })
+}
+
 
 // Head設定
 useHead({
@@ -131,56 +183,73 @@ const isFormValid = computed(() => {
 // ⭐ ユーザーネームバリデーション関数
 const validateUserName = (name) => {
   const trimmed = name.trim()
-  
+
   if (!trimmed) {
     return 'ユーザーネームを入力してください'
   }
-  
-  if (trimmed.length < 2) {
-    return 'ユーザーネームは2文字以上で入力してください'
-  }
-  
+
   if (trimmed.length > 20) {
     return 'ユーザーネームは20文字以内で入力してください'
   }
-  
+
   // 使用可能文字のチェック（日本語、英数字、一部記号）
-  const allowedPattern = /^[a-zA-Z0-9\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF_\-\s]+$/
+  const allowedPattern = /^[\p{L}\p{N}_\-\s]+$/u
   if (!allowedPattern.test(trimmed)) {
     return '使用できない文字が含まれています'
   }
-  
+
   // 連続するスペースのチェック
   if (/\s{2,}/.test(trimmed)) {
     return '連続するスペースは使用できません'
   }
-  
+
   return null // バリデーション通過
 }
 
 // ⭐ ファイルバリデーション関数
 const validateFile = (file) => {
-  if (!file) return null
+  console.log('🔍 ファイルバリデーション開始:', file.name)
   
+  if (!file) {
+    console.log('❌ ファイルなし')
+    return null
+  }
+
   // ファイルサイズチェック（5MB制限）
   const maxSize = 5 * 1024 * 1024 // 5MB
-  if (file.size > maxSize) {
-    return 'ファイルサイズは5MB以下にしてください'
-  }
+  console.log('📏 サイズチェック:', {
+    'file_size': file.size,
+    'max_size': maxSize,
+    'is_over': file.size > maxSize
+  })
   
+  if (file.size > maxSize) {
+    const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2)
+    console.error('❌ ファイルサイズ超過:', `${fileSizeMB}MB`)
+    return `ファイルサイズは5MB以下にしてください（現在: ${fileSizeMB}MB）`
+  }
+
   // ファイル形式チェック
   const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
+  console.log('🔍 形式チェック:', {
+    'file_type': file.type,
+    'allowed_types': allowedTypes,
+    'is_allowed': allowedTypes.includes(file.type)
+  })
+  
   if (!allowedTypes.includes(file.type)) {
+    console.error('❌ 無効なファイル形式:', file.type)
     return '対応している形式: JPEG, PNG, GIF, WebP'
   }
-  
+
+  console.log('✅ バリデーション通過:', file.name)
   return null // バリデーション通過
 }
 
 // ⭐ リアルタイムユーザーネームバリデーション
 const handleNameInput = () => {
   nameError.value = ''
-  
+
   // リアルタイムバリデーション
   const validationError = validateUserName(user.name)
   if (validationError) {
@@ -190,35 +259,118 @@ const handleNameInput = () => {
 
 // アバター画像の変更処理（バリデーション付き）
 const handleAvatarChange = (event) => {
+  console.log('🖼️ ファイル選択イベント開始')
+
   const file = event.target.files[0]
   fileError.value = ''
+
+  // ✅ ファイル情報の詳細ログ
+  console.log('📁 選択されたファイル詳細:', {
+    'file': file,
+    'name': file?.name,
+    'size': file?.size,
+    'type': file?.type,
+    'lastModified': file?.lastModified
+  })
+
+
+  if (!file) {
+    console.log('⚠️ ファイルが選択されていません')
+    return
+  }
+
+  // ✅ ファイルサイズの詳細チェック
+  const fileSizeKB = (file.size / 1024).toFixed(2)
+  const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2)
   
-  if (!file) return
-  
+  console.log('📊 ファイルサイズ詳細:', {
+    'bytes': file.size,
+    'KB': fileSizeKB,
+    'MB': fileSizeMB,
+    'limit_5MB': 5 * 1024 * 1024,
+    'is_over_limit': file.size > (5 * 1024 * 1024)
+  })
+
+
   // ファイルバリデーション
   const validationError = validateFile(file)
   if (validationError) {
+    console.error('❌ バリデーションエラー:', validationError)
     fileError.value = validationError
     event.target.value = '' // ファイル選択をリセット
     return
   }
-  
+
+  console.log('✅ バリデーション通過')
+
   // プレビュー用にファイルを読み込み
   const reader = new FileReader()
-  reader.onload = (e) => {
-    user.avatar = e.target.result
-  }
-  reader.readAsDataURL(file)
 
-  console.log('選択されたファイル:', file.name, `(${(file.size / 1024).toFixed(1)}KB)`)
+  reader.onload = (e) => {
+    try {
+      console.log('📖 FileReader読み込み成功')
+      user.avatar = e.target.result // プレビュー表示用
+      
+      // ✅ 強制的にリアクティブ更新をトリガー
+      nextTick(() => {
+        console.log('🔄 nextTick後のavatarUrl:', avatarUrl.value)
+      })
+      
+      console.log('✅ プレビュー設定完了:', {
+        'data_url_length': e.target.result?.length,
+        'starts_with': e.target.result?.substring(0, 50)
+      })
+    } catch (error) {
+      console.error('❌ FileReader onload エラー:', error)
+      fileError.value = 'プレビュー表示に失敗しました'
+    }
+  }
+  
+  reader.onerror = (error) => {
+    console.error('❌ FileReader エラー:', error)
+    fileError.value = 'ファイル読み込みに失敗しました'
+  }
+  
+  reader.onabort = () => {
+    console.warn('⚠️ FileReader が中断されました')
+  }
+
+  try {
+    console.log('📖 FileReader.readAsDataURL 開始')
+    reader.readAsDataURL(file)
+  } catch (error) {
+    console.error('❌ FileReader.readAsDataURL エラー:', error)
+    fileError.value = 'ファイル処理に失敗しました'
+  }
+
+  console.log('🎯 handleAvatarChange 完了:', {
+    'file_name': file.name,
+    'file_size_kb': fileSizeKB
+  })
 }
 
+
+
+
 // プロフィール保存処理（バリデーション付き）
+// プロフィール保存処理（FormData改善版）
 const saveProfile = async () => {
+  console.log('🚀 プロフィール保存処理開始')
+  
+  // ✅ 送信前の詳細確認
+  console.log('送信前の詳細確認:', {
+    'user.name': user.name,
+    'user.name.trim()': user.name.trim(),
+    'user.name.length': user.name.length,
+    'isEmpty': user.name.trim() === '',
+    'typeof': typeof user.name
+  })
+
   // 最終バリデーション
   const nameValidationError = validateUserName(user.name)
   if (nameValidationError) {
     nameError.value = nameValidationError
+    console.error('❌ バリデーションエラー:', nameValidationError)
     return
   }
 
@@ -227,59 +379,147 @@ const saveProfile = async () => {
   isLoading.value = true
 
   try {
-    console.log('プロフィール保存:', {
-      name: user.name.trim(),
-      avatar: user.avatar ? '画像あり' : '画像なし'
+    const currentUser = await waitForAuth()
+    if (!currentUser) {
+      alert('認証エラーが発生しました。再度ログインしてください。')
+      await navigateTo('/auth/login')
+      return
+    }
+
+    const token = await getIdToken()
+
+    // ✅ FormData作成（改善版）
+    const formData = new FormData()
+    
+    // 🔧 重要: 名前の確実な追加
+    const trimmedName = user.name.trim()
+    if (trimmedName) {
+      formData.append('name', trimmedName)
+      console.log('✅ 名前をFormDataに追加:', trimmedName)
+    } else {
+      console.error('❌ 名前が空です')
+      nameError.value = 'ユーザーネームを入力してください'
+      return
+    }
+
+    // アバター画像の処理
+    const avatarInput = document.getElementById('avatar-upload')
+    let hasNewAvatar = false
+    
+    if (avatarInput && avatarInput.files && avatarInput.files[0]) {
+      formData.append('avatar', avatarInput.files[0])
+      hasNewAvatar = true
+      console.log('✅ アバター画像をFormDataに追加:', {
+        name: avatarInput.files[0].name,
+        size: (avatarInput.files[0].size / 1024).toFixed(1) + 'KB',
+        type: avatarInput.files[0].type
+      })
+    }
+
+    // ✅ FormDataの内容を確認（デバッグ用）
+    console.log('📦 FormData の内容確認:')
+    for (let pair of formData.entries()) {
+      if (pair[1] instanceof File) {
+        console.log(`  ${pair[0]}: [File] ${pair[1].name} (${(pair[1].size / 1024).toFixed(1)}KB)`)
+      } else {
+        console.log(`  ${pair[0]}: ${pair[1]}`)
+      }
+    }
+
+    // ✅ リクエスト送信前の最終確認
+    console.log('📡 API送信情報:', {
+      url: config.public.apiBaseUrl + '/user/profile',
+      method: 'PUT',
+      hasToken: !!token,
+      tokenPreview: token ? token.substring(0, 30) + '...' : 'なし'
     })
 
-    // FormDataを作成（画像アップロード対応）
-    const formData = new FormData()
-    formData.append('name', user.name.trim())
+    formData.append('_method', 'PUT')
 
-    // アバター画像が選択されている場合
-    const avatarInput = document.getElementById('avatar-upload')
-    if (avatarInput && avatarInput.files[0]) {
-      formData.append('avatar', avatarInput.files[0])
-    }
-    
-    const config = useRuntimeConfig()
-    const token = await getIdToken() // 認証トークン取得
-    
+    // APIリクエスト
     const response = await $fetch('/user/profile', {
       baseURL: config.public.apiBaseUrl,
-      method: 'PUT',
+      method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
-        // Content-Typeはブラウザが自動設定（FormData使用時）
+        'Accept': 'application/json',
       },
-      body: formData
+      body: formData,
+      credentials: 'omit',
     })
-    
+
     console.log('✅ プロフィール更新成功:', response)
-    alert('プロフィールを保存しました！')
-    
-    // レスポンスでユーザー情報を更新
+
+    // レスポンスデータで確実に更新
     if (response.data) {
-      Object.assign(user, response.data)
+      console.log('📦 サーバーからのレスポンスデータ:', {
+        id: response.data.id,
+        name: response.data.name,
+        avatar_url: response.data.avatar_url
+      })
+
+      // 🔧 重要: サーバーから返された値で更新
+      user.name = response.data.name || user.name
+      user.avatar = response.data.avatar_url || user.avatar
+      
+      console.log('✅ ローカルデータ更新完了:', {
+        name: user.name,
+        avatar: user.avatar
+      })
+      
+      // DOM要素も更新
+      await nextTick()
+      const usernameInput = document.getElementById('username')
+      if (usernameInput) {
+        usernameInput.value = user.name
+        console.log('🔧 入力フィールド更新完了:', user.name)
+      }
     }
-    
-    // エラーをクリア
-    nameError.value = ''
-    fileError.value = ''
-    
+
+    // ファイル入力をクリア（新しい画像がアップロードされた場合のみ）
+    if (hasNewAvatar && avatarInput) {
+      avatarInput.value = ''
+      console.log('🔧 ファイル入力をクリア')
+    }
+
+    alert('プロフィールを保存しました！')
+    console.log('📱 レシピ一覧ページへ遷移')
+    await navigateTo('/user')
+
   } catch (error) {
-    console.error('❌ 保存エラー:', error)
-    
-    // APIエラーレスポンスの処理
-    if (error.data && error.data.errors) {
+    console.error('❌ 保存エラー詳細:', {
+      status: error.status,
+      statusText: error.statusText,
+      data: error.data,
+      message: error.message
+    })
+
+    if (error.status === 401) {
+      console.error('❌ 認証エラー: トークンが無効または期限切れ')
+      alert('認証が失効しています。再度ログインしてください。')
+      await navigateTo('/auth/login')
+      return
+    }
+
+    // Laravel側のバリデーションエラーを処理
+    if (error.status === 422 && error.data && error.data.errors) {
+      console.error('❌ バリデーションエラー:', error.data.errors)
+      
       if (error.data.errors.name) {
         nameError.value = error.data.errors.name[0]
+        console.error('名前エラー:', error.data.errors.name[0])
       }
       if (error.data.errors.avatar) {
         fileError.value = error.data.errors.avatar[0]
+        console.error('ファイルエラー:', error.data.errors.avatar[0])
       }
+      
+      // エラーメッセージも表示
+      const errorMessage = error.data.message || 'バリデーションエラーが発生しました'
+      alert(errorMessage)
     } else {
-      alert('保存に失敗しました')
+      const errorMessage = error.data?.message || error.message || '保存に失敗しました'
+      alert(errorMessage)
     }
   } finally {
     isLoading.value = false
@@ -287,43 +527,104 @@ const saveProfile = async () => {
   }
 }
 
+
 // ページ読み込み時にユーザーデータを取得
 onMounted(async () => {
   console.log('🔍 プロフィールページ読み込み')
   
-  // Firebase認証の状態確立を待機
-  const currentUser = await waitForAuth()
-  
-  if (!currentUser) {
-    console.log('⚠️ 認証失敗 - ログインページにリダイレクト')
-    await navigateTo('/auth/login')
-    return
-  }
-  
   try {
-    const config = useRuntimeConfig()
+    const currentUser = await waitForAuth()
+
+    if (!currentUser) {
+      console.log('⚠️ 認証失敗 - ログインページにリダイレクト')
+      await navigateTo('/auth/login')
+      return
+    }
+
+    console.log('✅ 認証確認完了:', currentUser.uid)
+
     const token = await getIdToken()
+    tokenStatus.value = token ? 'トークンあり' : 'トークンなし'
     
+    console.log('🔑 取得したトークン（最初の50文字）:', token ? token.substring(0, 50) + '...' : 'なし')
+    console.log('🌐 API URL:', config.public.apiBaseUrl)
+    console.log('📡 APIリクエスト送信中...')
+
     const response = await $fetch('/user/profile', {
       baseURL: config.public.apiBaseUrl,
       headers: {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json'
+      },
+      onRequestError({ request, options, error }) {
+        console.error('❌ プロフィール取得リクエストエラー:', error)
+        console.error('❌ リクエスト URL:', request)
+        console.error('❌ リクエスト Headers:', options.headers)
+      },
+      onResponseError({ request, response, options }) {
+        console.error('❌ プロフィール取得レスポンスエラー:', {
+          url: request,
+          status: response.status,
+          statusText: response.statusText,
+          body: response._data,
+          headers: response.headers
+        })
       }
     })
     
-    console.log('📦 プロフィールデータ取得:', response)
+    console.log('📦 APIレスポンス:', response)
 
-    // ユーザーデータを更新
     if (response.data) {
-      Object.assign(user, response.data)
+      user.id = response.data.id
+      user.name = response.data.name || ''
+
+      // ✅ 重要：アバター画像の設定をデバッグ強化
+      console.log('🔍 アバター情報詳細:', {
+        'response.data.avatar_url': response.data.avatar_url,
+        'typeof avatar_url': typeof response.data.avatar_url,
+        'avatar_url length': response.data.avatar_url?.length
+      })
+
+      if (response.data.avatar_url) {
+        user.avatar = response.data.avatar_url
+        console.log('✅ アバター設定完了:', user.avatar)
+        
+        // 即座にcomputed値も確認
+        await nextTick()
+        console.log('✅ computed avatarUrl:', avatarUrl.value)
+
+        // 画像URLの直接テスト
+        const testUrl = avatarUrl.value
+        console.log('🧪 画像URL直接テスト:', testUrl)
+
+      } else {
+        user.avatar = null
+        console.log('ℹ️ アバターなし - デフォルトアイコン使用')
+      }
     }
-    
   } catch (error) {
     console.error('❌ プロフィール取得エラー:', error)
-    // エラー時はデフォルト値のまま
+    console.error('❌ エラーの詳細:', {
+      status: error.status,
+      statusText: error.statusText,
+      data: error.data,
+      message: error.message
+    })
+    
+    if (error.status === 401) {
+      console.error('❌ 認証エラー: ログインが必要です')
+      alert(`認証エラーが発生しました。詳細: ${JSON.stringify(error.data)}`)
+      await navigateTo('/auth/login')
+      return
+    }
+    
+    // ✅ エラー時もデフォルト値を設定
+    user.name = ''
+    user.avatar = null
   }
 })
+
+
 </script>
 
 <style scoped>
@@ -331,7 +632,7 @@ onMounted(async () => {
 
 .profile-container {
     width: 400px;
-    margin: 50px auto;
+    margin: 130px auto 50px;
     background: #fff;
     padding: 30px;
     border-radius: 12px;

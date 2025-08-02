@@ -109,6 +109,40 @@ class User extends Authenticatable
         return $this->avatar_url ?: '/images/default-avatar.png';
     }
 
+    /**
+     * 🔧 アバター画像URLアクセサー（重要）
+     * これにより avatar_url フィールドが正しく処理されます
+     */
+    public function getAvatarUrlAttribute($value)
+    {
+        if (!$value) {
+            return null;
+        }
+
+        // すでに完全なURLの場合
+        if (str_starts_with($value, 'http')) {
+            return $value;
+        }
+
+        // /storage/ で始まる場合はそのまま
+        if (str_starts_with($value, '/storage/')) {
+            return $value;
+        }
+
+        // それ以外は /storage/ を付ける
+        return '/storage/' . $value;
+    }
+
+    /**
+     * 🔧 特定のレシピにいいねしているかチェック
+     */
+    public function hasLikedRecipe($recipeId): bool
+    {
+        return $this->recipeLikes()->where('recipe_id', $recipeId)->exists();
+    }
+
+
+
     // ==================== Scopes ====================
 
     /**
