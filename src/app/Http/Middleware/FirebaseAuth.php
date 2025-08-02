@@ -8,6 +8,7 @@ use Kreait\Firebase\Factory;
 use Kreait\Firebase\Auth;
 use App\Models\User;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Auth as LaravelAuth;
 
 class FirebaseAuth
 {
@@ -32,7 +33,7 @@ class FirebaseAuth
             ]);
 
             if (config('app.env') === 'local' || config('app.debug')) {
-                Log::info('🧪 Development environment detected - skipping Firebase init');
+                Log::info('🧪 Development environment detected - using mock Firebase auth');
                 $this->auth = null;
                 return;
             }
@@ -91,36 +92,59 @@ class FirebaseAuth
             'token_preview' => substr($idToken, 0, 20) . '...'
         ]);
 
-        // 開発環境での暫定対応
+        // 🔧 開発環境でもFirebase IDトークンをデコードしてUIDを取得
         if (config('app.env') === 'local' || config('app.debug') || is_null($this->auth)) {
-            Log::info('🧪 Using development mode authentication');
+            Log::info('🧪 Using development mode authentication with real Firebase UID');
             
             try {
-                $testUser = User::firstOrCreate(
-                    ['firebase_uid' => 'test_user_uid_004'],
-                    [
-                        'name' => 'テストユーザー',
-                        'email' => 'test@example.com',
-                        'role' => 'user',
-                        'email_verified_at' => now(),
-                    ]
-                );
+                // Firebase IDトークンをデコード（検証なし）
+                $tokenParts = explode('.', $idToken);
+                if (count($tokenParts) !== 3) {
+                    throw new \Exception('Invalid token format');
+                }
 
-                $request->setUserResolver(function () use ($testUser) {
-                    return $testUser;
-                });
+                $payload = json_decode(base64_decode($tokenParts[1]), true);
+                if (!$payload || !isset($payload['sub'])) {
+                    throw new \Exception('Invalid token payload');
+                }
 
-                Log::info('✅ Development user authenticated', [
-                    'user_id' => $testUser->id,
-                    'role' => $testUser->role,
-                    'name' => $testUser->name
+                $firebaseUid = $payload['sub'];
+                $email = $payload['email'] ?? null;
+
+                Log::info('🔍 Decoded Firebase token', [
+                    'firebase_uid' => $firebaseUid,
+                    'email' => $email
                 ]);
 
-                // 認証成功ログを追加
-                Log::info('User access granted', [
-                    'user_id' => $testUser->id,
-                    'firebase_uid' => $testUser->firebase_uid,
-                    'role' => $testUser->role
+                // 実際のFirebase UIDでユーザーを検索
+                $user = User::where('firebase_uid', $firebaseUid)->first();
+
+                if (!$user) {
+                    Log::error('❌ User not found with Firebase UID', [
+                        'firebase_uid' => $firebaseUid,
+                        'email' => $email
+                    ]);
+                    return response()->json([
+                        'success' => false,
+                        'error' => 'User not found'
+                    ], 404);
+                }
+
+                $request->setUserResolver(function () use ($user) {
+                    return $user;
+                });
+
+                // Laravel の標準認証システムにユーザーを設定
+                LaravelAuth::setUser($user);
+
+                Log::info('✅ Development user authenticated', [
+                    'user_id' => $user->id,
+                    'role' => $user->role,
+                    'name' => $user->name,
+                    'email' => $user->email,
+                    'firebase_uid' => $user->firebase_uid,
+                    'auth_check' => auth()->check(),
+                    'auth_user_id' => auth()->id()
                 ]);
 
                 return $next($request);
@@ -131,12 +155,12 @@ class FirebaseAuth
                 ]);
                 return response()->json([
                     'success' => false,
-                    'error' => 'Development authentication failed'
-                ], 500);
+                    'error' => 'Development authentication failed: ' . $e->getMessage()
+                ], 401);
             }
         }
 
-        // 本格的な Firebase 認証
+        // 本格的な Firebase 認証（本番環境用）
         try {
             if (!$this->auth) {
                 throw new \Exception('Firebase auth not initialized');
@@ -169,9 +193,14 @@ class FirebaseAuth
                 return $user;
             });
 
+            // Laravel の標準認証システムにユーザーを設定
+            LaravelAuth::setUser($user);
+
             Log::info('✅ Firebase user authenticated successfully', [
                 'user_id' => $user->id,
-                'role' => $user->role
+                'role' => $user->role,
+                'auth_check' => auth()->check(),
+                'auth_user_id' => auth()->id()
             ]);
 
         } catch (\Exception $e) {

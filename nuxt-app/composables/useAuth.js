@@ -3,7 +3,8 @@ import {
     createUserWithEmailAndPassword,
     signInWithEmailAndPassword,
     signOut,
-    onAuthStateChanged
+    onAuthStateChanged,
+    getIdToken
 } from 'firebase/auth'
 
 export const useAuth = () => {
@@ -12,8 +13,42 @@ export const useAuth = () => {
     const user = useState('auth.user', () => null)
     const loading = useState('auth.loading', () => false)
 
-    // Docker環境のAPIベースURL（ブラウザからのアクセス）
-    const API_BASE_URL = 'http://localhost/api'
+    // 設定からAPIベースURLを取得
+    const API_BASE_URL = config.public.apiBaseUrl
+
+    /**
+     * 現在のユーザーを取得
+     */
+    const getCurrentUser = () => {
+        return $auth.currentUser
+    }
+
+    /**
+     * 認証状態の確立を待機
+     */
+    const waitForAuth = () => {
+        return new Promise((resolve) => {
+            if ($auth.currentUser) {
+                resolve($auth.currentUser)
+            } else {
+                const unsubscribe = onAuthStateChanged($auth, (firebaseUser) => {
+                    unsubscribe()
+                    resolve(firebaseUser)
+                })
+            }
+        })
+    }
+
+    /**
+     * Firebase IDトークンを取得
+     */
+    const getFirebaseIdToken = async () => {
+        const currentUser = $auth.currentUser
+        if (!currentUser) {
+            throw new Error('User not authenticated')
+        }
+        return await getIdToken(currentUser)
+    }
 
     /**
      * 一般ユーザー登録
@@ -293,6 +328,9 @@ export const useAuth = () => {
         loading: readonly(loading),
         isAdmin,
         isLoggedIn,
+        getCurrentUser,
+        waitForAuth,
+        getIdToken: getFirebaseIdToken,
         register,
         registerAdmin,
         login,

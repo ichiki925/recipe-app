@@ -37,10 +37,9 @@ export default defineNuxtConfig({
   // API設定（Laravel連携用とFirebase設定を統合）
   runtimeConfig: {
     public: {
-      // ★ 修正: Docker環境用のAPI URL
+      
       apiBaseUrl: process.env.API_BASE_URL || 'http://localhost/api',
-
-      // 🔧 追加：今回必要な設定（1行追加）
+      
       apiBase: process.env.NUXT_PUBLIC_API_BASE || 'http://localhost',
 
       // Firebase設定
