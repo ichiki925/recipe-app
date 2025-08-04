@@ -83,7 +83,14 @@ class CommentController extends Controller
             \Log::info('Comment created successfully', ['comment_id' => $comment->id]);
 
             // 🔧 userリレーションを事前にロード（Resourceで使うため）
-            $comment->load('user');
+            $comment->load(['user:id,name,username,avatar_url']);
+
+            \Log::info('Comment with user loaded', [
+                'comment_id' => $comment->id,
+                'user_name' => $comment->user->name,
+                'user_avatar_url' => $comment->user->avatar_url
+            ]);
+
 
             // ✅ Resourceで整形して返却
             return response()->json([
@@ -136,7 +143,7 @@ class CommentController extends Controller
         $user = auth()->user();
 
         $comments = $user->recipeComments()
-                        ->with(['recipe:id,title,image_url'])
+                        ->with(['recipe:id,title,image_url', 'user:id,name,username,avatar_url'])
                         ->latest()
                         ->paginate(20);
 

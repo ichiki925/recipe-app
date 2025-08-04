@@ -275,9 +275,9 @@ const displayedComments = computed(() => {
     if (!recipe.value?.comments) return []
 
     if (showAllComments.value) {
-        return [...recipe.value.comments].reverse()
+        return [...recipe.value.comments]
         } else {
-        return [...recipe.value.comments].reverse().slice(0, 3)
+        return [...recipe.value.comments].slice(0, 3)
     }
 })
 
@@ -779,6 +779,7 @@ const deleteRecipe = async () => {
     .comment-body {
         flex: 1;
         font-size: 12px;
+        font-family: sans-serif;
         line-height: 1.4;
         word-wrap: break-word;
     }

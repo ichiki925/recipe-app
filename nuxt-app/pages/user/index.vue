@@ -715,7 +715,7 @@ const debugAuth = async () => {
   transform: translateY(-5px);
   padding: 8px 12px;
   position: relative;
-  z-index: 10; /* レシピカードより上に表示 */
+  z-index: 10;
 }
 
 .recipe-card {
@@ -735,7 +735,7 @@ const debugAuth = async () => {
 
 .heart-icon-filled,
 .heart-icon-outline {
-  
+
   cursor: pointer;
   font-size: 16px;
 }
@@ -753,10 +753,6 @@ const debugAuth = async () => {
 .like-button:hover .heart-icon-outline {
   color: #dc3545;
 }
-
-/* .heart-icon-outline:hover {
-  color: #dc3545;
-} */
 
 .like-count {
   font-size: 12px;

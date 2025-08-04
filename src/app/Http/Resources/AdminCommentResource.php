@@ -14,23 +14,23 @@ class AdminCommentResource extends JsonResource
             'content_preview' => mb_substr($this->content, 0, 50) . (mb_strlen($this->content) > 50 ? '...' : ''),
             'content_length' => mb_strlen($this->content),
 
-            // ユーザー情報
+            // ユーザー情報（安全に取得）
             'user' => [
-                'id' => $this->user->id ?? null,
-                'name' => $this->user->name ?? '削除されたユーザー',
-                'email' => $this->user->email ?? null,
-                'avatar_url' => $this->user->avatar_url ?? null,
+                'id' => optional($this->user)->id,
+                'name' => optional($this->user)->name ?? '削除されたユーザー',
+                'email' => optional($this->user)->email,
+                'avatar_url' => optional($this->user)->avatar_url,
                 'is_active' => $this->user ? true : false,
             ],
 
-            // レシピ情報
+            // レシピ情報（安全に取得）
             'recipe' => [
-                'id' => $this->recipe->id ?? null,
-                'title' => $this->recipe->title ?? '削除されたレシピ',
-                'genre' => $this->recipe->genre ?? null,
-                'image_url' => $this->recipe->image_url ?? null,
-                'is_published' => $this->recipe->is_published ?? false,
-                'is_deleted' => $this->recipe ? $this->recipe->trashed() : true,
+                'id' => optional($this->recipe)->id,
+                'title' => optional($this->recipe)->title ?? '削除されたレシピ',
+                'genre' => optional($this->recipe)->genre,
+                'image_url' => optional($this->recipe)->image_url,
+                'is_published' => optional($this->recipe)->is_published ?? false,
+                'is_deleted' => $this->recipe ? (method_exists($this->recipe, 'trashed') ? $this->recipe->trashed() : false) : true,
             ],
 
             // ステータス情報
@@ -42,21 +42,23 @@ class AdminCommentResource extends JsonResource
             ],
 
             // 日時情報
-            'created_at' => $this->created_at->format('Y-m-d H:i:s'),
-            'updated_at' => $this->updated_at->format('Y-m-d H:i:s'),
-            'created_at_human' => $this->created_at->diffForHumans(),
-            'updated_at_human' => $this->updated_at->diffForHumans(),
-            'created_at_formatted' => $this->created_at->format('Y年m月d日 H:i'),
-            'created_date' => $this->created_at->format('Y-m-d'),
-            'created_time' => $this->created_at->format('H:i'),
+            'created_at' => optional($this->created_at)->format('Y-m-d H:i:s'),
+            'updated_at' => optional($this->updated_at)->format('Y-m-d H:i:s'),
+            'created_at_human' => optional($this->created_at)->diffForHumans(),
+            'updated_at_human' => optional($this->updated_at)->diffForHumans(),
+            'created_at_formatted' => optional($this->created_at)->format('Y年m月d日 H:i'),
+            'created_date' => optional($this->created_at)->format('Y-m-d'),
+            'created_time' => optional($this->created_at)->format('H:i'),
 
-            // 管理者向け情報
+            // 管理者向け情報（安全に取得）
             'admin_info' => [
                 'can_delete' => true,
-                'user_total_comments' => $this->user ? $this->user->comments()->count() : 0,
-                'user_registration_date' => $this->user ? $this->user->created_at->format('Y-m-d') : null,
+                'user_total_comments' => $this->user ? $this->user->recipeComments()->count() : 0,
+                'user_registration_date' => 
+                    ($this->user && $this->user->created_at)
+                        ? $this->user->created_at->format('Y-m-d')
+                        : null,
             ],
-
 
             // 文字数・内容分析
             'analysis' => [
@@ -93,7 +95,6 @@ class AdminCommentResource extends JsonResource
         return false;
     }
 
-
     /**
      * レビューが必要かチェック
      */
@@ -103,7 +104,6 @@ class AdminCommentResource extends JsonResource
                 $this->containsUrls() ||
                 mb_strlen($this->content) > 500;
     }
-
 
     /**
      * URLが含まれているかチェック

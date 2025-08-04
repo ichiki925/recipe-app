@@ -30,22 +30,21 @@ class CommentController extends Controller
         try {
             $query = RecipeComment::with(['user:id,name,username,email', 'recipe:id,title']);
 
-            // キーワード検索（コメント内容、ユーザー名、レシピ名）
+            // 各種フィルター（省略せず残す）
             if ($request->has('keyword') && !empty($request->keyword)) {
                 $keyword = $request->keyword;
                 $query->where(function($q) use ($keyword) {
                     $q->where('content', 'LIKE', "%{$keyword}%")
-                        ->orWhereHas('user', function($userQuery) use ($keyword) {
-                            $userQuery->where('name', 'LIKE', "%{$keyword}%")
-                                    ->orWhere('username', 'LIKE', "%{$keyword}%");
-                        })
-                        ->orWhereHas('recipe', function($recipeQuery) use ($keyword) {
-                            $recipeQuery->where('title', 'LIKE', "%{$keyword}%");
-                        });
+                    ->orWhereHas('user', function($q) use ($keyword) {
+                        $q->where('name', 'LIKE', "%{$keyword}%")
+                            ->orWhere('username', 'LIKE', "%{$keyword}%");
+                    })
+                    ->orWhereHas('recipe', function($q) use ($keyword) {
+                        $q->where('title', 'LIKE', "%{$keyword}%");
+                    });
                 });
             }
 
-            // 期間フィルター
             if ($request->has('date_from') && !empty($request->date_from)) {
                 $query->whereDate('created_at', '>=', $request->date_from);
             }
@@ -53,51 +52,40 @@ class CommentController extends Controller
                 $query->whereDate('created_at', '<=', $request->date_to);
             }
 
-            // ユーザーフィルター
             if ($request->has('user_id') && !empty($request->user_id)) {
                 $query->where('user_id', $request->user_id);
             }
-
-            // レシピフィルター
             if ($request->has('recipe_id') && !empty($request->recipe_id)) {
                 $query->where('recipe_id', $request->recipe_id);
             }
 
-            // ソート（デフォルトは最新順）
+            // ソート
             $sortBy = $request->get('sort', 'latest');
             switch ($sortBy) {
                 case 'oldest':
                     $query->oldest();
                     break;
-                case 'user_name':
-                    $query->join('users', 'recipe_comments.user_id', '=', 'users.id')
-                        ->orderBy('users.name');
-                    break;
-                case 'recipe_title':
-                    $query->join('recipes', 'recipe_comments.recipe_id', '=', 'recipes.id')
-                        ->orderBy('recipes.title');
-                    break;
-                case 'latest':
                 default:
                     $query->latest();
-                    break;
             }
 
             // ページネーション
-            $perPage = $request->get('per_page', 10);
-            $perPage = min(max($perPage, 5), 100);
-
+            $perPage = min(max((int)$request->get('per_page', 10), 5), 100);
             $comments = $query->paginate($perPage);
 
+            // Resourceで返却
             return AdminCommentResource::collection($comments);
 
         } catch (\Exception $e) {
-            \Log::error('Admin comment list fetch failed: ' . $e->getMessage());
+            \Log::error('コメント一覧取得失敗: ' . $e->getMessage());
             return response()->json([
-                'message' => 'コメント一覧の取得に失敗しました'
+                'message' => 'コメント一覧の取得に失敗しました',
+                'error' => $e->getMessage()
             ], 500);
         }
     }
+
+
 
     /**
      * コメント詳細取得（管理者用）
@@ -139,6 +127,7 @@ class CommentController extends Controller
         }
 
         try {
+
             // 削除前に情報を記録（ログ用）
             $deletedCommentInfo = [
                 'comment_id' => $comment->id,
@@ -164,7 +153,8 @@ class CommentController extends Controller
         } catch (\Exception $e) {
             \Log::error('Comment deletion failed: ' . $e->getMessage());
             return response()->json([
-                'message' => 'コメントの削除に失敗しました'
+                'message' => 'コメントの削除に失敗しました',
+                'error' => $e->getMessage()
             ], 500);
         }
     }

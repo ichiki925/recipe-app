@@ -516,7 +516,7 @@ watch(() => route.query, (newQuery) => {
 }
 
 .pagination-number.active {
-    background-color: #ff770053;
+    background-color: #ffb300c7;
     color: white;
 }
 

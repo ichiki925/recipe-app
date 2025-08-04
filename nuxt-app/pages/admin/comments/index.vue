@@ -87,6 +87,10 @@ import { useRoute, useRouter } from '#app'
 // データ定義
 const comments = ref([])
 const loading = ref(false)
+const apiStatus = ref('未実行')
+const debugInfo = ref(null)
+const rawApiResponse = ref(null)
+
 
 // ページネーション関連
 const currentPage = ref(1)
@@ -105,31 +109,6 @@ const router = useRouter()
 // 認証
 const { getIdToken } = useAuth()
 
-// 全コメントデータ（モック - 22件）
-const allCommentsData = [
-  { id: 1, user: { name: 'テストユーザーA' }, recipe: { title: 'チキンカレー' }, content: 'めっちゃ美味しかったです！', created_at: '2025-01-10' },
-  { id: 2, user: { name: 'ユーザーB' }, recipe: { title: 'パスタボロネーゼ' }, content: '今度作ってみます〜', created_at: '2025-01-11' },
-  { id: 3, user: { name: 'CookingLover2024' }, recipe: { title: 'ハンバーグ' }, content: 'プロ級の仕上がりになりました！', created_at: '2025-01-12' },
-  { id: 4, user: { name: 'グルメ太郎' }, recipe: { title: '親子丼' }, content: '簡単で美味しい！', created_at: '2025-01-13' },
-  { id: 5, user: { name: 'ママの料理' }, recipe: { title: 'グラタン' }, content: '子供たちがおかわりしてくれました♪', created_at: '2025-01-14' },
-  { id: 6, user: { name: 'VeryLongUserName' }, recipe: { title: '麻婆豆腐' }, content: '材料も揃えやすくて助かります！', created_at: '2025-01-15' },
-  { id: 7, user: { name: 'レシピマスター' }, recipe: { title: 'オムライス' }, content: '包むコツを教えてください', created_at: '2025-01-16' },
-  { id: 8, user: { name: '料理初心者' }, recipe: { title: 'チャーハン' }, content: '初めて作りました！', created_at: '2025-01-17' },
-  { id: 9, user: { name: 'ベジタリアン' }, recipe: { title: '野菜炒め' }, content: 'ヘルシーで最高です', created_at: '2025-01-18' },
-  { id: 10, user: { name: 'スパイス好き' }, recipe: { title: 'カレー' }, content: 'スパイスの配合が絶妙', created_at: '2025-01-19' },
-  { id: 11, user: { name: '主婦A' }, recipe: { title: '肉じゃが' }, content: '家族に大好評でした', created_at: '2025-01-20' },
-  { id: 12, user: { name: '大学生' }, recipe: { title: 'ラーメン' }, content: '一人暮らしに最適！', created_at: '2025-01-21' },
-  { id: 13, user: { name: 'シェフ志望' }, recipe: { title: 'パスタ' }, content: 'プロの技術が学べました', created_at: '2025-01-22' },
-  { id: 14, user: { name: '健康志向' }, recipe: { title: 'サラダ' }, content: 'ダイエットにも良さそう', created_at: '2025-01-23' },
-  { id: 15, user: { name: 'お菓子作り' }, recipe: { title: 'ケーキ' }, content: 'デコレーションも可愛い', created_at: '2025-01-24' },
-  { id: 16, user: { name: 'パン好き' }, recipe: { title: 'フランスパン' }, content: '外はカリッと中はもちもち', created_at: '2025-01-25' },
-  { id: 17, user: { name: '魚料理愛好家' }, recipe: { title: '煮魚' }, content: '臭みが全くない！', created_at: '2025-01-26' },
-  { id: 18, user: { name: '時短料理' }, recipe: { title: '丼もの' }, content: '忙しい日に助かります', created_at: '2025-01-27' },
-  { id: 19, user: { name: '子育てママ' }, recipe: { title: '幼児食' }, content: '子供が喜んで食べました', created_at: '2025-01-28' },
-  { id: 20, user: { name: '節約生活' }, recipe: { title: 'もやし炒め' }, content: '安くて美味しい！', created_at: '2025-01-29' },
-  { id: 21, user: { name: '料理研究家' }, recipe: { title: '創作料理' }, content: 'アイデアが素晴らしい', created_at: '2025-01-30' },
-  { id: 22, user: { name: 'グルメ評論家' }, recipe: { title: '高級料理' }, content: 'レストラン級の味', created_at: '2025-01-31' }
-]
 
 // 初期データ読み込み
 onMounted(async () => {
@@ -141,70 +120,64 @@ onMounted(async () => {
 })
 
 // コメント一覧取得
+// コメント一覧取得
 const loadComments = async () => {
   loading.value = true
+  apiStatus.value = '実行中...'
+
   try {
-    //  Option 1: API使用（本番環境）
-    try {
-      const token = await getIdToken()
-      const config = useRuntimeConfig()
+    const token = await getIdToken()
+    const config = useRuntimeConfig()
 
-      const response = await $fetch('/admin/comments', {
-        baseURL: config.public.apiBaseUrl,
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        query: {
-          page: currentPage.value,
-          per_page: perPage,
-          keyword: searchFilters.value.keyword
-        }
-      })
-
-      // APIデータを使用
-      comments.value = response.data
-      totalPages.value = response.last_page
-      currentPage.value = response.current_page
-
-      console.log(`✅ API経由でコメント一覧を読み込みました: ${comments.value.length}件`)
-
-    } catch (apiError) {
-      console.warn('⚠️ API接続失敗、モックデータを使用します:', apiError)
-
-      //  Option 2: モックデータ使用（開発・デバッグ環境）
-      let filteredData = allCommentsData
-
-      // 検索フィルタリング
-      if (searchFilters.value.keyword) {
-        const keyword = searchFilters.value.keyword.toLowerCase()
-        filteredData = allCommentsData.filter(comment => 
-          comment.user.name.toLowerCase().includes(keyword) ||
-          comment.recipe.title.toLowerCase().includes(keyword) ||
-          comment.content.toLowerCase().includes(keyword)
-        )
+    const response = await $fetch('/admin/comments', {
+      baseURL: config.public.apiBaseUrl,
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      query: {
+        page: currentPage.value,
+        per_page: perPage,
+        keyword: searchFilters.value.keyword
       }
+    })
 
-      // ページネーション計算
-      totalPages.value = Math.ceil(filteredData.length / perPage)
+    // Resource形式に対応（meta情報あり）
+    comments.value = response.data
+    totalPages.value = response.meta?.last_page || 1
+    currentPage.value = response.meta?.current_page || 1
+    apiStatus.value = `成功 (${comments.value.length}件)`
 
-      // 現在ページのデータを取得
-      const start = (currentPage.value - 1) * perPage
-      const end = start + perPage
-      comments.value = filteredData.slice(start, end)
+    console.log('✅ コメント一覧取得:', comments.value)
 
-      console.log(`📋 モックデータでコメント一覧を読み込みました: ${comments.value.length}件`)
-    }
-
-  } catch (error) {
-    console.error('❌ コメント取得エラー:', error)
-    // エラー時は空配列
+  } catch (apiError) {
+    console.error('❌ API接続失敗:', apiError)
+    apiStatus.value = `エラー: ${apiError.message}`
     comments.value = []
     totalPages.value = 1
+    currentPage.value = 1
   } finally {
     loading.value = false
   }
 }
+
+
+// 🔧 安全にユーザー名を取得
+const getUserName = (comment) => {
+  if (comment.user && comment.user.name) {
+    return comment.user.name
+  }
+  return '削除されたユーザー'
+}
+
+// 🔧 安全にレシピタイトルを取得
+const getRecipeTitle = (comment) => {
+  if (comment.recipe && comment.recipe.title) {
+    return comment.recipe.title
+  }
+  return '削除されたレシピ'
+}
+
 // 検索実行
 const searchComments = async () => {
   currentPage.value = 1 // 検索時は1ページ目に戻る
@@ -260,34 +233,24 @@ const deleteComment = async (id) => {
   if (!confirm('本当に削除しますか？')) return
 
   try {
-    // 🔥 API使用を試行
-    try {
-      const token = await getIdToken()
-      const config = useRuntimeConfig()
+    const token = await getIdToken()
+    const config = useRuntimeConfig()
 
-      await $fetch(`/admin/comments/${id}`, {
-        baseURL: config.public.apiBaseUrl,
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      })
-
-      console.log(`✅ API経由でコメント${id}を削除しました`)
-
-    } catch (apiError) {
-      console.warn('⚠️ API削除失敗、モックデータから削除します:', apiError)
-
-      // モックデータから削除
-      const index = allCommentsData.findIndex(comment => comment.id === id)
-      if (index !== -1) {
-        allCommentsData.splice(index, 1)
+    await $fetch(`/admin/comments/${id}`, {
+      baseURL: config.public.apiBaseUrl,
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
       }
-    }
+    })
 
-    // どちらの場合も一覧を再読み込み
+    console.log(`✅ API経由でコメント${id}を削除しました`)
+
+    // ✅ 削除後、一覧を再読み込み
     await loadComments()
+    
+    // ページに表示するコメントがない場合、前のページに戻る
     if (comments.value.length === 0 && currentPage.value > 1) {
       currentPage.value = currentPage.value - 1
       updateUrl()
@@ -300,7 +263,6 @@ const deleteComment = async (id) => {
   }
 }
 </script>
-
 <style scoped>
 body {
     background-color: #fff;

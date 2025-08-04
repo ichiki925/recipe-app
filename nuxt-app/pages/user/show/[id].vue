@@ -21,16 +21,16 @@
             :key="comment.id"
             class="comment-item"
           >
-            <i
-              v-if="!comment.user.avatar_path"
-              class="fas fa-user comment-avatar-icon"
-            ></i>
             <img
-              v-else
-              :src="comment.user.avatar_path"
+              v-if="getAvatarUrl(comment.user)"
+              :src="getAvatarUrl(comment.user)"
               class="comment-avatar"
               alt="avatar"
             >
+            <i
+              v-else
+              class="fas fa-user comment-avatar-icon"
+            ></i>
             <span class="username" :title="comment.user.name">{{ truncateUsername(comment.user.name) }}</span>
             <span class="comment-body">{{ comment.body }}</span>
           </li>
@@ -155,15 +155,45 @@ const recipeId = parseInt(route.params.id)
 const newComment = ref('')
 const commentTextarea = ref(null)
 const showAllComments = ref(false)
-
-// ⭐ バリデーション関連のリアクティブ変数を追加
 const commentError = ref('')
 const isSubmitting = ref(false)
-
-// 🔧 レシピデータを追加
 const recipe = ref({})
 
-// 🔧 デバッグ用のwatchを追加
+// ✅ アバターURL取得関数を追加
+const getAvatarUrl = (user) => {
+  console.log('🔍 getAvatarUrl 実行:', {
+    user: user,
+    avatar_path: user?.avatar_path
+  })
+  
+  if (!user || !user.avatar_path) {
+    console.log('❌ アバターパスなし')
+    return null
+  }
+  
+  // フルURLの場合
+  if (user.avatar_path.startsWith('http://') || user.avatar_path.startsWith('https://')) {
+    console.log('✅ フルURL使用:', user.avatar_path)
+    return user.avatar_path
+  }
+  
+  // 相対パス（/storage/で始まる）の場合
+  if (user.avatar_path.startsWith('/storage/')) {
+    const fullUrl = `http://localhost${user.avatar_path}`
+    console.log('✅ 相対パス→フルURL:', fullUrl)
+    return fullUrl
+  }
+  
+  // ファイル名のみの場合
+  const fileName = user.avatar_path.includes('/') 
+    ? user.avatar_path.split('/').pop() 
+    : user.avatar_path
+  
+  const fallbackUrl = `http://localhost/storage/avatars/${fileName}`
+  console.log('⚠️ フォールバックURL使用:', fallbackUrl)
+  return fallbackUrl
+}
+
 // デバッグ用：レシピデータの変更を監視
 watch(recipe, (newRecipe) => {
   console.log('🔄 レシピデータが更新されました:', {
@@ -422,13 +452,16 @@ const recipeDatabase = {
 const favoriteStore = useState('favorites', () => new Set())
 
 // コメントデータ（グローバルストアで管理して永続化）
-const commentsStore = useState('comments', () => new Map())
+// const commentsStore = useState('comments', () => new Map())
 
 // 現在のレシピのコメント
-const comments = computed(() => {
-  const recipeComments = commentsStore.value.get(recipeId) || []
-  return recipeComments
-})
+// const comments = computed(() => {
+//   const recipeComments = commentsStore.value.get(recipeId) || []
+//   return recipeComments
+// })
+
+const comments = ref([])
+const commentsLoading = ref(false)
 
 // 表示するコメントを制御
 const displayedComments = computed(() => {
@@ -459,6 +492,7 @@ const truncateUsername = (username) => {
   if (!username) return 'ユーザー'
   return username.length > 10 ? username.substring(0, 10) + '...' : username
 }
+
 
 // ⭐ バリデーション関数を追加
 const validateComment = (comment) => {
@@ -580,9 +614,50 @@ const toggleLike = async () => {
   }
 }
 
+// ✅ APIからコメント一覧を取得
+const fetchComments = async () => {
+  commentsLoading.value = true
+  try {
+    console.log('💬 コメント一覧を取得中...')
+    
+    const config = useRuntimeConfig()
+    const { $auth } = useNuxtApp()
+    const token = await $auth.currentUser.getIdToken()
+    
+    const response = await $fetch(`${config.public.apiBase}/api/recipes/${recipeId}/comments`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    })
 
+    console.log('💬 コメント取得応答:', response)
 
+    // APIレスポンスからコメントデータを変換
+    const apiComments = response.data || []
+    console.log('💬 取得したコメント数:', apiComments.length)
 
+    const convertedComments = apiComments.map(comment => ({
+      id: comment.id,
+      user: {
+        name: comment.user?.name || 'ユーザー',
+        avatar_path: comment.user?.avatar_url || null
+      },
+      body: comment.content, // APIでは'content'、フロントでは'body'
+      createdAt: comment.created_at
+    }))
+
+    comments.value = convertedComments
+    console.log('✅ コメント一覧読み込み完了:', convertedComments.length, '件')
+
+  } catch (error) {
+    console.error('❌ コメント取得エラー:', error)
+    comments.value = []
+  } finally {
+    commentsLoading.value = false
+  }
+}
 
 // ⭐ コメント送信関数（API対応版）
 const submitComment = async () => {
@@ -591,21 +666,18 @@ const submitComment = async () => {
     return
   }
 
-  // バリデーション実行
   const validationError = validateComment(newComment.value)
   if (validationError) {
     commentError.value = validationError
     return
   }
 
-  // 送信中の重複防止
   if (isSubmitting.value) return
   isSubmitting.value = true
 
   try {
     console.log('💬 コメント投稿開始:', newComment.value.trim())
     
-    // 🔧 APIにコメントを投稿
     const config = useRuntimeConfig()
     const { $auth } = useNuxtApp()
     const token = await $auth.currentUser.getIdToken()
@@ -617,40 +689,19 @@ const submitComment = async () => {
         'Content-Type': 'application/json'
       },
       body: {
-        content: newComment.value.trim() // APIでは'content'フィールド
+        content: newComment.value.trim()
       }
     })
-    
-    console.log('💬 コメント投稿応答:', response)
-    
-    // 現在のコメント一覧を取得
-    const currentComments = commentsStore.value.get(recipeId) || []
-    
-    // 新しいコメントを変換してリストに追加
-    const newCommentData = {
-      id: response.data.id,
-      user: {
-        name: response.data.user?.name || user.value.displayName || user.value.email.split('@')[0] || '匿名ユーザー',
-        avatar_path: response.data.user?.avatar_url || null
-      },
-      body: response.data.content, // APIでは'content'、フロントでは'body'
-      createdAt: response.data.created_at
-    }
 
-    // 新しいコメントを先頭に追加（最新が上）
-    const updatedComments = [newCommentData, ...currentComments]
-    commentsStore.value.set(recipeId, updatedComments)
+    console.log('💬 コメント投稿応答:', response)
+
+    // ✅ 重要：投稿後にAPIから最新のコメント一覧を再取得
+    await fetchComments()
     
     newComment.value = ''
     commentError.value = ''
 
-    // 新しいコメントが追加されたらすべて表示する
-    if (updatedComments.length > 3) {
-      showAllComments.value = true
-    }
-
     console.log('✅ コメント投稿成功:', response.message)
-    console.log('📝 現在のコメント数:', updatedComments.length)
 
     // textareaをリセット
     autoResize()
@@ -672,6 +723,7 @@ const submitComment = async () => {
   }
 }
 
+
 // textareaの自動リサイズ
 const autoResize = () => {
   nextTick(() => {
@@ -688,10 +740,8 @@ onMounted(async () => {
   console.log('🔍 /user/show ページの認証チェック開始...')
 
   try {
-    // Firebase認証の状態確立を待機
     await initAuth()
     console.log('👤 認証チェック結果:', user.value ? user.value.email : 'null')
-    console.log('👤 isLoggedIn:', isLoggedIn.value)
 
     if (!isLoggedIn.value || !user.value) {
       console.log('⚠️ 認証失敗 - ログインページにリダイレクト')
@@ -703,17 +753,12 @@ onMounted(async () => {
 
     // 🔧 共通の設定を先に取得
     const config = useRuntimeConfig()
-    console.log('🔧 API Base URL:', config.public.apiBase) 
-
     const { $auth } = useNuxtApp()
     const token = await $auth.currentUser.getIdToken()
-    console.log('🔑 Firebase Token取得成功')
+
 
     // レシピデータの取得
-    console.log('📖 レシピID:', recipeId)
-
     try {
-      // 🔧 APIを使用してSeederデータを取得
       const response = await $fetch(`${config.public.apiBase}/api/recipes/${recipeId}`, {
         method: 'GET',
         headers: {
@@ -768,65 +813,81 @@ onMounted(async () => {
       console.log('📖 モックデータ読み込み完了:', recipe.value.title)
     }
 
-    // 🔧 コメントデータの取得
-    try {
-      console.log('💬 コメントデータを読み込み中...')
+    await fetchComments()
 
-      const commentsResponse = await $fetch(`${config.public.apiBase}/api/recipes/${recipeId}/comments`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      })
+    // // 🔧 コメントデータの取得
+    // try {
+    //   console.log('💬 コメントデータを読み込み中...')
 
-      console.log('💬 コメントAPI応答:', commentsResponse)
+    //   const commentsResponse = await $fetch(`${config.public.apiBase}/api/recipes/${recipeId}/comments`, {
+    //     method: 'GET',
+    //     headers: {
+    //       'Authorization': `Bearer ${token}`,
+    //       'Content-Type': 'application/json'
+    //     }
+    //   })
 
-      // APIレスポンスからコメントデータを変換
-      const apiComments = commentsResponse.data || []
-      console.log('💬 取得したコメント数:', apiComments.length)
+    //   console.log('💬 コメントAPI応答:', commentsResponse)
 
-      const convertedComments = apiComments.map(comment => ({
-        id: comment.id,
-        user: {
-          name: comment.user?.name || 'ユーザー',
-          avatar_path: comment.user?.avatar_url || null
-        },
-        body: comment.content, // APIでは'content'、フロントでは'body'
-        createdAt: comment.created_at
-      }))
+    //   // APIレスポンスからコメントデータを変換
+    //   const apiComments = commentsResponse.data || []
+    //   console.log('💬 取得したコメント数:', apiComments.length)
 
-      // Seederコメントをストアに設定
-      commentsStore.value.set(recipeId, convertedComments)
-      console.log('✅ Seederコメント読み込み完了:', convertedComments.length, '件')
+    //   const convertedComments = apiComments.map(comment => {
+    //     console.log('🔧 コメント変換:', comment) // デバッグ用
 
-    } catch (commentError) {
-      console.error('❌ コメント取得エラー:', commentError)
+    //     return {
+    //       id: comment.id,
+    //       user: {
+    //         name: comment.user?.name || 'ユーザー',
+    //         // 🔧 重要：APIから取得したavatar_urlを使用
+    //         avatar_path: comment.user?.avatar_url || null
+    //       },
+    //       body: comment.content, // APIでは'content'、フロントでは'body'
+    //       createdAt: comment.created_at
+    //     }
+    //   })
 
-      // エラー時はモックコメントを使用
-      console.log('📋 フォールバック：モックコメントを使用')
-      const initialComments = [
-        {
-          id: 1,
-          user: { name: 'ユーザーA', avatar_path: null },
-          body: 'めっちゃ美味しかったです！',
-          createdAt: new Date('2025-01-01').toISOString()
-        },
-        {
-          id: 2,
-          user: { name: 'ユーザーB', avatar_path: null },
-          body: '今度作ってみます〜',
-          createdAt: new Date('2025-01-02').toISOString()
-        },
-        {
-          id: 3,
-          user: { name: 'ユーザーC', avatar_path: null },
-          body: '今日の献立に取り入れようと思います。',
-          createdAt: new Date('2025-01-03').toISOString()
-        }
-      ]
-      commentsStore.value.set(recipeId, initialComments)
-    }
+
+    //   // コメントをストアに設定
+    //   commentsStore.value.set(recipeId, convertedComments)
+    //   console.log('✅ APIコメント読み込み完了:', convertedComments.length, '件')
+
+    //   // デバッグ：アバター情報を確認
+    //   convertedComments.forEach((comment, index) => {
+    //     console.log(`💬 コメント${index + 1}:`, {
+    //       user: comment.user.name,
+    //       avatar: comment.user.avatar_path
+    //     })
+    //   })
+
+    // } catch (commentError) {
+    //   console.error('❌ コメント取得エラー:', commentError)
+
+    //   // エラー時はモックコメントを使用
+    //   console.log('📋 フォールバック：モックコメントを使用')
+    //   const initialComments = [
+    //     {
+    //       id: 1,
+    //       user: { name: 'ユーザーA', avatar_path: null },
+    //       body: 'めっちゃ美味しかったです！',
+    //       createdAt: new Date('2025-01-01').toISOString()
+    //     },
+    //     {
+    //       id: 2,
+    //       user: { name: 'ユーザーB', avatar_path: null },
+    //       body: '今度作ってみます〜',
+    //       createdAt: new Date('2025-01-02').toISOString()
+    //     },
+    //     {
+    //       id: 3,
+    //       user: { name: 'ユーザーC', avatar_path: null },
+    //       body: '今日の献立に取り入れようと思います。',
+    //       createdAt: new Date('2025-01-03').toISOString()
+    //     }
+    //   ]
+    //   commentsStore.value.set(recipeId, initialComments)
+    // }
 
     // お気に入り状態を同期
     recipe.value.isLiked = favoriteStore.value.has(recipe.value.id)
@@ -1017,6 +1078,7 @@ const parseIngredients = (ingredientsString) => {
 .comment-body {
     flex: 1;
     font-size: 12px;
+    font-family: sans-serif;
     line-height: 1.4;
     word-wrap: break-word;
 }
