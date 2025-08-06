@@ -7,17 +7,14 @@
         </div>
         <h1 class="login-title">Login</h1>
 
-        <!-- 登録完了メッセージ -->
         <div v-if="registeredMessage" class="success-message">
           {{ registeredMessage }}
         </div>
 
-        <!-- 一般エラーメッセージ -->
         <div v-if="errors.general" class="error-message">
           {{ errors.general }}
         </div>
 
-        <!-- 成功メッセージ -->
         <div v-if="successMessage" class="success-message">
           {{ successMessage }}
         </div>
@@ -54,9 +51,9 @@
           <div v-if="errors.password" class="error">{{ errors.password }}</div>
         </div>
 
-        <button 
-          type="submit" 
-          class="submit-button" 
+        <button
+          type="submit"
+          class="submit-button"
           :class="{ 'disabled': !isFormValid || loading }"
           :disabled="!isFormValid || loading"
         >
@@ -85,7 +82,6 @@ definePageMeta({
   layout: false
 })
 
-// リアクティブデータ
 const form = reactive({
   email: '',
   password: ''
@@ -96,46 +92,41 @@ const loading = ref(false)
 const successMessage = ref('')
 const registeredMessage = ref('')
 
-// useAuth composableを使用
 const { login } = useAuth()
 
-// URLクエリパラメータをチェック
 const route = useRoute()
 
-// ⭐ フォーム全体のバリデーション状態
 const isFormValid = computed(() => {
-  return !errors.value.email && 
-         !errors.value.password &&
-         form.email.trim().length > 0 &&
-         form.password.length > 0
+  return !errors.value.email &&
+        !errors.value.password &&
+        form.email.trim().length > 0 &&
+        form.password.length > 0
 })
 
-// ⭐ メールバリデーション関数
+// バリデーション関数
 const validateEmail = (email) => {
   const trimmed = email.trim()
-  
+
   if (!trimmed) {
     return 'メールアドレスを入力してください'
   }
-  
+
   const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
   if (!emailPattern.test(trimmed)) {
     return '正しいメールアドレスを入力してください'
   }
-  
+
   return null
 }
 
-// ⭐ パスワードバリデーション関数
 const validatePassword = (password) => {
   if (!password) {
     return 'パスワードを入力してください'
   }
-  
+
   return null
 }
 
-// ⭐ リアルタイムバリデーション
 const handleEmailInput = () => {
   errors.value.email = ''
 }
@@ -158,13 +149,10 @@ const handlePasswordBlur = () => {
   }
 }
 
-// コンポーネントマウント時の処理
 onMounted(() => {
-  // 登録完了時のメッセージ表示
   if (route.query.registered === 'true') {
     registeredMessage.value = '会員登録が完了しました。ログインしてください。'
 
-    // 3秒後にメッセージを非表示
     setTimeout(() => {
       registeredMessage.value = ''
     }, 3000)
@@ -172,19 +160,17 @@ onMounted(() => {
 })
 
 const handleLogin = async () => {
-  // 最終バリデーション
   const emailError = validateEmail(form.email)
   const passwordError = validatePassword(form.password)
-  
+
   if (emailError) errors.value.email = emailError
   if (passwordError) errors.value.password = passwordError
-  
+
   if (emailError || passwordError) {
     console.log('❌ バリデーションエラー')
     return
   }
 
-  // 送信中の重複防止
   if (loading.value) return
   loading.value = true
   errors.value = {}
@@ -193,14 +179,13 @@ const handleLogin = async () => {
   try {
     console.log('🚀 ログイン開始:', form.email)
 
-    // useAuth が利用可能かチェック
     if (!login) {
       console.error('❌ useAuth composable が利用できません')
       errors.value.general = 'システムエラーが発生しました'
       return
     }
 
-    // Firebase認証でログイン
+
     console.log('🔐 Firebase認証実行中...')
     const result = await login(form.email.trim(), form.password)
 
@@ -221,21 +206,17 @@ const handleLogin = async () => {
 
     successMessage.value = 'ログインに成功しました！'
 
-    // エラーをクリア
     errors.value = {}
 
-    // Firebase認証状態の確立を待機
     console.log('⏳ 認証状態の確立を待機中...')
     await new Promise(resolve => setTimeout(resolve, 500))
 
-    // 少し待ってからリダイレクト
     console.log('🔄 /user ページにリダイレクト中...')
     setTimeout(async () => {
       try {
         await navigateTo('/user', { replace: true })
       } catch (navError) {
         console.error('❌ ナビゲーションエラー:', navError)
-        // 手動でページ遷移
         window.location.href = '/user'
       }
     }, 200)
@@ -248,7 +229,6 @@ const handleLogin = async () => {
       stack: error.stack
     })
 
-    // エラーメッセージの日本語化
     let errorMessage = 'ログインに失敗しました'
 
     if (error.code) {

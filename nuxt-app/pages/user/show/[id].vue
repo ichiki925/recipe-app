@@ -151,6 +151,16 @@ useHead({
 const route = useRoute()
 const recipeId = parseInt(route.params.id)
 
+const getImageUrl = (imageUrl) => {
+    if (!imageUrl) return '/images/no-image.png'
+    
+    if (imageUrl.startsWith('/storage/')) {
+        return `http://localhost${imageUrl}`
+    }
+    
+    return imageUrl
+}
+
 // データ定義
 const newComment = ref('')
 const commentTextarea = ref(null)
@@ -204,7 +214,6 @@ watch(recipe, (newRecipe) => {
     ingredients: newRecipe.ingredients
   })
 }, { deep: true })
-
 
 // モックレシピデータ
 const recipeDatabase = {
@@ -780,7 +789,7 @@ onMounted(async () => {
         title: recipeData.title,
         genre: recipeData.genre,
         servings: recipeData.servings,
-        image: recipeData.image_url,
+        image: getImageUrl(recipeData.image_url),
         body: recipeData.instructions,
         likes: recipeData.likes_count,
         isLiked: recipeData.is_liked || false,
