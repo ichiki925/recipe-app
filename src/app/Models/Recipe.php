@@ -6,6 +6,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\Storage;
 use App\Models\User;
 use App\Models\RecipeLike;
 use App\Models\RecipeComment;
@@ -26,6 +27,9 @@ class Recipe extends Model
         'views_count',
         'likes_count',
     ];
+
+    protected $appends = ['image_full_url'];
+
 
     protected $casts = [
         'is_published' => 'boolean',
@@ -78,9 +82,27 @@ class Recipe extends Model
     /**
      * 画像URL取得（デフォルト画像対応）
      */
-    public function getImageAttribute()
+    public function getImageFullUrlAttribute(): string
     {
-        return $this->image_url ?: '/images/no-image.png';
+        // DBに '/storage/recipe_images/foo.jpg' が入っている想定
+        $value = $this->attributes['image_url'] ?? '';
+
+        // 値がなければ即フォールバック
+        if (!$value) {
+            return url('/images/no-image.png');
+        }
+
+        // '/storage/...' → 'recipe_images/...'
+        $path = ltrim(str_replace('/storage/', '', $value), '/');
+
+        // 物理ファイルがあるかを public ディスクで確認
+        if (Storage::disk('public')->exists($path)) {
+            // Storage::url($path) は '/storage/...' を返すので absolute に
+            return url(Storage::url($path));
+        }
+
+        // ファイルが無いときは既定画像
+        return url('/images/no-image.png');
     }
 
     /**

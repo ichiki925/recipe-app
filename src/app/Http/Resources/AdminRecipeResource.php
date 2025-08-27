@@ -3,12 +3,24 @@
 namespace App\Http\Resources;
 
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Facades\Storage;
 
 class AdminRecipeResource extends JsonResource
 {
 
     public function toArray($request)
     {
+        $imageFullUrl = null;
+        $raw = $this->image_url;
+        if (is_string($raw) && strpos($raw, '/storage/') === 0) {
+            $path = ltrim(str_replace('/storage/', '', $raw), '/'); // 'recipe_images/xxx.jpg'
+
+            if (Storage::disk('public')->exists($path)) {
+                $imageFull = url(Storage::url($path)); // 例: http://localhost/storage/recipe_images/xxx.jpg
+            }
+        }
+
+
         return [
             'id' => $this->id,
             'title' => $this->title,
@@ -18,8 +30,9 @@ class AdminRecipeResource extends JsonResource
             'instructions' => $this->instructions,
             'ingredients_array' => $this->parseIngredients($this->ingredients),
             'instructions_array' => $this->parseInstructions($this->instructions),
-            'image_url' => $this->image_url ?? '/images/no-image.png',
-            'image' => $this->image_url ?? '/images/no-image.png',
+            'image_url'      => $raw,
+            'image_full_url' => $imageFull,
+            'image'          => $imageFull,
             'is_published' => (bool) $this->is_published,
             'views_count' => $this->views_count ?? 0,
             'likes_count' => $this->likes_count ?? 0,

@@ -35,12 +35,10 @@
           @click="goToRecipeDetail(recipe.id)"
         >
           <div class="recipe-image">
-              <img 
-                  :src="getImageUrl(recipe.image_url)" 
-                  :alt="recipe.title" 
-                  @error="handleImageError($event, recipe)"
-                  @load="handleImageLoad($event, recipe)"
-              />
+            <img
+              :src="recipe.image_full_url || '/images/no-image.png'"
+              :alt="recipe.title"
+            />
           </div>
 
 
@@ -113,85 +111,21 @@ const error = ref('')
 
 const route = useRoute()
 const router = useRouter()
-
-
-// 画像URL処理関数
-const getImageUrl = (imageUrl) => {
-  console.log('🖼️ Original image URL:', imageUrl)
-
-  if (!imageUrl) {
-    return '/images/no-image.png'
-  }
-
-  // 相対URLの場合、絶対URLに変換
-  if (imageUrl.startsWith('/storage/')) {
-    const fullUrl = `http://localhost${imageUrl}`
-    console.log('🔗 Converted to full URL:', fullUrl)
-    return fullUrl
-  }
-
-  return imageUrl
-}
-
-// 画像読み込みエラーハンドリング
-const handleImageError = (event, recipe) => {
-  console.error('❌ Image load failed:', {
-    recipe_id: recipe.id,
-    recipe_title: recipe.title,
-    image_url: recipe.image_url,
-    attempted_src: event.target.src
-  })
-
-  // 無限ループを防ぐため、エラーハンドラーを削除
-  event.target.onerror = null
-
-  // 画像要素を削除
-  const img = event.target
-  const parent = img.parentElement
-
-  if (parent) {
-    // 画像を削除
-    img.remove()
-
-    // プレースホルダーを作成（既に存在しない場合のみ）
-    if (!parent.querySelector('.no-image-fallback')) {
-      const placeholder = document.createElement('div')
-      placeholder.className = 'no-image-fallback'
-      placeholder.innerHTML = `
-        <div class="no-image-text">No Image</div>
-      `
-      parent.appendChild(placeholder)
-    }
-  }
-}
-
-// 画像読み込み成功時
-const handleImageLoad = (event, recipe) => {
-  console.log('✅ Image loaded successfully:', {
-    recipe_id: recipe.id,
-    recipe_title: recipe.title,
-    loaded_src: event.target.src
-  })
-}
-
+const config = useRuntimeConfig()
 
 // ページネーション表示用
 const displayPages = computed(() => {
   const pages = []
   const maxDisplay = 5
   const half = Math.floor(maxDisplay / 2)
-
   let start = Math.max(1, currentPage.value - half)
   let end = Math.min(totalPages.value, start + maxDisplay - 1)
-
   if (end - start + 1 < maxDisplay) {
     start = Math.max(1, end - maxDisplay + 1)
   }
-
   for (let i = start; i <= end; i++) {
     pages.push(i)
   }
-
   return pages
 })
 
@@ -205,25 +139,16 @@ const goToCreate = () => {
   router.push('/admin/recipes/create')
 }
 
-
 // 削除フラグをチェックする関数
 const checkDeleteFlag = () => {
   if (typeof localStorage !== 'undefined') {
     const recipeDeleted = localStorage.getItem('recipeDeleted')
     const deletedRecipeId = localStorage.getItem('deletedRecipeId')
-
     if (recipeDeleted === 'true') {
-      console.log('🔄 削除フラグを検知しました。レシピID:', deletedRecipeId)
-
       // フラグをクリア
       localStorage.removeItem('recipeDeleted')
       localStorage.removeItem('deletedRecipeId')
-
-      // データを強制更新
-      setTimeout(() => {
-        console.log('🔄 削除後のデータ更新を実行します')
-        fetchRecipes()
-      }, 500)
+      setTimeout(fetchRecipes, 500)
     }
   }
 }
@@ -233,19 +158,11 @@ const checkUpdateFlag = () => {
   if (typeof localStorage !== 'undefined') {
     const recipeUpdated = localStorage.getItem('recipeUpdated')
     const updatedRecipeId = localStorage.getItem('updatedRecipeId')
-    
     if (recipeUpdated === 'true') {
-      console.log('🔄 更新フラグを検知しました。レシピID:', updatedRecipeId)
-      
       // フラグをクリア
       localStorage.removeItem('recipeUpdated')
       localStorage.removeItem('updatedRecipeId')
-      
-      // データを強制更新
-      setTimeout(() => {
-        console.log('🔄 更新後のデータ更新を実行します')
-        fetchRecipes()
-      }, 500)
+      setTimeout(fetchRecipes, 500)
     }
   }
 }
@@ -254,28 +171,19 @@ const checkUpdateFlag = () => {
 onMounted(() => {
   searchKeyword.value = route.query.keyword || ''
   currentPage.value = parseInt(route.query.page) || 1
-  
-  // 削除フラグをチェック
   checkDeleteFlag()
-
-  // 更新フラグをチェック
   checkUpdateFlag()
-
   fetchRecipes()
 })
 
-
-// ページがフォーカスされた時もチェック
 if (typeof window !== 'undefined') {
   window.addEventListener('focus', () => {
     if (route.path === '/admin/recipes') {
-      console.log('🔄 ページフォーカス - 削除フラグをチェックします')
       checkDeleteFlag()
       checkUpdateFlag()
     }
   })
 }
-
 
 // 検索実行
 const searchRecipes = () => {
@@ -305,68 +213,38 @@ const updateUrl = () => {
 
 // レシピデータ取得
 const fetchRecipes = async () => {
-  console.log('🔍 fetchRecipes開始')
   loading.value = true
-  error.value = ''
-
+  error.value   = ''
   try {
     const { $auth } = useNuxtApp()
-
-    if (!$auth?.currentUser) {
-      throw new Error('認証が必要です')
-    }
-
+    if (!$auth?.currentUser) throw new Error('認証が必要です')
     const token = await $auth.currentUser.getIdToken()
 
     const params = new URLSearchParams()
     if (searchKeyword.value) params.append('keyword', searchKeyword.value)
-    if (currentPage.value > 1) params.append('page', currentPage.value)
+    if (currentPage.value > 1) params.append('page', String(currentPage.value))
 
-    const queryString = params.toString()
-    const url = `http://localhost/api/admin/recipes${queryString ? '?' + queryString : ''}`
+    // ← ここだけ base を runtimeConfig から取る
+    const url = `${config.public.apiBase}/api/admin/recipes${params.toString() ? '?' + params.toString() : ''}`
 
-    console.log('🔍 APIリクエスト送信:', url)
-
-    const response = await fetch(url, {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Accept': 'application/json'
-      }
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' }
     })
+    if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`)
 
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-    }
-
-    const data = await response.json()
-    console.log('✅ APIレスポンス受信:', {
-      レシピ数: data.data?.length || 0,
-      現在のページ: data.current_page,
-      総ページ数: data.last_page
-    })
-
-    // レシピリストを更新
-    recipes.value = data.data || []
+    const data = await res.json()
+    // data.data 内の各要素に image_full_url が入ってくる想定（AdminRecipeResource で付与済み）
+    recipes.value     = Array.isArray(data.data) ? data.data : []
     currentPage.value = data.current_page || 1
-    totalPages.value = data.last_page || 1
-
-    // 更新されたレシピのタイトルをログ出力
-    if (data.data && Array.isArray(data.data)) {
-      console.log('📋 現在のレシピ一覧:')
-      data.data.forEach((recipe, index) => {
-        console.log(`  ${index + 1}. ${recipe.title} (ID: ${recipe.id})`)
-      })
-    }
-
-  } catch (err) {
-    console.error('❌ レシピ取得エラー:', err)
+    totalPages.value  = data.last_page   || 1
+  } catch (e) {
+    console.error('❌ レシピ取得エラー:', e)
     error.value = 'レシピの取得に失敗しました。'
     recipes.value = []
     currentPage.value = 1
     totalPages.value = 1
   } finally {
     loading.value = false
-    console.log('✅ fetchRecipes完了')
   }
 }
 

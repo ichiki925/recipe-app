@@ -2,13 +2,21 @@
 
 namespace App\Http\Resources;
 
-use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Facades\Storage;
 
 class RecipeResource extends JsonResource
 {
     public function toArray($request)
     {
+        $raw = $this->image_url;
+
+        $full = $raw
+            ? (str_starts_with($raw, '/storage/')
+                ? rtrim(config('app.url'), '/') . $raw
+                : $raw)
+            : null;
+
         return [
             'id' => $this->id,
             'title' => $this->title,
@@ -18,7 +26,10 @@ class RecipeResource extends JsonResource
             'instructions' => $this->instructions,
             'ingredients_array' => $this->ingredients_array,
             'instructions_array' => $this->instructions_array,
+
             'image_url' => $this->image_url ?? '/images/no-image.png',
+            'image_full_url' => $full ?? '/images/no-image.png',
+
             'views_count' => $this->views_count ?? 0,
             'likes_count' => $this->likes_count ?? 0,
             'is_published' => (bool) $this->is_published,
@@ -26,27 +37,38 @@ class RecipeResource extends JsonResource
             'updated_at' => $this->updated_at->toISOString(),
             'formatted_created_at' => $this->created_at->format('Y年m月d日'),
 
-            // レシピ作成者情報（管理者）
             'admin' => new UserResource($this->whenLoaded('admin')),
 
-            // コメント情報
             'comments' => CommentResource::collection($this->whenLoaded('comments')),
-            'comments_count' => $this->when($this->relationLoaded('comments'), function () {
-                return $this->comments->count();
-            }),
+            'comments_count' => $this->when($this->relationLoaded('comments'), fn () => $this->comments->count()),
 
-            // 🔧 認証ユーザー用の情報（改善版）
             'is_liked' => $this->when($request->user(), function () use ($request) {
                 $user = $request->user();
-
-                // 管理者の場合は常にfalse
-                if (method_exists($user, 'isAdmin') && $user->isAdmin()) {
-                    return false;
-                }
-
-                // ユーザーの場合はいいね状態を確認
+                if (method_exists($user, 'isAdmin') && $user->isAdmin()) return false;
                 return $this->isLikedBy($user);
             }),
         ];
+
+    }
+
+    /** 相対パス（/storage/...）→ 絶対URL へ */
+    private function fullUrlFrom(?string $raw): ?string
+    {
+        if (!$raw) return null;
+
+        // すでに絶対URLならそのまま
+        if (preg_match('#^https?://#', $raw)) {
+            return $raw;
+        }
+
+        // /storage/... を public ディスクのパスに変換して存在確認
+        if (strpos($raw, '/storage/') === 0) {
+            $path = ltrim(str_replace('/storage/', '', $raw), '/'); // e.g. recipe_images/xxx.jpg
+            if (Storage::disk('public')->exists($path)) {
+                return url(Storage::url($path)); // 例: http://localhost/storage/recipe_images/xxx.jpg
+            }
+        }
+
+        return null;
     }
 }

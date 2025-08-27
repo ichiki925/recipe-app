@@ -43,7 +43,16 @@
           :data-recipe-id="recipe.id"
           @click="goToRecipeDetail(recipe.id)"
         >
-          <div class="no-image">No Image</div>
+          <div class="recipe-image">
+            <img
+              :src="recipe.image_full_url || '/images/no-image.png'"
+              :alt="recipe.title"
+              class="recipe-img"
+              loading="lazy"
+              decoding="async"
+              @error="e => { e.target.onerror = null; e.target.src = '/images/no-image.png' }"
+            />
+          </div>
           <div class="recipe-title">{{ recipe.title }}</div>
           <div class="recipe-genre">{{ recipe.genre }}</div>
           <div class="recipe-stats">
@@ -147,14 +156,50 @@ const paginatedRecipes = computed(() => {
   return filteredRecipes.value.slice(start, end)
 })
 
+const getImageUrl = (imageUrl) => {
+  console.log(`🔍 getImageUrl called with: ${imageUrl}`)
+  
+  if (!imageUrl) {
+    console.log(`🔍 No image URL, returning default`)
+    return '/images/no-image.png'
+  }
+
+  if (imageUrl.startsWith('/storage/')) {
+    const fullUrl = `http://localhost:8000${imageUrl}`
+    console.log(`🔍 Converted relative URL to: ${fullUrl}`)
+    return fullUrl
+  }
+
+  console.log(`🔍 Using original URL: ${imageUrl}`)
+  return imageUrl
+}
+
+
+
+const handleImageError = (event, recipe) => {
+  console.log(`❌ 画像読み込みエラー: ${recipe.title}`)
+  console.log(`❌ 画像URL: ${recipe.image_url}`)
+  console.log(`❌ 処理済みURL: ${getImageUrl(recipe.image_url)}`)
+
+  event.target.onerror = null
+  const parent = event.target.parentElement
+  event.target.style.display = 'none'
+
+  if (!parent.querySelector('.no-image-fallback')) {
+    const placeholder = document.createElement('div')
+    placeholder.className = 'no-image-fallback'
+    placeholder.innerHTML = '<div class="no-image-text">No Image</div>'
+    parent.appendChild(placeholder)
+  }
+}
+
+// お気に入りレシピをAPIから取得
 // お気に入りレシピをAPIから取得
 const fetchFavoriteRecipes = async () => {
   if (!user.value) return
 
   try {
     isLoading.value = true
-    console.log('💖 お気に入りレシピを取得中...')
-
     const config = useRuntimeConfig()
     const { $auth } = useNuxtApp()
     const token = await $auth.currentUser.getIdToken()
@@ -162,62 +207,52 @@ const fetchFavoriteRecipes = async () => {
     const response = await $fetch(`${config.public.apiBase}/api/user/liked-recipes`, {
       method: 'GET',
       headers: {
-        'Authorization': `Bearer ${token}`,
+        Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json'
       },
-      query: {
-        keyword: searchKeyword.value || '',
-        page: 1,
-        per_page: 100
+      query: { keyword: searchKeyword.value || '', page: 1, per_page: 100 }
+    })
+
+    // 想定: { data: [...] }
+    const items = Array.isArray(response?.data) ? response.data : []
+    favoriteRecipes.value = items.map((r) => {
+      // ① バックエンドが返す絶対URLを優先
+      // ② なければ /storage/... を絶対URLに直す
+      // ③ それもなければ null
+      const img =
+        r.image_full_url ??
+        (r.image_url
+          ? (String(r.image_url).startsWith('/storage/')
+              ? `${config.public.apiBase}${r.image_url}`
+              : r.image_url)
+          : null)
+
+      return {
+        id: r.id,
+        title: r.title,
+        genre: r.genre,
+        likes: r.likes_count ?? 0,
+        isFavorited: true,
+        image_full_url: img,
+        admin: r.admin ?? null,
       }
     })
 
-    console.log('📦 お気に入りAPI応答:', response)
-
-    if (!response.data || !Array.isArray(response.data)) {
-      console.error('❌ APIレスポンスの形式が不正:', response)
-      throw new Error('APIレスポンスの形式が不正です')
-    }
-
-    favoriteRecipes.value = response.data.map(recipe => ({
-      id: recipe.id,
-      title: recipe.title,
-      genre: recipe.genre,
-      likes: recipe.likes_count || 0,
-      isFavorited: true,
-      image_url: recipe.image_url,
-      admin: recipe.admin
-    }))
-
+    // ストア同期
     favoriteStore.value.clear()
-    favoriteRecipes.value.forEach(recipe => {
-      favoriteStore.value.add(recipe.id)
-    })
-
+    favoriteRecipes.value.forEach((r) => favoriteStore.value.add(r.id))
     favoriteStore.value = new Set(favoriteStore.value)
-
-    console.log(`💖 お気に入りレシピ ${favoriteRecipes.value.length}件を取得しました`)
-    console.log('💖 同期後のストア:', Array.from(favoriteStore.value))
 
   } catch (error) {
     console.error('❌ お気に入りレシピ取得エラー:', error)
-
-    console.error('❌ エラーの詳細:', {
-      message: error.message,
-      status: error.status,
-      statusText: error.statusText,
-      data: error.data
-    })
-
     favoriteRecipes.value = []
     favoriteStore.value.clear()
-
     alert('お気に入りレシピの取得に失敗しました。ページを再読み込みしてください。')
-
   } finally {
     isLoading.value = false
   }
 }
+
 
 // 詳細ページへの遷移
 const goToRecipeDetail = (recipeId) => {
@@ -374,11 +409,11 @@ const updateUrl = () => {
 watch(favoriteStore, async (newFavorites, oldFavorites) => {
   // 初回実行や同じ参照の場合はスキップ
   if (!oldFavorites || newFavorites === oldFavorites) return
-  
+
   console.log('🔄 お気に入りページ: ストア変更を検知')
   console.log('新しいストア:', Array.from(newFavorites))
   console.log('古いストア:', Array.from(oldFavorites))
-  
+
   // サイズが変わった場合のみ再取得
   if (newFavorites.size !== oldFavorites.size) {
     console.log('📊 ストアサイズ変更を検知、データ再取得')
@@ -387,7 +422,7 @@ watch(favoriteStore, async (newFavorites, oldFavorites) => {
     // サイズが同じでも中身が違う場合があるのでチェック
     const newArray = Array.from(newFavorites).sort()
     const oldArray = Array.from(oldFavorites).sort()
-    
+
     if (JSON.stringify(newArray) !== JSON.stringify(oldArray)) {
       console.log('📊 ストア内容変更を検知、データ再取得')
       await fetchFavoriteRecipes()
@@ -465,6 +500,61 @@ watch(favoriteStore, async (newFavorites, oldFavorites) => {
 .recipe-list {
     flex: 1;
     min-height: 300px;
+}
+
+.recipe-image {
+    width: 100%;
+    height: 300px;
+    border-radius: 6px;
+    overflow: hidden;
+    position: relative;
+}
+
+.recipe-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 6px;
+    transition: transform 0.2s ease;
+}
+
+.recipe-card:hover .recipe-img {
+    transform: scale(1.05);
+}
+
+.no-image {
+    width: 100%;
+    height: 300px;
+    background-color: #f0f0f0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #999;
+    font-size: 14px;
+    border-radius: 6px;
+  }
+
+.no-image-fallback {
+    width: 100%;
+    height: 100%;
+    background-color: #f0f0f0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: #999;
+    border-radius: 6px;
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+}
+
+.no-image-text {
+    font-size: 14px;
+    font-weight: 500;
+    text-align: center;
 }
 
 .page-title {
@@ -561,17 +651,7 @@ watch(favoriteStore, async (newFavorites, oldFavorites) => {
     box-shadow: 2px 4px 12px rgba(0, 0, 0, 0.15);
 }
 
-.no-image {
-    width: 100%;
-    height: 300px;
-    background-color: #f0f0f0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #999;
-    font-size: 14px;
-    border-radius: 6px;
-}
+
 
 .recipe-title {
     margin-top: 10px;
