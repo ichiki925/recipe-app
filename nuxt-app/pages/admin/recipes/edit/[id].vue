@@ -511,7 +511,6 @@ body {
     font-family: sans-serif;
 }
 
-/* 全体のレイアウト */
 .recipe-edit-container {
     display: flex;
     gap: 40px;
@@ -522,7 +521,6 @@ body {
     padding: 20px;
 }
 
-/* 左側：画像プレビューエリア */
 .image-preview {
     width: 300px;
     height: 300px;
@@ -538,7 +536,6 @@ body {
     flex-shrink: 0;
 }
 
-/* No Image プレースホルダーのスタイル */
 .no-image-placeholder {
     display: flex;
     flex-direction: column;
@@ -554,7 +551,6 @@ body {
     font-weight: 500;
 }
 
-/* プレビュー画像 */
 .preview-image {
     width: 100%;
     height: 100%;
@@ -562,7 +558,6 @@ body {
     border-radius: 12px;
 }
 
-/* 右側：入力フォーム */
 .recipe-form {
     width: 400px;
     flex-shrink: 0;
@@ -573,10 +568,6 @@ body {
     text-align: center;
     font-family: cursive;
 }
-
-
-
-
 
 .recipe-form label {
     display: block;
@@ -599,14 +590,12 @@ body {
     border: 1px solid #aaa;
 }
 
-/* 材料名と分量を横並び */
 .recipe-form .ingredient-row {
     display: flex;
     gap: 0px;
     margin-bottom: 10px;
 }
 
-/* 材料名入力欄 */
 .recipe-form .ingredient-name {
     flex: 2;
     border: 1px solid #aaa !important;
@@ -622,7 +611,6 @@ body {
     border-right: none !important;
 }
 
-/* 分量入力欄 */
 .recipe-form .ingredient-qty {
     flex: 1;
     border: 1px solid #aaa !important;
@@ -669,7 +657,6 @@ body {
     border: 1px solid #aaa;
 }
 
-/* ボタンコンテナ */
 .button-container {
     display: flex;
     gap: 10px;
@@ -727,7 +714,6 @@ body {
     cursor: not-allowed;
 }
 
-/* エラーメッセージ */
 .error-messages {
     margin-bottom: 20px;
 }
@@ -741,7 +727,6 @@ body {
     border: 1px solid #f5c6cb;
 }
 
-/* 成功メッセージ */
 .success-message {
     background-color: #d4edda;
     color: #155724;
@@ -757,7 +742,6 @@ textarea::placeholder {
     opacity: 1 !important;
 }
 
-/* レスポンシブデザイン */
 @media screen and (max-width: 768px) {
     .recipe-edit-container {
         flex-direction: column;

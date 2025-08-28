@@ -2,27 +2,13 @@
     <div class="recipe-page">
 
         <!-- 左サイドバー -->
-        <aside class="sidebar">
-            <form @submit.prevent="searchRecipes">
-            <div class="search-wrapper">
-                <i class="fa-solid fa-magnifying-glass"></i>
-                <input
-                type="text"
-                v-model="searchKeyword"
-                placeholder="料理名・食材で検索"
-                >
-                <button
-                    v-if="searchKeyword"
-                    type="button"
-                    @click="clearSearch"
-                    class="clear-button"
-                >
-                    ×
-                </button>
-            </div>
-            <button type="submit">検索</button>
-            </form>
-        </aside>
+        <RecipeSearchSection
+            user-type="guest"
+            :initial-keyword="searchKeyword"
+            placeholder="料理名・食材で検索"
+            @search="handleSearch"
+            @clear-search="clearSearch"
+        />
 
         <!-- メイン：レシピ一覧 -->
         <section class="recipe-list">
@@ -201,7 +187,7 @@ const fetchRecipes = async () => {
         } else {
             recipes.value = mockRecipes
         }
-        
+
         totalPages.value = Math.ceil(recipes.value.length / 9)
     } finally {
         isLoading.value = false
@@ -213,6 +199,11 @@ const searchRecipes = () => {
     currentPage.value = 1
     updateUrl()
     fetchRecipes()
+}
+
+const handleSearch = (keyword) => {
+    searchKeyword.value = keyword
+    searchRecipes()
 }
 
 // ページ遷移
@@ -255,81 +246,6 @@ watch(() => route.query, (newQuery) => {
     gap: 30px;
     max-width: 1400px;
     margin: 0 auto;
-}
-
-.sidebar {
-    width: 300px;
-    background-color: #fff;
-    padding: 20px;
-    border-radius: 8px;
-    height: fit-content;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-}
-
-.sidebar h2 {
-    font-size: 18px;
-    font-weight: bold;
-    margin-bottom: 15px;
-}
-
-
-.search-wrapper {
-    position: relative;
-    width: 100%;
-}
-
-.search-wrapper i.fa-solid {
-    position: absolute;
-    top: 50%;
-    left: 12px;
-    transform: translateY(-50%);
-    color: #e6e5e5;
-    pointer-events: none;
-}
-
-.search-wrapper input[type="text"] {
-    width: 100%;
-    padding: 10px 10px 10px 40px;
-    font-size: 16px;
-    border: 1px solid #adadad;
-    border-radius: 6px;
-    box-sizing: border-box;
-}
-
-.clear-button {
-    position: absolute;
-    top: 50%;
-    right: 12px;
-    transform: translateY(-60%);
-    background: none;
-    border: none;
-    font-size: 20px;
-    font-family: sans-serif;
-    color: #999;
-    cursor: pointer;
-    padding: 0;
-    line-height: 1;
-}
-
-.search-wrapper input::placeholder {
-    color: #ddd;
-    opacity: 1;
-}
-
-.sidebar button[type="submit"] {
-    width: 100%;
-    background-color: #ddd;
-    border: none;
-    color: #000;
-    padding: 10px;
-    font-weight: bold;
-    border-radius: 8px;
-    margin-top: 20px;
-    cursor: pointer;
-}
-
-.sidebar button[type="submit"]:hover {
-    background-color: #e6e5e5;
 }
 
 .recipe-list {
@@ -567,11 +483,6 @@ watch(() => route.query, (newQuery) => {
     .recipe-page {
         flex-direction: column;
         padding: 15px;
-    }
-
-    .sidebar {
-        width: 100%;
-        order: 2;
     }
 
     .recipe-list {

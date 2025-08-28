@@ -2,19 +2,13 @@
   <div class="recipe-page">
 
     <!-- 左サイドバー -->
-    <aside class="sidebar">
-      <form @submit.prevent="searchRecipes">
-        <div class="search-wrapper">
-          <i class="fa-solid fa-magnifying-glass"></i>
-          <input
-            type="text"
-            v-model="searchKeyword"
-            placeholder="お気に入りレシピを検索"
-          >
-        </div>
-        <button type="submit">検索</button>
-      </form>
-    </aside>
+    <RecipeSearchSection
+      user-type="user"
+      :initial-keyword="searchKeyword"
+      placeholder="お気に入りレシピを検索"
+      @search="handleSearch"
+      @clear-search="handleClearSearch"
+    />
 
     <!-- メイン：お気に入りレシピ一覧 -->
     <section class="recipe-list">
@@ -386,11 +380,19 @@ const toggleLike = async (recipe) => {
 }
 
 
-const searchRecipes = () => {
+const handleSearch = (keyword) => {
+  searchKeyword.value = keyword
   currentPage.value = 1
   updateUrl()
   console.log('🔍 お気に入りレシピ検索:', searchKeyword.value)
   // 検索はクライアントサイドで実行（filteredRecipesが自動更新）
+}
+
+const handleClearSearch = () => {
+  searchKeyword.value = ''
+  currentPage.value = 1
+  updateUrl()
+  // お気に入りページでは検索はクライアントサイドなのでfetchは不要
 }
 
 const goToPage = (page) => {
@@ -440,61 +442,6 @@ watch(favoriteStore, async (newFavorites, oldFavorites) => {
     gap: 30px;
     max-width: 1400px;
     margin: 0 auto;
-}
-
-.sidebar {
-    width: 300px;
-    background-color: #fff;
-    padding: 20px;
-    border-radius: 8px;
-    height: fit-content;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-}
-
-
-.search-wrapper {
-    position: relative;
-    width: 100%;
-}
-
-.search-wrapper i.fa-solid {
-    position: absolute;
-    top: 50%;
-    left: 12px;
-    transform: translateY(-50%);
-    color: #e6e5e5;
-    pointer-events: none;
-}
-
-.search-wrapper input[type="text"] {
-    width: 100%;
-    padding: 10px 10px 10px 40px;
-    font-size: 16px;
-    border: 1px solid #adadad;
-    border-radius: 6px;
-    box-sizing: border-box;
-}
-
-
-.search-wrapper input::placeholder {
-    color: #ddd;
-    opacity: 1;
-}
-
-.sidebar button {
-    width: 100%;
-    background-color: #ddd;
-    border: none;
-    color: #000;
-    padding: 10px;
-    font-weight: bold;
-    border-radius: 8px;
-    margin-top: 20px;
-    cursor: pointer;
-}
-
-.sidebar button:hover {
-    background-color: #e6e5e5;
 }
 
 .recipe-list {
@@ -785,11 +732,6 @@ watch(favoriteStore, async (newFavorites, oldFavorites) => {
     .recipe-page {
       flex-direction: column;
       padding: 15px;
-    }
-
-    .sidebar {
-      width: 100%;
-      order: 2;
     }
 
     .recipe-list {

@@ -24,7 +24,6 @@ class RecipeController extends Controller
                     ->published()
                     ->withCount('likes');
 
-        // 検索機能
         if ($request->has('keyword') && !empty($request->keyword)) {
             $keyword = $request->keyword;
             $query->where(function($q) use ($keyword) {
@@ -35,7 +34,6 @@ class RecipeController extends Controller
 
         $recipes = $query->latest()->paginate(9);
 
-        // 🔧 未ログインユーザー向け：いいね状態は常にfalse
         $recipesData = $recipes->getCollection()->map(function ($recipe) {
             return [
                 'id' => $recipe->id,
@@ -43,7 +41,7 @@ class RecipeController extends Controller
                 'genre' => $recipe->genre,
                 'likes_count' => $recipe->likes_count ?? 0,
                 'image_url' => $recipe->image_url,
-                'is_liked' => false, // 🔧 未ログインなので常にfalse
+                'is_liked' => false,
                 'admin' => [
                     'id' => $recipe->admin->id,
                     'name' => $recipe->admin->name
@@ -85,16 +83,13 @@ class RecipeController extends Controller
 
         $recipes = $query->latest()->paginate(9);
 
-        // 🔧 ログインユーザー向け：正確ないいね状態を取得
         $recipesWithLikeStatus = $recipes->getCollection()->map(function ($recipe) use ($user) {
             $isLiked = false;
 
-            // 管理者チェック
             if ($user->isAdmin()) {
                 \Log::info("Recipe {$recipe->id}: ユーザーは管理者のためis_liked=false");
                 $isLiked = false;
             } else {
-                // 🔧 一般ユーザー：いいね状態を直接SQLで確認
                 $likeExists = \DB::table('recipe_likes')
                     ->where('user_id', $user->id)
                     ->where('recipe_id', $recipe->id)
@@ -139,7 +134,7 @@ class RecipeController extends Controller
         try {
             $keyword = $request->get('keyword', '');
             $perPage = $request->get('per_page', 9);
-            $user = $request->user(); // 認証ユーザーを取得（未認証ならnull）
+            $user = $request->user();
 
             \Log::info('Recipe search started', [
                 'keyword' => $keyword,
@@ -153,27 +148,24 @@ class RecipeController extends Controller
                 ->with('admin')
                 ->withCount('likes');
 
-            // 検索条件
             if (!empty($keyword)) {
                 $query->where(function($q) use ($keyword) {
                     $q->where('title', 'LIKE', "%{$keyword}%")
+                        ->orWhere('title_reading', 'LIKE', "%{$keyword}%")
                         ->orWhere('ingredients', 'LIKE', "%{$keyword}%");
                 });
             }
 
             $recipes = $query->latest()->paginate($perPage);
 
-            // 🔧 認証状態に応じてis_liked状態を設定
             $recipesData = collect($recipes->items())->map(function($recipe) use ($user) {
                 $isLiked = false;
 
                 if ($user) {
-                    // 管理者の場合は常にfalse
                     if (method_exists($user, 'isAdmin') && $user->isAdmin()) {
                         $isLiked = false;
                         \Log::debug("Recipe {$recipe->id}: 管理者のためis_liked=false");
                     } else {
-                        // 🔧 一般ユーザー：直接SQLで確認（isLikedByメソッドが存在しない場合の対策）
                         $isLiked = \DB::table('recipe_likes')
                             ->where('user_id', $user->id)
                             ->where('recipe_id', $recipe->id)
@@ -569,6 +561,7 @@ class RecipeController extends Controller
                 $keyword = $request->keyword;
                 $query->where(function($q) use ($keyword) {
                     $q->where('title', 'LIKE', "%{$keyword}%")
+                        ->orWhere('title_reading', 'LIKE', "%{$keyword}%")
                         ->orWhere('ingredients', 'LIKE', "%{$keyword}%")
                         ->orWhere('genre', 'LIKE', "%{$keyword}%");
                 });

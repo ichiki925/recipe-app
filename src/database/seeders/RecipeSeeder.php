@@ -27,6 +27,7 @@ class RecipeSeeder extends Seeder
         $activeRecipes = [
             [
                 'title' => '基本のハンバーグ',
+                'title_reading' => 'きほんのはんばーぐ',
                 'genre' => '肉料理',
                 'servings' => '4人分',
                 'ingredients' => "牛ひき肉 400g\n玉ねぎ 1個\n卵 1個\nパン粉 1/2カップ\n牛乳 大さじ2\n塩こしょう 適量\nナツメグ 少々",
@@ -41,6 +42,7 @@ class RecipeSeeder extends Seeder
             ],
             [
                 'title' => 'チキンカレー',
+                'title_reading' => 'ちきんかれー',
                 'genre' => 'カレー',
                 'servings' => '3人分',
                 'ingredients' => "鶏もも肉 400g\n玉ねぎ 2個\nにんじん 1本\nじゃがいも 2個\nトマト缶 1缶\nカレールー 1/2箱\n水 400ml\nサラダ油 大さじ1",
@@ -55,6 +57,7 @@ class RecipeSeeder extends Seeder
             ],
             [
                 'title' => '和風パスタ',
+                'title_reading' => 'わふうぱすた',
                 'genre' => '麺類',
                 'servings' => '2人分',
                 'ingredients' => "スパゲッティ 200g\nしめじ 1パック\nベーコン 3枚\n大葉 5枚\n醤油 大さじ2\nバター 15g\n塩こしょう 適量",
@@ -69,6 +72,7 @@ class RecipeSeeder extends Seeder
             ],
             [
                 'title' => 'チョコレートケーキ',
+                'title_reading' => 'ちょこれーとけーき',
                 'genre' => 'デザート',
                 'servings' => '5人分以上',
                 'ingredients' => "薄力粉 100g\nココアパウダー 30g\n卵 2個\n砂糖 80g\nバター 50g\n牛乳 50ml\nベーキングパウダー 小さじ1",
@@ -83,6 +87,7 @@ class RecipeSeeder extends Seeder
             ],
             [
                 'title' => '野菜炒め',
+                'title_reading' => 'やさいいため',
                 'genre' => '野菜料理',
                 'servings' => '2人分',
                 'ingredients' => "キャベツ 1/4個\nにんじん 1/2本\nピーマン 2個\nもやし 1袋\n豚こま肉 150g\n醤油 大さじ1\n塩こしょう 適量\nごま油 大さじ1",
@@ -95,9 +100,10 @@ class RecipeSeeder extends Seeder
                 'created_at' => now()->subDays(3),
                 'updated_at' => now()->subDays(2),
             ],
-            // 🔥 新しく追加するレシピ（ID 6-12になります）
+
             [
                 'title' => 'グラタン',
+                'title_reading' => 'ぐらたん',
                 'genre' => '洋食',
                 'servings' => '4人分',
                 'ingredients' => "マカロニ 200g\n鶏肉 150g\n玉ねぎ 1個\nバター 30g\n小麦粉 大さじ3\n牛乳 400ml\nチーズ 100g\n塩こしょう 適量",
@@ -112,6 +118,7 @@ class RecipeSeeder extends Seeder
             ],
             [
                 'title' => 'ゆかりおにぎり',
+                'title_reading' => 'ゆかりおにぎり',
                 'genre' => '和食',
                 'servings' => '2人分',
                 'ingredients' => "ご飯 2杯\nゆかり 大さじ1\n海苔 2枚\n塩 少々",
@@ -126,6 +133,7 @@ class RecipeSeeder extends Seeder
             ],
             [
                 'title' => '唐揚げ',
+                'title_reading' => 'からあげ',
                 'genre' => '和食',
                 'servings' => '3人分',
                 'ingredients' => "鶏もも肉 400g\n醤油 大さじ2\n酒 大さじ1\n生姜 1片\n片栗粉 適量\nサラダ油 適量",
@@ -140,6 +148,7 @@ class RecipeSeeder extends Seeder
             ],
             [
                 'title' => '味噌汁',
+                'title_reading' => 'みそしる',
                 'genre' => '和食',
                 'servings' => '4人分',
                 'ingredients' => "だし 800ml\n味噌 大さじ3\n豆腐 1/2丁\nわかめ 適量\nネギ 1本",
@@ -154,6 +163,7 @@ class RecipeSeeder extends Seeder
             ],
             [
                 'title' => '焼きそば',
+                'title_reading' => 'やきそば',
                 'genre' => '中華',
                 'servings' => '2人分',
                 'ingredients' => "焼きそば麺 2玉\nキャベツ 1/4個\n人参 1/2本\nもやし 1袋\n豚こま肉 100g\n焼きそばソース 1袋\n青のり 適量",
@@ -167,7 +177,8 @@ class RecipeSeeder extends Seeder
                 'updated_at' => now()->subDays(3),
             ],
             [
-                'title' => 'チャーハン', // ← これがID=11になります！
+                'title' => 'チャーハン',
+                'title_reading' => 'ちゃーはん',
                 'genre' => '中華',
                 'servings' => '2人分',
                 'ingredients' => "ご飯 2杯\n卵 2個\nハム 2枚\nネギ 1本\n醤油 大さじ1\n塩こしょう 適量\nごま油 小さじ1",
@@ -182,6 +193,7 @@ class RecipeSeeder extends Seeder
             ],
             [
                 'title' => 'オムライス',
+                'title_reading' => 'おむらいす',
                 'genre' => '洋食',
                 'servings' => '2人分',
                 'ingredients' => "ご飯 2杯\n卵 4個\n鶏肉 100g\n玉ねぎ 1/2個\nケチャップ 大さじ4\nバター 20g\n塩こしょう 適量\nパセリ 少々",
@@ -196,10 +208,11 @@ class RecipeSeeder extends Seeder
             ],
         ];
 
-        // 削除済みレシピ（論理削除テスト用）
+
         $deletedRecipes = [
             [
                 'title' => '古いレシピ1',
+                'title_reading' => 'ふるいれしぴわん',
                 'genre' => '和食',
                 'servings' => '2人分',
                 'ingredients' => "材料A 100g\n材料B 200g\n調味料C 適量",
@@ -215,6 +228,7 @@ class RecipeSeeder extends Seeder
             ],
             [
                 'title' => '削除テスト用レシピ',
+                'title_reading' => 'さくじょてすとようれしぴ',
                 'genre' => '中華',
                 'servings' => '3人分',
                 'ingredients' => "テスト材料1 150g\nテスト材料2 1個\nテスト調味料 大さじ1",
@@ -230,6 +244,7 @@ class RecipeSeeder extends Seeder
             ],
             [
                 'title' => '非公開だったレシピ',
+                'title_reading' => 'ひこうかいだったれしぴ',
                 'genre' => 'イタリアン',
                 'servings' => '1人分',
                 'ingredients' => "パスタ 100g\nトマトソース 適量\nチーズ 少々",
@@ -254,9 +269,5 @@ class RecipeSeeder extends Seeder
         foreach ($deletedRecipes as $recipeData) {
             Recipe::create($recipeData);
         }
-
-        $this->command->info('レシピのシーダーが完了しました！');
-        $this->command->info('- アクティブなレシピ: ' . count($activeRecipes) . '件');
-        $this->command->info('- 削除済みレシピ: ' . count($deletedRecipes) . '件');
     }
 }
