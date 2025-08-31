@@ -10,7 +10,12 @@
 
     <!-- メイン：レシピ一覧 -->
     <section class="recipe-list">
-      <div class="recipe-grid">
+      <div v-if="!isLoading && searchKeyword && recipes.length === 0" class="no-recipes">
+        レシピが見つかりませんでした。
+      </div>
+
+
+      <div v-else class="recipe-grid">
         <div
           v-for="recipe in recipes"
           :key="recipe.id"
@@ -48,7 +53,7 @@
       </div>
 
       <!-- ページネーション -->
-      <div class="pagination">
+      <div v-if="!isLoading && totalPages > 1" class="pagination">
         <button
           v-if="currentPage > 1"
           @click="goToPage(currentPage - 1)"
@@ -80,7 +85,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, watch, nextTick } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 
 
 // FontAwesome CSS読み込み
@@ -105,19 +110,19 @@ const totalPages = ref(1)
 
 // お気に入り状態を含むレシピデータ
 const recipes = ref([])
+const isLoading = ref(false)
 
 const route = useRoute()
 const router = useRouter()
 
 // 画像URL処理関数
 const getImageUrl = (imageUrl) => {
-    if (!imageUrl) return '/images/no-image.png'
-
-    if (imageUrl.startsWith('/storage/')) {
-        return `http://localhost${imageUrl}`
-    }
-
-    return imageUrl
+  if (!imageUrl) return '/images/no-image.png'
+  const config = useRuntimeConfig()
+  const host =
+    (config.public.apiBaseUrl || '').replace(/\/api\/?$/, '') ||
+    (import.meta.client ? window.location.origin : '')
+  return imageUrl.startsWith('/storage/') ? `${host}${imageUrl}` : imageUrl
 }
 
 // 画像エラーハンドリング
@@ -193,155 +198,50 @@ const updateUrl = () => {
 }
 
 const fetchRecipes = async () => {
+  isLoading.value = true
   try {
     console.log('🔍 検索:', searchKeyword.value, 'ページ:', currentPage.value)
-    
-    // 🔧 重要: fetchRecipes開始時のストア状態を詳細確認
-    console.log('💖 fetchRecipes開始時のストア詳細:')
-    console.log('💖 - ストア内容:', Array.from(favoriteStore.value))
-    console.log('💖 - ストアサイズ:', favoriteStore.value.size)
-    console.log('💖 - ストアの型:', typeof favoriteStore.value)
-    console.log('💖 - ストアが Set かどうか:', favoriteStore.value instanceof Set)
 
     const config = useRuntimeConfig()
     let headers = {}
 
     if (user.value) {
       const { $auth } = useNuxtApp()
-      const token = await $auth.currentUser.getIdToken()
-      headers.Authorization = `Bearer ${token}`
+      headers.Authorization = `Bearer ${await $auth.currentUser.getIdToken()}`
     }
 
-    const response = await $fetch(`${config.public.apiBase}/api/user/recipes`, {
-      method: 'GET',
+    const response = await $fetch('/recipes/search', {
+      baseURL: config.public.apiBaseUrl,
       headers,
       query: {
         keyword: searchKeyword.value || '',
         page: currentPage.value,
-        sort: 'latest'
+        per_page: 9
       }
     })
 
     console.log('📦 API応答:', response)
 
-    if (!response.data || !Array.isArray(response.data)) {
-      console.error('❌ APIレスポンスの形式が不正:', response)
-      throw new Error('APIレスポンスの形式が不正です')
-    }
+    recipes.value = (response.data || []).map(r => ({
+      id: r.id,
+      title: r.title,
+      genre: r.genre,
+      likes: r.likes_count ?? 0,
+      isFavorited: !!r.is_liked,     // ログイン時だけ付与される想定のフラグ
+      image_url: r.image_url,
+      admin: r.admin
+    }))
 
-    // 🔧 重要: APIデータ処理前にストアを再確認
-    console.log('💖 APIデータ処理前のストア:', Array.from(favoriteStore.value))
-
-    // レシピデータを更新（既存のコードのまま）
-    recipes.value = response.data.map((recipe, index) => {
-      console.log(`📝 Recipe ${index + 1} (ID: ${recipe.id}):`, {
-        title: recipe.title,
-        is_liked: recipe.is_liked,
-        likes_count: recipe.likes_count
-      })
-
-      const isLikedFromApi = Boolean(recipe.is_liked)
-      const isLikedInStore = favoriteStore.value.has(recipe.id)
-      
-      console.log(`🔍 レシピ${recipe.id}の状態比較:`, {
-        API: isLikedFromApi,
-        Store: isLikedInStore,
-        Title: recipe.title
-      })
-
-      // 🔧 重要: ストア操作の詳細ログ
-      if (isLikedFromApi && !isLikedInStore) {
-        console.log(`🔄 レシピ${recipe.id}「${recipe.title}」をストアに追加（API優先）`)
-        favoriteStore.value.add(recipe.id)
-        console.log(`🔄 追加後のストア:`, Array.from(favoriteStore.value))
-      } else if (!isLikedFromApi && isLikedInStore) {
-        console.log(`🔄 レシピ${recipe.id}「${recipe.title}」をストアから削除（API優先）`)
-        favoriteStore.value.delete(recipe.id)
-        console.log(`🔄 削除後のストア:`, Array.from(favoriteStore.value))
-      }
-
-      return {
-        id: recipe.id,
-        title: recipe.title,
-        genre: recipe.genre,
-        likes: recipe.likes_count || 0,
-        isFavorited: isLikedFromApi,
-        image_url: recipe.image_url,
-        admin: recipe.admin
-      }
-    })
+    favoriteStore.value = new Set(
+      recipes.value.filter(r => r.isFavorited).map(r => r.id)
+    )
 
     // ページネーション情報更新
-    currentPage.value = response.current_page
-    totalPages.value = response.last_page
+    currentPage.value = Number(response.current_page ?? 1)
+    totalPages.value = Number(response.last_page ?? 1)
 
-    await nextTick()
-    
-    // 🔧 最終確認（詳細版）
-    console.log('💖 ===== 最終状態確認 =====')
-    console.log('💖 処理後のお気に入りストア:', Array.from(favoriteStore.value))
-    console.log('💖 ストアサイズ:', favoriteStore.value.size)
-    
-    recipes.value.forEach((recipe, index) => {
-      const inStore = favoriteStore.value.has(recipe.id)
-      console.log(`🔍 最終チェック Recipe ${index + 1}:`, {
-        id: recipe.id,
-        title: recipe.title,
-        isFavorited: recipe.isFavorited,
-        shouldShowRedHeart: recipe.isFavorited ? 'YES' : 'NO',
-        inStore: inStore,
-        consistent: recipe.isFavorited === inStore ? '✅' : '❌'
-      })
-    })
-    console.log('💖 ========================')
-
-  } catch (error) {
-    console.error('❌ レシピ取得エラー:', error)
-  }
-}
-const emergencyDebug = () => {
-  console.log('🚨 緊急デバッグ開始')
-  console.log('💖 現在のストア:', Array.from(favoriteStore.value))
-  console.log('💖 ストアの実際の型:', Object.prototype.toString.call(favoriteStore.value))
-  
-  // 強制的にレシピ9を追加してテスト
-  console.log('🧪 テスト: レシピ9を強制追加')
-  favoriteStore.value.add(9)
-  console.log('💖 追加後のストア:', Array.from(favoriteStore.value))
-  
-  // レシピ9の表示を強制更新
-  const recipe9 = recipes.value.find(r => r.id === 9)
-  if (recipe9) {
-    recipe9.isFavorited = true
-    console.log('🧪 レシピ9の表示を強制更新')
-  }
-}
-
-// 🔧 syncFavoriteStatus関数も改善
-const syncFavoriteStatus = () => {
-  if (recipes.value.length === 0) {
-    console.log('🔄 レシピデータがないため同期をスキップ')
-    return
-  }
-
-  console.log('🔄 syncFavoriteStatus 開始')
-  let changedCount = 0
-  
-  recipes.value.forEach(recipe => {
-    const wasLiked = recipe.isFavorited
-    const shouldBeLiked = favoriteStore.value.has(recipe.id)
-    
-    if (wasLiked !== shouldBeLiked) {
-      recipe.isFavorited = shouldBeLiked
-      changedCount++
-      console.log(`🔄 レシピ ${recipe.id}: ${wasLiked} → ${shouldBeLiked}`)
-    }
-  })
-  
-  if (changedCount > 0) {
-    console.log(`🔄 ${changedCount}件の変更を適用`)
-  } else {
-    console.log('🔄 変更なし')
+    } catch (e) {
+    console.error('❌ レシピ取得エラー:', e)
   }
 }
 
@@ -374,41 +274,24 @@ const toggleLike = async (recipe, event) => {
     const config = useRuntimeConfig()
 
     console.log('📡 API呼び出し開始...')
-    const response = await $fetch(`${config.public.apiBase}/api/recipes/${recipe.id}/toggle-like`, {
+
+    const response = await $fetch(`/recipes/${recipe.id}/toggle-like`, {
+      baseURL: config.public.apiBaseUrl,
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      }
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
     })
 
     console.log('✅ いいね切り替え成功:', response)
 
-    // 🔧 APIレスポンスで最終的な状態を確定
     if (response && typeof response.is_liked !== 'undefined') {
-      const newLikedState = Boolean(response.is_liked)
+      const newLikedState = !!response.is_liked
       const newLikesCount = response.likes_count || 0
-
-      // UI更新（APIレスポンスに基づく最終更新）
       recipe.isFavorited = newLikedState
       recipe.likes = newLikesCount
-
-      // 🔧 重要: グローバルストア更新
-      if (newLikedState) {
-        favoriteStore.value.add(recipe.id)
-        console.log(`💖 レシピ${recipe.id}をお気に入りに追加（ストア更新）`)
-      } else {
-        favoriteStore.value.delete(recipe.id)
-        console.log(`💔 レシピ${recipe.id}をお気に入りから削除（ストア更新）`)
-      }
-
-      // 🔧 追加: お気に入りページへの変更通知
-      console.log('📢 お気に入りページへ変更を通知')
-      
-      // ストア変更を強制的にトリガー（他のページが監視している）
+      if (newLikedState) favoriteStore.value.add(recipe.id)
+      else favoriteStore.value.delete(recipe.id)
+      // reactivity を促す
       favoriteStore.value = new Set(favoriteStore.value)
-
-      console.log('💖 更新後のお気に入りストア:', Array.from(favoriteStore.value))
     }
 
   } catch (error) {
@@ -472,66 +355,6 @@ watch(favoriteStore, (newFavorites) => {
     }
   })
 }, { deep: true })
-
-
-
-const fetchUserFavorites = async () => {
-  try {
-    const { $auth } = useNuxtApp()
-    const token = await $auth.currentUser.getIdToken()
-
-    const response = await $fetch('/api/user/liked-recipes', {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      query: {
-        page: currentPage.value
-      }
-    })
-
-    console.log('💖 お気に入りレシピ取得:', response)
-
-    return response.data.map(recipe => ({
-      id: recipe.id,
-      title: recipe.title,
-      genre: recipe.genre,
-      likes: recipe.likes_count,
-      isFavorited: true,
-      image_url: recipe.image_url,
-      admin: recipe.admin
-    }))
-
-  } catch (error) {
-    console.error('❌ お気に入り取得エラー:', error)
-    return []
-  }
-}
-
-const debugAuth = async () => {
-  try {
-    const { $auth } = useNuxtApp()
-    console.log('🔍 認証デバッグ開始')
-    console.log('User:', user.value)
-    console.log('IsLoggedIn:', isLoggedIn.value)
-
-    if ($auth.currentUser) {
-      const token = await $auth.currentUser.getIdToken()
-      console.log('Token preview:', token.substring(0, 50) + '...')
-
-      // トークンの有効性をテスト
-      const testResponse = await $fetch('http://localhost/api/auth/check', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      })
-      console.log('認証テスト結果:', testResponse)
-    }
-  } catch (error) {
-    console.error('認証デバッグエラー:', error)
-  }
-}
 
 </script>
 
@@ -712,6 +535,12 @@ const debugAuth = async () => {
 .like-button.liked  {
   color: #dc3545;
   font-weight: 500;
+}
+
+.recipe-list .no-recipes {
+  text-align: center;
+  padding: 40px;
+  font-size: 16px;
 }
 
 

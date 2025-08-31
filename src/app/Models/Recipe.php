@@ -10,6 +10,8 @@ use Illuminate\Support\Facades\Storage;
 use App\Models\User;
 use App\Models\RecipeLike;
 use App\Models\RecipeComment;
+use App\Support\JaString;
+
 
 class Recipe extends Model
 {
@@ -17,7 +19,6 @@ class Recipe extends Model
 
     protected $fillable = [
         'title',
-        'title_reading',
         'genre',
         'servings',
         'ingredients',
@@ -27,6 +28,7 @@ class Recipe extends Model
         'is_published',
         'views_count',
         'likes_count',
+        'search_reading',
     ];
 
     protected $appends = ['image_full_url'];
@@ -167,14 +169,17 @@ class Recipe extends Model
      */
     public function scopeSearch($query, $keyword)
     {
-        if (empty($keyword)) {
-            return $query;
-        }
+        if (empty($keyword)) return $query;
 
-        return $query->where(function ($q) use ($keyword) {
-            $q->where('title', 'LIKE', "%{$keyword}%")
-                ->orWhere('ingredients', 'LIKE', "%{$keyword}%")
-                ->orWhere('genre', 'LIKE', "%{$keyword}%");
+        $raw  = $keyword;
+        $like = '%' . \App\Support\JaString::normalizeToHiragana($raw) . '%';
+
+        return $query->where(function ($q) use ($raw, $like) {
+            $q->where('title', 'LIKE', "%{$raw}%")
+            ->orWhere('genre', 'LIKE', "%{$raw}%")
+            ->orWhere('ingredients', 'LIKE', "%{$raw}%")
+            ->orWhere('instructions', 'LIKE', "%{$raw}%")  // この行を追加
+            ->orWhere('search_reading', 'LIKE', $like);
         });
     }
 
@@ -190,11 +195,24 @@ class Recipe extends Model
         return $query->where('genre', $genre);
     }
 
+    protected static function booted()
+    {
+        static::saving(function (\App\Models\Recipe $recipe) {
+            $plain = trim(
+                ($recipe->title ?? '') . ' ' .
+                ($recipe->genre ?? '') . ' ' .
+                ($recipe->ingredients ?? '') . ' ' .
+                ($recipe->instructions ?? '')  // この行を追加
+            );
+
+            $hira = \App\Support\JaString::normalizeToHiragana($plain);
+            $recipe->search_reading = trim($hira . ' ' . $plain);
+        });
+
+    }
+
     // ==================== Methods ====================
 
-    /**
-     * いいね数を更新
-     */
     public function updateLikesCount()
     {
         $count = $this->likes()->count();
@@ -202,17 +220,11 @@ class Recipe extends Model
         return $count;
     }
 
-    /**
-     * 閲覧数を増加
-     */
     public function incrementViews()
     {
         $this->increment('views_count');
     }
 
-    /**
-     * ユーザーがいいね済みかチェック
-     */
     public function isLikedBy($user)
     {
         if (!$user) {
@@ -222,9 +234,6 @@ class Recipe extends Model
         return $this->likes()->where('user_id', $user->id)->exists();
     }
 
-    /**
-     * 🔧 いいね数を強制的に再計算
-     */
     public function refreshLikesCount()
     {
         $this->likes_count = $this->likes()->count();

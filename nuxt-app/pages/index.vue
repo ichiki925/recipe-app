@@ -12,7 +12,10 @@
 
         <!-- メイン：レシピ一覧 -->
         <section class="recipe-list">
-            <div class="recipe-grid">
+            <div v-if="!isLoading && searchKeyword && recipes.length === 0" class="no-recipes">
+                レシピが見つかりませんでした。
+            </div>
+            <div v-else class="recipe-grid">
                 <div
                     v-for="recipe in recipes"
                     :key="recipe.id"
@@ -35,7 +38,7 @@
             </div>
 
             <!-- ページネーション -->
-            <div class="pagination">
+            <div v-if="!isLoading && totalPages > 1" class="pagination">
             <button
                 v-if="currentPage > 1"
                 @click="goToPage(currentPage - 1)"
@@ -476,6 +479,13 @@ watch(() => route.query, (newQuery) => {
 .login-overlay span {
     font-size: 14px;
     font-weight: bold;
+}
+
+.recipe-list
+.no-recipes {
+    text-align: center;
+    padding: 40px;
+    font-size: 16px;
 }
 
 /* レスポンシブ対応 */

@@ -21,16 +21,9 @@ class RecipeController extends Controller
         \Log::info('=== Public Recipe Index (未ログイン向け) ===');
 
         $query = Recipe::with(['admin'])
-                    ->published()
-                    ->withCount('likes');
-
-        if ($request->has('keyword') && !empty($request->keyword)) {
-            $keyword = $request->keyword;
-            $query->where(function($q) use ($keyword) {
-                $q->where('title', 'LIKE', "%{$keyword}%")
-                ->orWhere('ingredients', 'LIKE', "%{$keyword}%");
-            });
-        }
+            ->published()
+            ->withCount('likes')
+            ->search($request->keyword);
 
         $recipes = $query->latest()->paginate(9);
 
@@ -69,17 +62,10 @@ class RecipeController extends Controller
         ]);
 
         $query = Recipe::with(['admin'])
-                    ->published()
-                    ->withCount('likes');
+            ->published()
+            ->withCount('likes')
+            ->search($request->keyword);
 
-        // 検索機能
-        if ($request->has('keyword') && !empty($request->keyword)) {
-            $keyword = $request->keyword;
-            $query->where(function($q) use ($keyword) {
-                $q->where('title', 'LIKE', "%{$keyword}%")
-                ->orWhere('ingredients', 'LIKE', "%{$keyword}%");
-            });
-        }
 
         $recipes = $query->latest()->paginate(9);
 
@@ -87,7 +73,6 @@ class RecipeController extends Controller
             $isLiked = false;
 
             if ($user->isAdmin()) {
-                \Log::info("Recipe {$recipe->id}: ユーザーは管理者のためis_liked=false");
                 $isLiked = false;
             } else {
                 $likeExists = \DB::table('recipe_likes')
@@ -97,11 +82,6 @@ class RecipeController extends Controller
 
                 $isLiked = $likeExists;
 
-                \Log::info("Recipe {$recipe->id} いいね状態", [
-                    'user_id' => $user->id,
-                    'recipe_id' => $recipe->id,
-                    'is_liked' => $isLiked
-                ]);
             }
 
             return [
@@ -127,8 +107,6 @@ class RecipeController extends Controller
         ]);
     }
 
-
-
     public function search(Request $request)
     {
         try {
@@ -146,15 +124,8 @@ class RecipeController extends Controller
 
             $query = Recipe::published()
                 ->with('admin')
-                ->withCount('likes');
-
-            if (!empty($keyword)) {
-                $query->where(function($q) use ($keyword) {
-                    $q->where('title', 'LIKE', "%{$keyword}%")
-                        ->orWhere('title_reading', 'LIKE', "%{$keyword}%")
-                        ->orWhere('ingredients', 'LIKE', "%{$keyword}%");
-                });
-            }
+                ->withCount('likes')
+                ->search($request->keyword);
 
             $recipes = $query->latest()->paginate($perPage);
 
@@ -164,7 +135,6 @@ class RecipeController extends Controller
                 if ($user) {
                     if (method_exists($user, 'isAdmin') && $user->isAdmin()) {
                         $isLiked = false;
-                        \Log::debug("Recipe {$recipe->id}: 管理者のためis_liked=false");
                     } else {
                         $isLiked = \DB::table('recipe_likes')
                             ->where('user_id', $user->id)
@@ -173,9 +143,6 @@ class RecipeController extends Controller
 
                         \Log::debug("Recipe {$recipe->id}: ユーザー{$user->id}のいいね状態={$isLiked}");
                     }
-                } else {
-                    $isLiked = false;
-                    \Log::debug("Recipe {$recipe->id}: 未認証のためis_liked=false");
                 }
 
                 return [
@@ -556,17 +523,9 @@ class RecipeController extends Controller
             $query = Recipe::with(['admin', 'comments.user'])
                             ->withCount(['comments', 'likes']);
 
-            // 検索
-            if ($request->filled('keyword')) {
-                $keyword = $request->keyword;
-                $query->where(function($q) use ($keyword) {
-                    $q->where('title', 'LIKE', "%{$keyword}%")
-                        ->orWhere('title_reading', 'LIKE', "%{$keyword}%")
-                        ->orWhere('ingredients', 'LIKE', "%{$keyword}%")
-                        ->orWhere('genre', 'LIKE', "%{$keyword}%");
-                });
-                \Log::info('Search applied', ['keyword' => $keyword]);
-            }
+            $query = Recipe::with(['admin', 'comments.user'])
+                ->withCount(['comments', 'likes'])
+                ->search($request->keyword);
 
             $recipes = $query->orderBy('updated_at', 'desc')->paginate(9);
 
@@ -968,5 +927,4 @@ class RecipeController extends Controller
             // 古い画像削除の失敗は致命的ではないので、例外を再発生させない
         }
     }
-
 }

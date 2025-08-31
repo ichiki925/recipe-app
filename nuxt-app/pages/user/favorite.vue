@@ -99,6 +99,8 @@ definePageMeta({
   // layout: 'default' が自動適用
 })
 
+import { normalizeJa, normalizeFields } from '@/utils/normalize'
+
 useHead({
   link: [
     {
@@ -128,15 +130,17 @@ const favoriteStore = useState('favorites', () => new Set())
 
 // 検索でフィルタリング
 const filteredRecipes = computed(() => {
-  if (!searchKeyword.value) {
-    return favoriteRecipes.value
-  }
+  const kw = normalizeJa(searchKeyword.value || '')
+  if (!kw) return favoriteRecipes.value
 
-  const keyword = searchKeyword.value.toLowerCase()
-  return favoriteRecipes.value.filter(recipe =>
-    recipe.title.toLowerCase().includes(keyword) ||
-    recipe.genre.toLowerCase().includes(keyword)
-  )
+  return favoriteRecipes.value.filter((r) => {
+    const haystack = normalizeFields(
+      r?.title ?? '',
+      r?.genre ?? '',
+      r?.title_yomi ?? ''   // 読み仮名が来るなら
+    )
+    return haystack.includes(kw)
+  })
 })
 
 // ページネーション計算

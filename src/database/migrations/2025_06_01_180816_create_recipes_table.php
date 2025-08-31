@@ -12,7 +12,6 @@ class CreateRecipesTable extends Migration
         Schema::create('recipes', function (Blueprint $table) {
             $table->id();
             $table->string('title');
-            $table->string('title_reading')->nullable();
             $table->string('genre')->nullable();
             $table->enum('servings', ['1人分', '2人分', '3人分', '4人分', '5人分以上']);
             $table->text('ingredients');
@@ -25,9 +24,9 @@ class CreateRecipesTable extends Migration
             $table->softDeletes();
             $table->timestamps();
 
+            $table->text('search_reading')->nullable();
             $table->index('admin_id');
             $table->index('genre');
-            $table->index('title_reading');
             $table->index('is_published');
             $table->index('created_at');
             $table->index('likes_count');

@@ -102,7 +102,10 @@ Route::middleware('firebase.auth')->group(function () {
 // 🧪 デバッグ用テストルート（開発環境のみ）
 // ==============================================
 
+
+
 if (config('app.env') === 'local') {
+
     // 1. 認証なしでレシピ取得をテスト
     Route::get('/debug/recipe/{id}', function($id) {
         try {

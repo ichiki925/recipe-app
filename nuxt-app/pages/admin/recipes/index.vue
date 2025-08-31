@@ -5,7 +5,7 @@
       user-type="admin"
       :initial-keyword="searchKeyword"
       placeholder="料理名・材料で検索"
-      @search="searchRecipes"
+      @search="onSearch"
       @clear-search="handleClearSearch"
       @create-recipe="goToCreate"
     />
@@ -55,9 +55,9 @@
         >
           ＜
         </button>
-        
-        <span 
-          v-for="page in displayPages" 
+
+        <span
+          v-for="page in displayPages"
           :key="page"
           :class="{ active: page === currentPage }"
           @click="goToPage(page)"
@@ -65,8 +65,8 @@
         >
           {{ page }}
         </span>
-        
-        <button 
+
+        <button
           v-if="currentPage < totalPages"
           @click="goToPage(currentPage + 1)"
           class="pagination-btn"
@@ -134,32 +134,21 @@ const goToCreate = () => {
 
 // 削除フラグをチェックする関数
 const checkDeleteFlag = () => {
-  if (typeof localStorage !== 'undefined') {
-    const recipeDeleted = localStorage.getItem('recipeDeleted')
-    const deletedRecipeId = localStorage.getItem('deletedRecipeId')
-    if (recipeDeleted === 'true') {
-      // フラグをクリア
-      localStorage.removeItem('recipeDeleted')
-      localStorage.removeItem('deletedRecipeId')
-      setTimeout(fetchRecipes, 500)
-    }
+  if (typeof localStorage === 'undefined') return
+  if (localStorage.getItem('recipeDeleted') === 'true') {
+    localStorage.removeItem('recipeDeleted')
+    localStorage.removeItem('deletedRecipeId')
+    setTimeout(fetchRecipes, 500)
   }
 }
-
-// 【追加】更新フラグをチェックする関数
 const checkUpdateFlag = () => {
-  if (typeof localStorage !== 'undefined') {
-    const recipeUpdated = localStorage.getItem('recipeUpdated')
-    const updatedRecipeId = localStorage.getItem('updatedRecipeId')
-    if (recipeUpdated === 'true') {
-      // フラグをクリア
-      localStorage.removeItem('recipeUpdated')
-      localStorage.removeItem('updatedRecipeId')
-      setTimeout(fetchRecipes, 500)
-    }
+  if (typeof localStorage === 'undefined') return
+  if (localStorage.getItem('recipeUpdated') === 'true') {
+    localStorage.removeItem('recipeUpdated')
+    localStorage.removeItem('updatedRecipeId')
+    setTimeout(fetchRecipes, 500)
   }
 }
-
 // 初期化
 onMounted(() => {
   searchKeyword.value = route.query.keyword || ''
@@ -179,7 +168,9 @@ if (typeof window !== 'undefined') {
 }
 
 // 検索実行
-const searchRecipes = () => {
+const onSearch = (keyword) => {
+  const k = (keyword || '').trim().normalize('NFC')
+  searchKeyword.value = k
   currentPage.value = 1
   updateUrl()
   fetchRecipes()
@@ -220,23 +211,19 @@ const fetchRecipes = async () => {
     if (!$auth?.currentUser) throw new Error('認証が必要です')
     const token = await $auth.currentUser.getIdToken()
 
-    const params = new URLSearchParams()
-    if (searchKeyword.value) params.append('keyword', searchKeyword.value)
-    if (currentPage.value > 1) params.append('page', String(currentPage.value))
-
-    // ← ここだけ base を runtimeConfig から取る
-    const url = `${config.public.apiBase}/api/admin/recipes${params.toString() ? '?' + params.toString() : ''}`
-
-    const res = await fetch(url, {
-      headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' }
+    const data = await $fetch('/admin/recipes', {
+      baseURL: config.public.apiBaseUrl,
+      headers: { Authorization: `Bearer ${token}` },
+      query: {
+        keyword: searchKeyword.value || '',
+        page: currentPage.value,
+        per_page: 9
+      }
     })
-    if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`)
 
-    const data = await res.json()
-    // data.data 内の各要素に image_full_url が入ってくる想定（AdminRecipeResource で付与済み）
     recipes.value     = Array.isArray(data.data) ? data.data : []
-    currentPage.value = data.current_page || 1
-    totalPages.value  = data.last_page   || 1
+    currentPage.value = Number(data.current_page || 1)
+    totalPages.value  = Number(data.last_page   || 1)
   } catch (e) {
     console.error('❌ レシピ取得エラー:', e)
     error.value = 'レシピの取得に失敗しました。'
@@ -248,9 +235,6 @@ const fetchRecipes = async () => {
   }
 }
 
-
-
-
 // URLクエリ変更の監視（修正版）
 watch(() => route.query, (newQuery) => {
   try {
@@ -261,7 +245,6 @@ watch(() => route.query, (newQuery) => {
     console.error('クエリ監視エラー:', error)
   }
 })
-
 
 </script>
 
