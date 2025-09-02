@@ -14,15 +14,27 @@
     <section class="recipe-list">
       <h2 class="page-title">
         <i class="fas fa-heart"></i>
-        お気に入りレシピ ({{ filteredRecipes.length }}件)
+        お気に入りレシピ ({{ totalRecipes }}件)
       </h2>
 
+      <!-- ローディング表示 -->
+      <div v-if="isLoading" class="loading">
+        <i class="fas fa-spinner fa-spin"></i>
+        読み込み中...
+      </div>
+
       <!-- レシピが0件の場合のメッセージ -->
-      <div v-if="filteredRecipes.length === 0" class="no-recipes">
+      <div v-else-if="favoriteRecipes.length === 0" class="no-recipes">
         <div class="empty-state">
           <i class="far fa-heart empty-heart"></i>
-          <h3>お気に入りのレシピがありません</h3>
-          <p>レシピ一覧で♡をクリックして、<br>お気に入りに追加してみましょう！</p>
+          <h3 v-if="!searchKeyword">お気に入りのレシピがありません</h3>
+          <h3 v-else>「{{ searchKeyword }}」に該当するお気に入りレシピがありません</h3>
+          <p v-if="!searchKeyword">
+            レシピ一覧で♡をクリックして、<br>お気に入りに追加してみましょう！
+          </p>
+          <p v-else>
+            検索条件を変更するか、他のレシピをお気に入りに追加してみてください。
+          </p>
           <NuxtLink to="/user" class="back-to-recipes">
             レシピ一覧に戻る
           </NuxtLink>
@@ -31,7 +43,7 @@
 
       <div v-else class="recipe-grid">
         <div
-          v-for="recipe in paginatedRecipes"
+          v-for="recipe in favoriteRecipes"
           :key="recipe.id"
           class="recipe-card"
           :data-recipe-id="recipe.id"
@@ -63,7 +75,7 @@
       </div>
 
       <!-- ページネーション -->
-      <div class="pagination" v-if="filteredRecipes.length > recipesPerPage">
+      <div class="pagination" v-if="!isLoading && totalPages > 1">
         <button
           v-if="currentPage > 1"
           @click="goToPage(currentPage - 1)"
@@ -99,8 +111,6 @@ definePageMeta({
   // layout: 'default' が自動適用
 })
 
-import { normalizeJa, normalizeFields } from '@/utils/normalize'
-
 useHead({
   link: [
     {
@@ -111,12 +121,13 @@ useHead({
 })
 
 // 認証関連
-const { user, isLoggedIn, initAuth, getIdToken } = useAuth()
+const { user, isLoggedIn, initAuth } = useAuth()
 
-// データ定義
+// データ定義（他のページと統一）
 const searchKeyword = ref('')
 const currentPage = ref(1)
-const recipesPerPage = 6
+const totalPages = ref(1)
+const totalRecipes = ref(0)
 const isLoading = ref(false)
 
 // お気に入りレシピデータ
@@ -128,129 +139,73 @@ const router = useRouter()
 // お気に入り状態管理用のグローバルストア
 const favoriteStore = useState('favorites', () => new Set())
 
-// 検索でフィルタリング
-const filteredRecipes = computed(() => {
-  const kw = normalizeJa(searchKeyword.value || '')
-  if (!kw) return favoriteRecipes.value
-
-  return favoriteRecipes.value.filter((r) => {
-    const haystack = normalizeFields(
-      r?.title ?? '',
-      r?.genre ?? '',
-      r?.title_yomi ?? ''   // 読み仮名が来るなら
-    )
-    return haystack.includes(kw)
-  })
-})
-
-// ページネーション計算
-const totalPages = computed(() => {
-  return Math.ceil(filteredRecipes.value.length / recipesPerPage)
-})
-
-const paginatedRecipes = computed(() => {
-  const start = (currentPage.value - 1) * recipesPerPage
-  const end = start + recipesPerPage
-  return filteredRecipes.value.slice(start, end)
-})
-
-const getImageUrl = (imageUrl) => {
-  console.log(`🔍 getImageUrl called with: ${imageUrl}`)
-  
-  if (!imageUrl) {
-    console.log(`🔍 No image URL, returning default`)
-    return '/images/no-image.png'
-  }
-
-  if (imageUrl.startsWith('/storage/')) {
-    const fullUrl = `http://localhost:8000${imageUrl}`
-    console.log(`🔍 Converted relative URL to: ${fullUrl}`)
-    return fullUrl
-  }
-
-  console.log(`🔍 Using original URL: ${imageUrl}`)
-  return imageUrl
-}
-
-
-
-const handleImageError = (event, recipe) => {
-  console.log(`❌ 画像読み込みエラー: ${recipe.title}`)
-  console.log(`❌ 画像URL: ${recipe.image_url}`)
-  console.log(`❌ 処理済みURL: ${getImageUrl(recipe.image_url)}`)
-
-  event.target.onerror = null
-  const parent = event.target.parentElement
-  event.target.style.display = 'none'
-
-  if (!parent.querySelector('.no-image-fallback')) {
-    const placeholder = document.createElement('div')
-    placeholder.className = 'no-image-fallback'
-    placeholder.innerHTML = '<div class="no-image-text">No Image</div>'
-    parent.appendChild(placeholder)
-  }
-}
-
-// お気に入りレシピをAPIから取得
-// お気に入りレシピをAPIから取得
+// APIベースのお気に入りレシピ取得（検索対応）
 const fetchFavoriteRecipes = async () => {
   if (!user.value) return
 
   try {
     isLoading.value = true
+    console.log('🔍 お気に入り検索:', searchKeyword.value, 'ページ:', currentPage.value)
+
     const config = useRuntimeConfig()
     const { $auth } = useNuxtApp()
-    const token = await $auth.currentUser.getIdToken()
+    const token = await $auth.currentUser.getIdToken(true)
 
-    const response = await $fetch(`${config.public.apiBase}/api/user/liked-recipes`, {
-      method: 'GET',
+    // 新しいAPIエンドポイントを使用
+    const response = await $fetch('/user/liked-recipes', {
+      baseURL: config.public.apiBaseUrl,
       headers: {
         Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json'
       },
-      query: { keyword: searchKeyword.value || '', page: 1, per_page: 100 }
-    })
-
-    // 想定: { data: [...] }
-    const items = Array.isArray(response?.data) ? response.data : []
-    favoriteRecipes.value = items.map((r) => {
-      // ① バックエンドが返す絶対URLを優先
-      // ② なければ /storage/... を絶対URLに直す
-      // ③ それもなければ null
-      const img =
-        r.image_full_url ??
-        (r.image_url
-          ? (String(r.image_url).startsWith('/storage/')
-              ? `${config.public.apiBase}${r.image_url}`
-              : r.image_url)
-          : null)
-
-      return {
-        id: r.id,
-        title: r.title,
-        genre: r.genre,
-        likes: r.likes_count ?? 0,
-        isFavorited: true,
-        image_full_url: img,
-        admin: r.admin ?? null,
+      query: {
+        keyword: searchKeyword.value || '',
+        page: currentPage.value,
+        per_page: 6 // お気に入りページは6件表示
       }
     })
 
-    // ストア同期
-    favoriteStore.value.clear()
-    favoriteRecipes.value.forEach((r) => favoriteStore.value.add(r.id))
+    console.log('📦 お気に入りAPI応答:', response)
+
+    // レシピデータを更新
+    favoriteRecipes.value = (response.data || []).map(recipe => ({
+      id: recipe.id,
+      title: recipe.title,
+      genre: recipe.genre,
+      likes_count: recipe.likes_count,
+      isFavorited: true,
+      image_full_url: recipe.image_full_url,
+      admin: recipe.admin
+    }))
+
+    // ページネーション情報更新
+    currentPage.value = response.current_page || 1
+    totalPages.value = response.last_page || 1
+    totalRecipes.value = response.total || 0
+
+    // ストア同期（お気に入りページで表示されているものは全てお気に入り）
+    favoriteRecipes.value.forEach(recipe => {
+      favoriteStore.value.add(recipe.id)
+    })
     favoriteStore.value = new Set(favoriteStore.value)
+
+    console.log(`✅ ${favoriteRecipes.value.length}件のお気に入りレシピを取得しました`)
 
   } catch (error) {
     console.error('❌ お気に入りレシピ取得エラー:', error)
     favoriteRecipes.value = []
-    favoriteStore.value.clear()
-    alert('お気に入りレシピの取得に失敗しました。ページを再読み込みしてください。')
+    totalRecipes.value = 0
+    totalPages.value = 1
+
+    // 401エラーの場合はログイン画面にリダイレクト
+    if (error.status === 401 || error.statusCode === 401) {
+      console.log('🔒 認証エラーのためログイン画面にリダイレクト')
+      await navigateTo('/auth/login')
+    }
   } finally {
     isLoading.value = false
   }
 }
-
 
 // 詳細ページへの遷移
 const goToRecipeDetail = (recipeId) => {
@@ -258,44 +213,42 @@ const goToRecipeDetail = (recipeId) => {
   navigateTo(`/user/show/${recipeId}`)
 }
 
-// コンポーネント初期化
-onMounted(async () => {
-  console.log('🔍 お気に入りページの認証チェック開始...')
+// 検索処理（他のページと同じ）
+const handleSearch = (keyword) => {
+  searchKeyword.value = keyword
+  currentPage.value = 1
+  updateUrl()
+  fetchFavoriteRecipes()
+}
 
-  try {
-    // 🔧 修正：waitForAuthではなく、他のページと同じ方法を使用
-    await initAuth()
-    console.log('👤 認証チェック結果:', user.value ? user.value.email : 'null')
+const handleClearSearch = () => {
+  searchKeyword.value = ''
+  currentPage.value = 1
+  updateUrl()
+  fetchFavoriteRecipes()
+}
 
-    if (!user.value) {
-      console.log('⚠️ 認証失敗 - ログインページにリダイレクト')
-      await navigateTo('/auth/login')
-      return
-    }
+const goToPage = (page) => {
+  currentPage.value = page
+  updateUrl()
+  fetchFavoriteRecipes()
+}
 
-    console.log('✅ 認証成功:', user.value.email, 'お気に入りページを表示')
+const updateUrl = () => {
+  const query = {}
+  if (searchKeyword.value) query.keyword = searchKeyword.value
+  if (currentPage.value > 1) query.page = currentPage.value
+  router.push({ path: '/user/favorite', query })
+}
 
-    // 初期データ読み込み
-    searchKeyword.value = route.query.keyword || ''
-    currentPage.value = parseInt(route.query.page) || 1
-
-    // お気に入りレシピを取得
-    await fetchFavoriteRecipes()
-
-  } catch (error) {
-    console.error('❌ 認証処理エラー:', error)
-    await navigateTo('/auth/login')
-  }
-})
-
-// お気に入りから削除する機能（API連携版）
+// お気に入りから削除する機能
 const toggleLike = async (recipe) => {
   if (!user.value) return
 
   try {
     console.log(`💔 レシピ${recipe.id}「${recipe.title}」をお気に入りから削除中...`)
 
-    // 🔧 楽観的更新: UIから即座に削除
+    // 楽観的更新: UIから即座に削除
     const recipeElement = document.querySelector(`[data-recipe-id="${recipe.id}"]`)
     if (recipeElement) {
       recipeElement.style.transition = 'opacity 0.3s ease, transform 0.3s ease'
@@ -303,43 +256,15 @@ const toggleLike = async (recipe) => {
       recipeElement.style.transform = 'scale(0.8)'
     }
 
-    // 🔧 楽観的更新: ストアから即座に削除
+    // ストアから削除
     favoriteStore.value.delete(recipe.id)
-
-    // 🔧 楽観的更新: リストからも即座に削除
-    favoriteRecipes.value = favoriteRecipes.value.filter(r => r.id !== recipe.id)
-
-    // 🔧 追加: ページネーション自動調整
-    const remainingRecipes = favoriteRecipes.value.length
-    const maxPages = Math.ceil(remainingRecipes / recipesPerPage)
-    
-    console.log(`📊 削除後の状況:`, {
-      remainingRecipes,
-      currentPage: currentPage.value,
-      maxPages,
-      recipesPerPage
-    })
-
-    // 現在のページが最大ページを超えている場合、前のページに戻る
-    if (currentPage.value > maxPages && maxPages > 0) {
-      console.log(`🔄 ページ調整: ${currentPage.value} → ${maxPages}`)
-      currentPage.value = maxPages
-      updateUrl() // URLも更新
-    }
-    
-    // 全部削除された場合は1ページ目に戻る
-    if (remainingRecipes === 0) {
-      console.log(`🔄 全削除のため1ページ目に戻る`)
-      currentPage.value = 1
-      updateUrl()
-    }
 
     const config = useRuntimeConfig()
     const { $auth } = useNuxtApp()
     const token = await $auth.currentUser.getIdToken()
 
-
-    const response = await $fetch(`${config.public.apiBase}/api/recipes/${recipe.id}/toggle-like`, {
+    const response = await $fetch(`/recipes/${recipe.id}/toggle-like`, {
+      baseURL: config.public.apiBaseUrl,
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -349,28 +274,17 @@ const toggleLike = async (recipe) => {
 
     console.log('✅ お気に入り削除API応答:', response)
 
-    // 🔧 APIが成功した場合の最終確認
-    if (response && !response.is_liked) {
-      console.log(`💔 レシピ${recipe.id}「${recipe.title}」をお気に入りから削除しました（API確認済み）`)
-      
-      // 🔧 ストア変更を強制的にトリガー（他のページに通知）
-      favoriteStore.value = new Set(favoriteStore.value)
-      
-    } else {
-      // APIレスポンスが期待と異なる場合はロールバック
-      throw new Error('APIレスポンスが期待と異なります')
-    }
+    // APIが成功したらデータを再取得（検索結果も更新される）
+    await fetchFavoriteRecipes()
+
+    // ストア変更を強制的にトリガー
+    favoriteStore.value = new Set(favoriteStore.value)
 
   } catch (error) {
     console.error('❌ お気に入り削除エラー:', error)
 
-    // 🔧 エラー時は楽観的更新をロールバック
+    // エラー時は楽観的更新をロールバック
     favoriteStore.value.add(recipe.id)
-    
-    // レシピをリストに戻す
-    if (!favoriteRecipes.value.find(r => r.id === recipe.id)) {
-      favoriteRecipes.value.push(recipe)
-    }
 
     // アニメーションを元に戻す
     const recipeElement = document.querySelector(`[data-recipe-id="${recipe.id}"]`)
@@ -383,58 +297,62 @@ const toggleLike = async (recipe) => {
   }
 }
 
+// コンポーネント初期化
+onMounted(async () => {
+  console.log('🔍 お気に入りページの認証チェック開始...')
 
-const handleSearch = (keyword) => {
-  searchKeyword.value = keyword
-  currentPage.value = 1
-  updateUrl()
-  console.log('🔍 お気に入りレシピ検索:', searchKeyword.value)
-  // 検索はクライアントサイドで実行（filteredRecipesが自動更新）
-}
+  try {
+    await initAuth()
+    console.log('👤 認証チェック結果:', user.value ? user.value.email : 'null')
 
-const handleClearSearch = () => {
-  searchKeyword.value = ''
-  currentPage.value = 1
-  updateUrl()
-  // お気に入りページでは検索はクライアントサイドなのでfetchは不要
-}
-
-const goToPage = (page) => {
-  currentPage.value = page
-  updateUrl()
-}
-
-const updateUrl = () => {
-  const query = {}
-  if (searchKeyword.value) query.keyword = searchKeyword.value
-  if (currentPage.value > 1) query.page = currentPage.value
-  router.push({ path: '/user/favorite', query })
-}
-
-// お気に入りストアの変更を監視してデータを再取得
-watch(favoriteStore, async (newFavorites, oldFavorites) => {
-  // 初回実行や同じ参照の場合はスキップ
-  if (!oldFavorites || newFavorites === oldFavorites) return
-
-  console.log('🔄 お気に入りページ: ストア変更を検知')
-  console.log('新しいストア:', Array.from(newFavorites))
-  console.log('古いストア:', Array.from(oldFavorites))
-
-  // サイズが変わった場合のみ再取得
-  if (newFavorites.size !== oldFavorites.size) {
-    console.log('📊 ストアサイズ変更を検知、データ再取得')
-    await fetchFavoriteRecipes()
-  } else {
-    // サイズが同じでも中身が違う場合があるのでチェック
-    const newArray = Array.from(newFavorites).sort()
-    const oldArray = Array.from(oldFavorites).sort()
-
-    if (JSON.stringify(newArray) !== JSON.stringify(oldArray)) {
-      console.log('📊 ストア内容変更を検知、データ再取得')
-      await fetchFavoriteRecipes()
+    if (!user.value) {
+      console.log('⚠️ 認証失敗 - ログインページにリダイレクト')
+      await navigateTo('/auth/login')
+      return
     }
+
+    console.log('✅ 認証成功:', user.value.email, 'お気に入りページを表示')
+
+    // URLクエリの設定
+    searchKeyword.value = route.query.keyword || ''
+    currentPage.value = parseInt(route.query.page) || 1
+
+    // お気に入りレシピを取得
+    await fetchFavoriteRecipes()
+
+  } catch (error) {
+    console.error('❌ 認証処理エラー:', error)
+    await navigateTo('/auth/login')
   }
-}, { deep: true })
+})
+
+// URLクエリの監視（他のページと同じ）
+watch(() => route.query, (newQuery, oldQuery) => {
+  const newKeyword = newQuery.keyword || ''
+  const newPage = parseInt(newQuery.page) || 1
+  
+  const oldKeyword = searchKeyword.value
+  const oldPage = currentPage.value
+
+  let shouldFetch = false
+
+  if (newKeyword !== oldKeyword) {
+    searchKeyword.value = newKeyword
+    shouldFetch = true
+    console.log('🔍 検索キーワード変更:', oldKeyword, '→', newKeyword)
+  }
+
+  if (newPage !== oldPage) {
+    currentPage.value = newPage
+    shouldFetch = true
+    console.log('📄 ページ変更:', oldPage, '→', newPage)
+  }
+
+  if (shouldFetch) {
+    console.log('🔄 URLクエリ変更によりデータ再取得')
+    fetchFavoriteRecipes()
+  }
+}, { immediate: false })
 </script>
 
 <style scoped>
@@ -473,39 +391,17 @@ watch(favoriteStore, async (newFavorites, oldFavorites) => {
     transform: scale(1.05);
 }
 
-.no-image {
-    width: 100%;
-    height: 300px;
-    background-color: #f0f0f0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #999;
-    font-size: 14px;
-    border-radius: 6px;
-  }
-
-.no-image-fallback {
-    width: 100%;
-    height: 100%;
-    background-color: #f0f0f0;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    color: #999;
-    border-radius: 6px;
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
+.loading {
+  text-align: center;
+  padding: 40px;
+  color: #666;
+  font-size: 16px;
 }
 
-.no-image-text {
-    font-size: 14px;
-    font-weight: 500;
-    text-align: center;
+.loading i {
+  font-size: 20px;
+  margin-right: 10px;
+  color: #dc3545;
 }
 
 .page-title {
@@ -602,8 +498,6 @@ watch(favoriteStore, async (newFavorites, oldFavorites) => {
     box-shadow: 2px 4px 12px rgba(0, 0, 0, 0.15);
 }
 
-
-
 .recipe-title {
     margin-top: 10px;
     font-weight: bold;
@@ -645,7 +539,6 @@ watch(favoriteStore, async (newFavorites, oldFavorites) => {
   animation: heartPulse 0.3s ease;
 }
 
-
 .heart-icon-filled {
     color: #dc3545;
     font-size: 16px;
@@ -655,12 +548,6 @@ watch(favoriteStore, async (newFavorites, oldFavorites) => {
   font-size: 12px;
   color: #dc3545;
   font-weight: 500;
-  transform: translateY(-1.5px);
-}
-
-.like-count {
-  font-size: 12px;
-  color: #333;
   transform: translateY(-1.5px);
 }
 
@@ -711,27 +598,6 @@ watch(favoriteStore, async (newFavorites, oldFavorites) => {
     color: white;
 }
 
-.like-button.clickable {
-  cursor: pointer;
-  transition: transform 0.2s, opacity 0.2s;
-}
-
-.like-button.clickable:hover {
-  transform: scale(1.1);
-  opacity: 0.8;
-}
-
-.no-recipes {
-  text-align: center;
-  padding: 40px;
-  color: #333;
-  font-size: 18px;
-}
-
-.recipe-card {
-  transition: opacity 0.3s, transform 0.3s;
-}
-
 @media (max-width: 768px) {
     .recipe-page {
       flex-direction: column;
@@ -750,6 +616,4 @@ watch(favoriteStore, async (newFavorites, oldFavorites) => {
       font-size: 1.2rem;
     }
 }
-
-
 </style>

@@ -228,6 +228,7 @@ Route::middleware('firebase.auth')->group(function () {
     });
 
     Route::get('/user/recipes', [RecipeController::class, 'userIndex']);
+    Route::get('/user/liked-recipes', [RecipeController::class, 'likedRecipes']);
 
     Route::get('/recipes/{recipe}', [RecipeController::class, 'show']);
 
@@ -253,7 +254,6 @@ Route::middleware('firebase.auth')->group(function () {
     Route::prefix('user')->group(function () {
         Route::get('/profile', [ProfileController::class, 'show']);
         Route::put('/profile', [ProfileController::class, 'update']);
-        Route::get('/liked-recipes', [LikeController::class, 'userLikes']);
         Route::get('/comments', [CommentController::class, 'userComments']);
     });
 });

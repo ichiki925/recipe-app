@@ -172,14 +172,16 @@ class Recipe extends Model
         if (empty($keyword)) return $query;
 
         $raw  = $keyword;
-        $like = '%' . \App\Support\JaString::normalizeToHiragana($raw) . '%';
+        $likeRaw  = "%{$raw}%";
+        $likeHira = '%' . \App\Support\JaString::normalizeToHiragana($raw) . '%';
 
-        return $query->where(function ($q) use ($raw, $like) {
-            $q->where('title', 'LIKE', "%{$raw}%")
-            ->orWhere('genre', 'LIKE', "%{$raw}%")
-            ->orWhere('ingredients', 'LIKE', "%{$raw}%")
-            ->orWhere('instructions', 'LIKE', "%{$raw}%")  // この行を追加
-            ->orWhere('search_reading', 'LIKE', $like);
+        return $query->where(function ($q) use ($likeRaw, $likeHira) {
+            $q->where('title', 'LIKE', $likeRaw)
+            ->orWhere('genre', 'LIKE', $likeRaw)
+            ->orWhere('ingredients', 'LIKE', $likeRaw)
+            ->orWhere('instructions', 'LIKE', $likeRaw)
+            ->orWhere('search_reading', 'LIKE', $likeRaw)   // 生の文字列でも検索
+            ->orWhere('search_reading', 'LIKE', $likeHira); // ひらがな正規化でも検索
         });
     }
 

@@ -152,6 +152,9 @@ onMounted(async () => {
       return
     }
 
+    favoriteStore.value.clear()
+    console.log('🔄 ログイン時：ストアをクリア')
+
     // URLクエリの設定
     searchKeyword.value = route.query.keyword || ''
     currentPage.value = parseInt(route.query.page) || 1
@@ -207,8 +210,43 @@ const fetchRecipes = async () => {
 
     if (user.value) {
       const { $auth } = useNuxtApp()
-      headers.Authorization = `Bearer ${await $auth.currentUser.getIdToken()}`
+
+      console.log('🔑 認証情報確認:', {
+        hasUser: !!user.value,
+        userEmail: user.value?.email,
+        hasAuth: !!$auth,
+        hasCurrentUser: !!$auth.currentUser
+      })
+
+      try {
+        const token = await $auth.currentUser.getIdToken(true) // forceRefresh=true
+        headers.Authorization = `Bearer ${token}`
+        
+        console.log('🔑 トークン生成成功:', {
+          tokenLength: token?.length,
+          tokenPreview: token?.substring(0, 50) + '...'
+        })
+        
+      } catch (tokenError) {
+        console.error('🔑 トークン取得エラー:', tokenError)
+        // トークン取得失敗時はログイン画面にリダイレクト
+        await navigateTo('/auth/login')
+        return
+      }
+    } else {
+      console.log('🔑 ユーザー未認証')
     }
+
+    console.log('📡 APIリクエスト送信:', {
+      baseURL: config.public.apiBaseUrl,
+      hasAuthHeader: !!headers.Authorization,
+      query: {
+        keyword: searchKeyword.value || '',
+        page: currentPage.value,
+        per_page: 9
+      }
+    })
+
 
     const response = await $fetch('/recipes/search', {
       baseURL: config.public.apiBaseUrl,
@@ -220,7 +258,15 @@ const fetchRecipes = async () => {
       }
     })
 
-    console.log('📦 API応答:', response)
+    console.log('📦 API応答（完全版）:', response)
+
+    // 🔍 APIの各レシピのis_liked状態を詳細確認
+    if (response.data) {
+      console.log('🔍 各レシピのis_liked状態:')
+      response.data.forEach(r => {
+        console.log(`レシピ${r.id}: is_liked=${r.is_liked}, likes_count=${r.likes_count}`)
+      })
+    }
 
     recipes.value = (response.data || []).map(r => ({
       id: r.id,
@@ -232,9 +278,54 @@ const fetchRecipes = async () => {
       admin: r.admin
     }))
 
-    favoriteStore.value = new Set(
-      recipes.value.filter(r => r.isFavorited).map(r => r.id)
-    )
+    // 🔍 変換後のレシピ状態も確認
+    console.log('🔍 変換後のレシピ状態:')
+    recipes.value.forEach(r => {
+      console.log(`レシピ${r.id}(${r.title}): isFavorited=${r.isFavorited}`)
+    })
+
+    const isFirstLoad = favoriteStore.value.size === 0
+    const hasApiFavorites = recipes.value.some(r => r.isFavorited)
+
+    console.log('🔍 状態確認:', {
+      isFirstLoad,
+      hasApiFavorites, 
+      storeSize: favoriteStore.value.size,
+      apiFavoriteIds: recipes.value.filter(r => r.isFavorited).map(r => r.id),
+      currentStoreIds: Array.from(favoriteStore.value)
+    })
+
+    if (isFirstLoad) {
+      console.log('🔄 ログイン直後またはページ初期化：APIの状態でストアを初期化')
+      // ストアが空の場合は必ずAPIの状態をストアに同期
+      recipes.value.forEach(recipe => {
+        if (recipe.isFavorited) {
+          favoriteStore.value.add(recipe.id)
+          console.log(`🔄 ストアに復元: レシピ${recipe.id} → お気に入り追加`)
+        }
+      })
+      // ストアが更新されたことを確認
+      console.log('🔄 ストア更新後:', Array.from(favoriteStore.value))
+      // 🔥 強制的にreactivityをトリガー
+      favoriteStore.value = new Set(favoriteStore.value)
+    } else {
+      console.log('🔄 通常時：ストアを優先')
+      // 通常時：ストアを優先（画面遷移時の保持）
+      recipes.value.forEach(recipe => {
+        const shouldBeFavorited = favoriteStore.value.has(recipe.id)
+        if (recipe.isFavorited !== shouldBeFavorited) {
+          recipe.isFavorited = shouldBeFavorited
+          console.log(`🔄 レシピ${recipe.id}: ストア優先で${shouldBeFavorited}に更新`)
+        }
+      })
+    }
+
+    // 🔍 最終的なレシピ状態を確認
+    console.log('🔍 最終的なレシピ状態:')
+    recipes.value.forEach(r => {
+      console.log(`レシピ${r.id}(${r.title}): isFavorited=${r.isFavorited}, inStore=${favoriteStore.value.has(r.id)}`)
+    })
+
 
     // ページネーション情報更新
     currentPage.value = Number(response.current_page ?? 1)
@@ -242,6 +333,14 @@ const fetchRecipes = async () => {
 
     } catch (e) {
     console.error('❌ レシピ取得エラー:', e)
+
+    // 401エラーの場合はログイン画面にリダイレクト
+    if (e.status === 401 || e.statusCode === 401) {
+      console.log('🔒 認証エラーのためログイン画面にリダイレクト')
+      await navigateTo('/auth/login')
+    }
+  } finally {
+    isLoading.value = false
   }
 }
 

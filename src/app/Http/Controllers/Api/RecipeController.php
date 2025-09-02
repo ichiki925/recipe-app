@@ -16,6 +16,8 @@ class RecipeController extends Controller
 {
     private const IMAGE_DIRECTORY = 'recipe_images';
 
+    
+
     public function index(Request $request)
     {
         \Log::info('=== Public Recipe Index (未ログイン向け) ===');
@@ -107,84 +109,212 @@ class RecipeController extends Controller
         ]);
     }
 
+    public function likedRecipes(Request $request)
+    {
+        $user = $request->user();
+
+        if (!$user || $user->isAdmin()) {
+            return response()->json([
+                'current_page' => 1,
+                'data' => [],
+                'last_page' => 1,
+                'per_page' => 6,
+                'total' => 0
+            ]);
+        }
+
+        \Log::info('=== Liked Recipes (お気に入りページ用) ===', [
+            'user_id' => $user->id,
+            'keyword' => $request->keyword
+        ]);
+
+        $query = Recipe::with(['admin'])
+            ->published()
+            ->withCount('likes')
+            ->whereHas('likes', function($q) use ($user) {
+                $q->where('user_id', $user->id);
+            })
+            ->search($request->keyword); // 既存の検索ロジックを使用
+
+        $recipes = $query->latest()->paginate($request->get('per_page', 6));
+
+        $recipesData = $recipes->getCollection()->map(function ($recipe) {
+            return [
+                'id' => $recipe->id,
+                'title' => $recipe->title,
+                'genre' => $recipe->genre,
+                'likes_count' => $recipe->likes_count ?? 0,
+                'image_url' => $recipe->image_url,
+                'image_full_url' => $recipe->image_url
+                    ? asset($recipe->image_url)
+                    : asset('images/no-image.png'),
+                'is_liked' => true, // お気に入りページなので常にtrue
+                'admin' => [
+                    'id' => $recipe->admin->id,
+                    'name' => $recipe->admin->name
+                ]
+            ];
+        });
+
+        return response()->json([
+            'current_page' => $recipes->currentPage(),
+            'data' => $recipesData,
+            'last_page' => $recipes->lastPage(),
+            'per_page' => $recipes->perPage(),
+            'total' => $recipes->total()
+        ]);
+    }
+
+    // public function search(Request $request)
+    // {
+    //     try {
+    //         $keyword = $request->get('keyword', '');
+    //         $perPage = $request->get('per_page', 9);
+            
+    //         $user = null;
+
+    //         if ($request->hasHeader('Authorization')) {
+    //             try {
+    //                 // Firebaseミドルウェアの処理を手動実行
+    //                 $firebaseMiddleware = app(\App\Http\Middleware\FirebaseAuth::class);
+    //                 $firebaseMiddleware->handle($request, function ($req) {
+    //                     return $req;
+    //                 });
+    //                 $user = $request->user();
+                    
+    //                 \Log::info('手動認証成功:', ['user_id' => $user ? $user->id : null]);
+    //             } catch (\Exception $e) {
+    //                 \Log::info('手動認証失敗 - 未ログインとして処理:', ['error' => $e->getMessage()]);
+    //                 $user = null;
+    //             }
+    //         }
+
+    //         $query = Recipe::published()
+    //             ->with('admin')
+    //             ->withCount('likes')
+    //             ->search($request->keyword);
+
+    //         $recipes = $query->latest()->paginate($perPage);
+
+    //         $recipesData = collect($recipes->items())->map(function($recipe) use ($user) {
+    //             $isLiked = false;
+
+    //             // ユーザーがログインしている場合のみお気に入り状態をチェック
+    //             if ($user && !($user->isAdmin() ?? false)) {
+    //                 $isLiked = \DB::table('recipe_likes')
+    //                     ->where('user_id', $user->id)
+    //                     ->where('recipe_id', $recipe->id)
+    //                     ->exists();
+    //             }
+
+
+    //             return [
+    //                 'id' => $recipe->id,
+    //                 'title' => $recipe->title,
+    //                 'genre' => $recipe->genre,
+    //                 'likes_count' => $recipe->likes_count ?? 0,
+    //                 'image_url' => $recipe->image_url,
+    //                 'is_liked' => $isLiked,
+    //                 'admin' => [
+    //                     'id' => $recipe->admin->id,
+    //                     'name' => $recipe->admin->name
+    //                 ]
+    //             ];
+    //         });
+
+    //         return response()->json([
+    //             'current_page' => $recipes->currentPage(),
+    //             'data' => $recipesData,
+    //             'last_page' => $recipes->lastPage(),
+    //             'per_page' => $recipes->perPage(),
+    //             'total' => $recipes->total()
+    //         ]);
+
+    //     } catch (\Exception $e) {
+    //         \Log::error('Recipe search error', ['error' => $e->getMessage()]);
+
+
+    //         return response()->json([
+    //             'current_page' => 1,
+    //             'data' => [],
+    //             'last_page' => 1,
+    //             'per_page' => 9,
+    //             'total' => 0
+    //         ]);
+    //     }
+    // }
+
     public function search(Request $request)
     {
         try {
-            $keyword = $request->get('keyword', '');
-            $perPage = $request->get('per_page', 9);
-            $user = $request->user();
+            $keyword = (string) $request->get('keyword', '');
+            $perPage = (int) $request->get('per_page', 9);
 
-            \Log::info('Recipe search started', [
-                'keyword' => $keyword,
-                'page' => $request->get('page', 1),
-                'is_authenticated' => $user ? true : false,
-                'user_id' => $user ? $user->id : null,
-                'is_admin' => $user && method_exists($user, 'isAdmin') ? $user->isAdmin() : false
-            ]);
+            // 認証（ミドルウェアに依存しつつ、無い場合は手動でフォールバック）
+            $user = $request->user();
+            if (!$user && $request->hasHeader('Authorization')) {
+                try {
+                    app(\App\Http\Middleware\FirebaseAuth::class)
+                        ->handle($request, fn($req) => $req);
+                    $user = $request->user();
+                } catch (\Throwable $e) {
+                    // 認証失敗でもゲストとして続行
+                    \Log::info('Auth fallback failed: ' . $e->getMessage());
+                }
+            }
 
             $query = Recipe::published()
                 ->with('admin')
                 ->withCount('likes')
-                ->search($request->keyword);
+                ->search($keyword);
 
             $recipes = $query->latest()->paginate($perPage);
 
-            $recipesData = collect($recipes->items())->map(function($recipe) use ($user) {
+            $data = collect($recipes->items())->map(function ($r) use ($user) {
                 $isLiked = false;
-
-                if ($user) {
-                    if (method_exists($user, 'isAdmin') && $user->isAdmin()) {
-                        $isLiked = false;
-                    } else {
-                        $isLiked = \DB::table('recipe_likes')
-                            ->where('user_id', $user->id)
-                            ->where('recipe_id', $recipe->id)
-                            ->exists();
-
-                        \Log::debug("Recipe {$recipe->id}: ユーザー{$user->id}のいいね状態={$isLiked}");
-                    }
+                if ($user && method_exists($user, 'isAdmin') && !$user->isAdmin()) {
+                    $isLiked = \DB::table('recipe_likes')
+                        ->where('user_id', $user->id)
+                        ->where('recipe_id', $r->id)
+                        ->exists();
                 }
 
                 return [
-                    'id' => $recipe->id,
-                    'title' => $recipe->title,
-                    'genre' => $recipe->genre,
-                    'likes_count' => $recipe->likes_count ?? 0,
-                    'image_url' => $recipe->image_url,
-                    'is_liked' => $isLiked,
-                    'admin' => [
-                        'id' => $recipe->admin->id,
-                        'name' => $recipe->admin->name
-                    ]
+                    'id'            => $r->id,
+                    'title'         => $r->title,
+                    'genre'         => $r->genre,
+                    'likes_count'   => $r->likes_count ?? 0,
+                    'image_url'     => $r->image_url,
+                    'image_full_url'=> $r->image_url ? asset($r->image_url) : asset('images/no-image.png'),
+                    'is_liked'      => $isLiked,
+                    'admin'         => [
+                        'id'   => optional($r->admin)->id,
+                        'name' => optional($r->admin)->name,
+                    ],
                 ];
             });
 
             return response()->json([
                 'current_page' => $recipes->currentPage(),
-                'data' => $recipesData,
-                'last_page' => $recipes->lastPage(),
-                'per_page' => $recipes->perPage(),
-                'total' => $recipes->total()
+                'data'         => $data,
+                'last_page'    => $recipes->lastPage(),
+                'per_page'     => $recipes->perPage(),
+                'total'        => $recipes->total(),
             ]);
 
-        } catch (\Exception $e) {
-            \Log::error('Recipe search error', [
-                'error' => $e->getMessage(),
-                'keyword' => $request->get('keyword', ''),
-                'user_id' => $request->user() ? $request->user()->id : null,
-                'file' => $e->getFile(),
-                'line' => $e->getLine()
-            ]);
-
+        } catch (\Throwable $e) {
+            \Log::error('Recipe search error', ['error' => $e->getMessage()]);
             return response()->json([
                 'current_page' => 1,
-                'data' => [],
-                'last_page' => 1,
-                'per_page' => 9,
-                'total' => 0
+                'data'         => [],
+                'last_page'    => 1,
+                'per_page'     => 9,
+                'total'        => 0,
             ]);
         }
     }
+
+
 
     public function create()
     {

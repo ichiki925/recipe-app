@@ -7,6 +7,9 @@ use Illuminate\Foundation\Console\Kernel as ConsoleKernel;
 
 class Kernel extends ConsoleKernel
 {
+    protected $commands = [
+            \App\Console\Commands\RefreshRecipeSearchReading::class,
+        ];
     /**
      * Define the application's command schedule.
      *
@@ -28,5 +31,6 @@ class Kernel extends ConsoleKernel
         $this->load(__DIR__.'/Commands');
 
         require base_path('routes/console.php');
+
     }
 }
