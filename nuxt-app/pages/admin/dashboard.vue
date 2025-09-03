@@ -23,7 +23,6 @@
       <NuxtLink to="/admin/comments" class="admin-button">💬 コメント管理</NuxtLink>
     </div>
 
-    <!-- 編集中のレシピ -->
     <div class="recent-deleted" v-if="editingRecipes.length > 0">
       <h2>✏️ 編集中のレシピ</h2>
       <ul class="deleted-list">
@@ -52,7 +51,6 @@
       </ul>
     </div>
 
-    <!-- 最近削除されたレシピ -->
     <div class="recent-deleted">
       <h2>🗑 最近削除されたレシピ</h2>
       <ul class="deleted-list" v-if="deletedRecipes.length > 0">
@@ -62,14 +60,14 @@
             <span class="recipe-meta">{{ formatDate(recipe.deleted_at) }}</span>
           </div>
           <div class="recipe-actions">
-            <button 
+            <button
               @click="restoreRecipe(recipe.id)"
               class="restore-button"
               :disabled="isProcessing"
             >
               復元
             </button>
-            <button 
+            <button
               @click="permanentlyDeleteRecipe(recipe.id)"
               class="permanent-delete-button"
               :disabled="isProcessing"
@@ -91,11 +89,9 @@ definePageMeta({
   layout: 'admin'
 })
 
-// 認証とデータ取得
 const { user, isLoggedIn, isAdmin, initAuth } = useAuth()
 const { $auth } = useNuxtApp()
 
-// リアクティブデータ
 const dashboardData = ref({
   stats: {},
   deleted_recipes: [],
@@ -107,7 +103,6 @@ const isLoading = ref(true)
 const isProcessing = ref(false)
 const editingRecipes = ref([])
 
-// 編集中レシピを読み込み
 const loadEditingRecipes = () => {
   try {
     const saved = localStorage.getItem('savedRecipes')
@@ -120,7 +115,6 @@ const loadEditingRecipes = () => {
   }
 }
 
-// 編集中レシピを削除
 const deleteEditingRecipe = (id) => {
   if (confirm('この下書きを削除しますか？')) {
     try {
@@ -132,14 +126,13 @@ const deleteEditingRecipe = (id) => {
   }
 }
 
-// レシピを復元
 const restoreRecipe = async (recipeId) => {
   if (!confirm('このレシピを復元しますか？')) {
     return
   }
 
   isProcessing.value = true
-  
+
   try {
     const idToken = await $auth.currentUser?.getIdToken()
     if (!idToken) {
@@ -155,12 +148,10 @@ const restoreRecipe = async (recipeId) => {
       }
     })
 
-    // 成功したら削除済みリストから除去
     dashboardData.value.deleted_recipes = dashboardData.value.deleted_recipes.filter(
       recipe => recipe.id !== recipeId
     )
 
-    // 統計情報を更新
     if (dashboardData.value.stats) {
       dashboardData.value.stats.total_recipes = (dashboardData.value.stats.total_recipes || 0) + 1
     }
@@ -177,7 +168,6 @@ const restoreRecipe = async (recipeId) => {
   }
 }
 
-// レシピを完全削除
 const permanentlyDeleteRecipe = async (recipeId) => {
   if (!confirm('このレシピを完全に削除しますか？\n※この操作は取り消せません')) {
     return
@@ -200,7 +190,6 @@ const permanentlyDeleteRecipe = async (recipeId) => {
       }
     })
 
-    // 成功したら削除済みリストから除去
     dashboardData.value.deleted_recipes = dashboardData.value.deleted_recipes.filter(
       recipe => recipe.id !== recipeId
     )
@@ -215,7 +204,6 @@ const permanentlyDeleteRecipe = async (recipeId) => {
   }
 }
 
-// 日付フォーマット
 const formatDate = (dateString) => {
   try {
     if (!dateString) return '不明'
@@ -231,14 +219,9 @@ const formatDate = (dateString) => {
   }
 }
 
-// API呼び出し
 onMounted(async () => {
-  console.log('🔍 ダッシュボード onMounted 開始')
-
-  // 編集中レシピを読み込み
   loadEditingRecipes()
 
-  // Firebase認証状態の確定を待つ
   await new Promise(resolve => {
     const unsubscribe = $auth.onAuthStateChanged((user) => {
       unsubscribe()
@@ -246,7 +229,6 @@ onMounted(async () => {
     })
   })
 
-  // 認証状態の初期化を待つ
   await initAuth()
 
   console.log('🔍 認証状態:', {
@@ -262,7 +244,6 @@ onMounted(async () => {
   }
 
   try {
-    // Firebase IDトークンを取得
     const idToken = await $auth.currentUser?.getIdToken()
 
     if (!idToken) {
@@ -271,9 +252,6 @@ onMounted(async () => {
       return
     }
 
-    console.log('✅ IDトークン取得成功')
-
-    // ダッシュボードデータを取得
     const response = await $fetch('/admin/dashboard', {
       baseURL: 'http://localhost/api',
       headers: {
@@ -283,12 +261,10 @@ onMounted(async () => {
     })
 
     dashboardData.value = response.data || response
-    console.log('✅ ダッシュボードデータ取得成功:', dashboardData.value)
 
   } catch (error) {
     console.error('❌ ダッシュボードデータ取得エラー:', error)
 
-    // 認証エラーの場合はログインページへ
     if (error.status === 401 || error.status === 403) {
       await navigateTo('/admin/login')
     }
@@ -297,7 +273,6 @@ onMounted(async () => {
   }
 })
 
-// computed プロパティ
 const totalRecipes = computed(() => dashboardData.value.stats?.total_recipes || 0)
 const recentUpdatedRecipes = computed(() => dashboardData.value.stats?.recent_updated_recipes || 0)
 const totalUsers = computed(() => dashboardData.value.stats?.total_users || 0)
@@ -307,14 +282,12 @@ const deletedRecipes = computed(() => dashboardData.value.deleted_recipes || [])
 <style scoped>
 @import '@/assets/css/common.css';
 
-/* 全体のレイアウト */
 .dashboard-container {
     padding: 30px;
     font-family: 'Arial', sans-serif;
     color: #333;
 }
 
-/* タイトル */
 .dashboard-container h1 {
     font-size: 28px;
     font-family: serif;
@@ -324,7 +297,6 @@ const deletedRecipes = computed(() => dashboardData.value.deleted_recipes || [])
     padding-left: 10px;
 }
 
-/* 情報カード */
 .dashboard-stats {
     display: flex;
     gap: 30px;
@@ -374,7 +346,6 @@ const deletedRecipes = computed(() => dashboardData.value.deleted_recipes || [])
     background-color: #ddd;
 }
 
-/* 最近削除の見出し（編集中リストも同じスタイル） */
 .recent-deleted h2 {
     font-family: serif;
     font-weight: lighter;
@@ -383,7 +354,6 @@ const deletedRecipes = computed(() => dashboardData.value.deleted_recipes || [])
     margin-bottom: 10px;
 }
 
-/* 削除リスト（編集中リストも同じスタイル） */
 .deleted-list {
     list-style: none;
     padding: 0;
@@ -397,7 +367,6 @@ const deletedRecipes = computed(() => dashboardData.value.deleted_recipes || [])
     align-items: center;
 }
 
-/* 編集中レシピ用の追加スタイル */
 .recipe-info {
     display: flex;
     flex-direction: column;
@@ -442,7 +411,6 @@ const deletedRecipes = computed(() => dashboardData.value.deleted_recipes || [])
     text-decoration: underline;
 }
 
-/* 復元ボタン */
 .restore-button {
     background-color: #fbc559f6;
     color: white;
@@ -463,7 +431,6 @@ const deletedRecipes = computed(() => dashboardData.value.deleted_recipes || [])
     cursor: not-allowed;
 }
 
-/* 完全削除ボタン */
 .permanent-delete-button {
     background-color: #ec8892f5;
     color: white;

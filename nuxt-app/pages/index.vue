@@ -106,9 +106,6 @@ const clearSearch = () => {
     fetchRecipes()
 }
 
-
-
-
 // 画像URL処理関数
 const getImageUrl = (imageUrl) => {
     if (!imageUrl) return '/images/no-image.png'
@@ -137,7 +134,7 @@ const handleImageError = (event, recipe) => {
 onMounted(() => {
     searchKeyword.value = route.query.keyword || ''
     currentPage.value = parseInt(route.query.page) || 1
-    totalPages.value = 1 // モックデータでは1ページのみ
+    totalPages.value = 1
     fetchRecipes()
 })
 
@@ -145,7 +142,6 @@ onMounted(() => {
 const fetchRecipes = async () => {
     try {
         isLoading.value = true
-        console.log('🔍 ゲスト検索:', searchKeyword.value, 'ページ:', currentPage.value)
 
         const config = useRuntimeConfig()
 
@@ -154,11 +150,9 @@ const fetchRecipes = async () => {
             query: {
                 keyword: searchKeyword.value,
                 page: currentPage.value,
-                per_page: 9 // 1ページあたり9件表示
+                per_page: 9
             }
         })
-
-        console.log('📦 ゲスト検索API応答:', response)
 
         // レシピデータを更新（ジャンル情報は除外）
         recipes.value = response.data.map(recipe => ({
@@ -173,18 +167,15 @@ const fetchRecipes = async () => {
         currentPage.value = response.current_page
         totalPages.value = response.last_page
 
-        console.log(`✅ ${recipes.value.length}件のレシピを取得しました`)
-
     } catch (error) {
         console.error('❌ レシピ検索エラー:', error)
 
         // エラー時はモックデータを使用（ジャンル情報なし）
-        console.log('📋 モックデータを使用します')
         const mockRecipes = []
 
         if (searchKeyword.value) {
             // 検索キーワードがある場合はフィルタリング
-            recipes.value = mockRecipes.filter(recipe => 
+            recipes.value = mockRecipes.filter(recipe =>
                 recipe.title.toLowerCase().includes(searchKeyword.value.toLowerCase())
             )
         } else {
@@ -197,7 +188,6 @@ const fetchRecipes = async () => {
     }
 }
 
-// 検索実行
 const searchRecipes = () => {
     currentPage.value = 1
     updateUrl()
@@ -209,14 +199,12 @@ const handleSearch = (keyword) => {
     searchRecipes()
 }
 
-// ページ遷移
 const goToPage = (page) => {
     currentPage.value = page
     updateUrl()
     fetchRecipes()
 }
 
-// URL更新
 const updateUrl = () => {
     const query = {}
     if (searchKeyword.value) query.keyword = searchKeyword.value
@@ -224,15 +212,10 @@ const updateUrl = () => {
     router.push({ path: '/', query })
 }
 
-// レシピカードクリック時の処理（ログインページへリダイレクト）
 const handleRecipeClick = (recipe) => {
-    console.log('🔒 未ログインのため詳細表示不可:', recipe.title)
-
-    // 現在のページ情報を保持してログインページへ
     navigateTo(`/auth/login?redirect=${encodeURIComponent(route.fullPath)}`)
 }
 
-// URLクエリの監視
 watch(() => route.query, (newQuery) => {
     searchKeyword.value = newQuery.keyword || ''
     currentPage.value = parseInt(newQuery.page) || 1
@@ -340,7 +323,6 @@ watch(() => route.query, (newQuery) => {
     border-radius: 6px;
 }
 
-
 .recipe-title {
     margin-top: 10px;
     font-weight: bold;
@@ -361,7 +343,6 @@ watch(() => route.query, (newQuery) => {
     height: 100%;
     object-fit: cover;
 }
-
 
 .no-image-fallback {
     width: 100%;
@@ -400,7 +381,6 @@ watch(() => route.query, (newQuery) => {
     margin-top: 8px;
     font-size: 12px;
 }
-
 
 .pagination {
     display: flex;

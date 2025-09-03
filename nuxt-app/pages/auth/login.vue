@@ -103,7 +103,6 @@ const isFormValid = computed(() => {
         form.password.length > 0
 })
 
-// バリデーション関数
 const validateEmail = (email) => {
   const trimmed = email.trim()
 
@@ -167,7 +166,6 @@ const handleLogin = async () => {
   if (passwordError) errors.value.password = passwordError
 
   if (emailError || passwordError) {
-    console.log('❌ バリデーションエラー')
     return
   }
 
@@ -177,16 +175,12 @@ const handleLogin = async () => {
   successMessage.value = ''
 
   try {
-    console.log('🚀 ログイン開始:', form.email)
-
     if (!login) {
       console.error('❌ useAuth composable が利用できません')
       errors.value.general = 'システムエラーが発生しました'
       return
     }
 
-
-    console.log('🔐 Firebase認証実行中...')
     const result = await login(form.email.trim(), form.password)
 
     if (!result || (!result.id && !result.firebase_uid)) {
@@ -195,23 +189,12 @@ const handleLogin = async () => {
       return
     }
 
-    console.log('✅ ログイン成功:', result)
-    console.log('👤 ユーザー情報:', {
-        id: result.id,
-        firebase_uid: result.firebase_uid,
-        email: result.email,
-        name: result.name,
-        role: result.role
-    })
-
     successMessage.value = 'ログインに成功しました！'
 
     errors.value = {}
 
-    console.log('⏳ 認証状態の確立を待機中...')
     await new Promise(resolve => setTimeout(resolve, 500))
 
-    console.log('🔄 /user ページにリダイレクト中...')
     setTimeout(async () => {
       try {
         await navigateTo('/user', { replace: true })
@@ -439,7 +422,6 @@ const handleLogin = async () => {
     color: #666;
 }
 
-/* スピナーアニメーション */
 .fa-spin {
     animation: fa-spin 1s infinite linear;
 }

@@ -6,10 +6,9 @@
                     <img src="/images/rabbit-shape.svg" alt="Rabbit Logo" class="logo-image">
                 </div>
                 <h1 class="title">Admin Sign up</h1>
-                
-                <!-- 全般エラーメッセージ -->
+
                 <div v-if="errors.general" class="error general-error">{{ errors.general }}</div>
-                
+
                 <div class="form-group">
                     <label class="form-label">管理者コード</label>
                     <input
@@ -27,7 +26,6 @@
                     <div class="help-text">※ 管理者コードが必要です</div>
                 </div>
 
-                <!-- ユーザーネーム -->
                 <div class="form-group">
                     <label class="form-label">管理者名</label>
                     <input
@@ -44,7 +42,6 @@
                     <div v-if="errors.name" class="error">{{ errors.name }}</div>
                 </div>
 
-                <!-- メールアドレス -->
                 <div class="form-group">
                     <label class="form-label">メールアドレス</label>
                     <input
@@ -60,7 +57,6 @@
                     <div v-if="errors.email" class="error">{{ errors.email }}</div>
                 </div>
 
-                <!-- パスワード -->
                 <div class="form-group">
                     <label class="form-label">パスワード</label>
                     <input
@@ -78,7 +74,6 @@
                     <div class="help-text">※ 管理者パスワードは8文字以上</div>
                 </div>
 
-                <!-- パスワード確認 -->
                 <div class="form-group">
                     <label class="form-label">パスワード確認</label>
                     <input
@@ -118,7 +113,6 @@ definePageMeta({
     layout: false
 })
 
-// 🔁 Firebaseエラーコード対応マップ
 const firebaseErrorMessages = {
     'auth/email-already-in-use': 'このメールアドレスは既に使用されています',
     'auth/invalid-email': '無効なメールアドレスです',
@@ -133,8 +127,6 @@ const translateFirebaseError = (code) => {
     return firebaseErrorMessages[code] || '管理者登録でエラーが発生しました'
 }
 
-
-// リアクティブなフォームデータ
 const form = reactive({
     adminCode: '',
     name: '',
@@ -143,24 +135,20 @@ const form = reactive({
     password_confirmation: ''
 })
 
-// エラー状態
 const errors = ref({})
 const loading = ref(false)
 
-// 管理者コード（実際の環境では環境変数などで管理）
 const ADMIN_CODE = 'VANILLA_KITCHEN_ADMIN_2025'
 
-// ⭐ パスワード一致チェック
 const passwordsMatch = computed(() => {
     return form.password && form.password_confirmation && form.password === form.password_confirmation
 })
 
-// ⭐ フォーム全体のバリデーション状態
 const isFormValid = computed(() => {
     return !errors.value.adminCode &&
-            !errors.value.name && 
-            !errors.value.email && 
-            !errors.value.password && 
+            !errors.value.name &&
+            !errors.value.email &&
+            !errors.value.password &&
             !errors.value.password_confirmation &&
             form.adminCode.trim().length > 0 &&
             form.name.trim().length > 0 &&
@@ -170,7 +158,6 @@ const isFormValid = computed(() => {
             passwordsMatch.value
 })
 
-// 管理者コードバリデーション
 const validateAdminCode = (code) => {
     const trimmed = code.trim()
 
@@ -185,7 +172,6 @@ const validateAdminCode = (code) => {
     return null
 }
 
-// ⭐ ユーザーネームバリデーション関数
 const validateUserName = (name) => {
     const trimmed = name.trim()
 
@@ -201,21 +187,18 @@ const validateUserName = (name) => {
         return '管理者名は20文字以内で入力してください'
     }
 
-    // 使用可能文字のチェック（日本語、英数字、一部記号）
     const allowedPattern = /^[a-zA-Z0-9\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF_\-\s]+$/
     if (!allowedPattern.test(trimmed)) {
         return '使用できない文字が含まれています'
     }
 
-    // 連続するスペースのチェック
     if (/\s{2,}/.test(trimmed)) {
         return '連続するスペースは使用できません'
     }
 
-    return null // バリデーション通過
+    return null
 }
 
-// ⭐ メールバリデーション関数
 const validateEmail = (email) => {
     const trimmed = email.trim()
 
@@ -231,7 +214,6 @@ const validateEmail = (email) => {
     return null
 }
 
-// ⭐ パスワードバリデーション関数
 const validatePassword = (password) => {
     if (!password) {
         return 'パスワードを入力してください'
@@ -245,7 +227,6 @@ const validatePassword = (password) => {
         return 'パスワードは100文字以内で入力してください'
     }
 
-    // 管理者パスワードの強度チェック
     const hasUpperCase = /[A-Z]/.test(password)
     const hasLowerCase = /[a-z]/.test(password)
     const hasNumbers = /\d/.test(password)
@@ -256,7 +237,6 @@ const validatePassword = (password) => {
     return null
 }
 
-// ⭐ パスワード確認バリデーション関数
 const validatePasswordConfirmation = (passwordConfirm, password) => {
     if (!passwordConfirm) {
         return 'パスワード確認を入力してください'
@@ -269,8 +249,6 @@ const validatePasswordConfirmation = (passwordConfirm, password) => {
     return null
 }
 
-// ⭐ リアルタイムバリデーション
-// リアルタイムバリデーション
 const handleAdminCodeInput = () => {
     errors.value.adminCode = ''
 }
@@ -336,7 +314,6 @@ const handlePasswordConfirmBlur = () => {
 }
 
 const handleSubmit = async () => {
-    // 最終バリデーション
     const adminCodeError = validateAdminCode(form.adminCode)
     const nameError = validateUserName(form.name)
     const emailError = validateEmail(form.email)
@@ -358,8 +335,6 @@ const handleSubmit = async () => {
     errors.value = {}
 
     try {
-        console.log('🚀 管理者登録処理開始:', form.email)
-
         const { registerAdmin } = useAuth()
 
         await registerAdmin({
@@ -369,7 +344,6 @@ const handleSubmit = async () => {
             password: form.password
         })
 
-        console.log('✅ 管理者登録成功！ログイン画面に遷移します')
         errors.value = {}
 
         await navigateTo('/admin/login?registered=true')
@@ -560,7 +534,6 @@ const handleSubmit = async () => {
     color: #9f9b9b;
 }
 
-/* スピナーアニメーション */
 .fa-spin {
     animation: fa-spin 1s infinite linear;
 }

@@ -1,115 +1,106 @@
 <template>
     <div class="recipe-edit-container">
-        
-        <!-- 左側：画像プレビューエリア -->
         <div class="image-preview" @click="triggerImageInput">
-        <!-- 画像がない場合のプレースホルダー -->
-        <div v-if="!imagePreview" class="no-image-placeholder">
-            <div class="no-image-text">No Image</div>
+            <div v-if="!imagePreview" class="no-image-placeholder">
+                <div class="no-image-text">No Image</div>
+            </div>
+
+            <img
+                v-if="imagePreview"
+                :src="imagePreview"
+                alt="プレビュー"
+                class="preview-image"
+                @error="handleImageError"
+                @load="handleImageLoad"
+            />
         </div>
-        <!-- 画像がある場合 -->
-        <img
-            v-if="imagePreview"
-            :src="imagePreview"
-            alt="プレビュー"
-            class="preview-image"
-            @error="handleImageError"
-            @load="handleImageLoad"
-        />
-        </div>
+
         <input
-        type="file"
-        ref="imageInput"
-        style="display: none"
-        accept="image/*"
-        @change="previewImage"
+            type="file"
+            ref="imageInput"
+            style="display: none"
+            accept="image/*"
+            @change="previewImage"
         />
 
-        <!-- 右側：入力フォーム -->
         <form class="recipe-form" @submit.prevent="submitRecipe">
-        <h2>Edit Recipe</h2>
+            <h2>Edit Recipe</h2>
 
-
-
-
-
-        <!-- エラーメッセージ表示 -->
-        <div v-if="errors.length > 0" class="error-messages">
-            <div v-for="error in errors" :key="error" class="error-message">
-            {{ error }}
+            <div v-if="errors.length > 0" class="error-messages">
+                <div v-for="error in errors" :key="error" class="error-message">
+                    {{ error }}
+                </div>
             </div>
-        </div>
 
-        <!-- 成功メッセージ表示 -->
-        <div v-if="successMessage" class="success-message">
-            {{ successMessage }}
-        </div>
 
-        <label>料理名</label>
-        <input type="text" v-model="form.title" class="recipe-title" required />
-
-        <label>ジャンル</label>
-        <input type="text" v-model="form.genre" class="recipe-title" />
-
-        <label>人数</label>
-        <select v-model="form.servings" class="servings-input" required>
-            <option value="">選択してください</option>
-            <option value="1人分">1人分</option>
-            <option value="2人分">2人分</option>
-            <option value="3人分">3人分</option>
-            <option value="4人分">4人分</option>
-            <option value="5人分以上">5人分以上</option>
-        </select>
-
-        <label>材料</label>
-        <div id="ingredients">
-            <div
-            class="ingredient-row"
-            v-for="(ingredient, index) in form.ingredients"
-            :key="index"
-            >
-            <input
-                type="text"
-                v-model="ingredient.name"
-                class="ingredient-name"
-                placeholder="材料名"
-            />
-            <input
-                type="text"
-                v-model="ingredient.qty"
-                class="ingredient-qty"
-                placeholder="分量"
-            />
+            <div v-if="successMessage" class="success-message">
+                {{ successMessage }}
             </div>
-        </div>
 
-        <label>作り方</label>
-        <textarea
-            v-model="form.instructions"
-            class="auto-resize"
-            @input="resizeTextarea"
-            placeholder="作り方を入力してください"
-            required
-        ></textarea>
+            <label>料理名</label>
+            <input type="text" v-model="form.title" class="recipe-title" required />
 
-        <!-- 保存と更新のボタン -->
-        <div class="button-container">
-            <button 
-            type="button" 
-            class="save-button"
-            @click="saveRecipe"
-            :disabled="isSaving"
-            >
-            {{ isSaving ? '保存中...' : '下書き保存' }}
-            </button>
-            <button 
-            type="submit" 
-            class="submit-button"
-            :disabled="isSubmitting"
-            >
-            {{ isSubmitting ? '更新中...' : 'レシピを更新' }}
-            </button>
-        </div>
+            <label>ジャンル</label>
+            <input type="text" v-model="form.genre" class="recipe-title" />
+
+            <label>人数</label>
+            <select v-model="form.servings" class="servings-input" required>
+                <option value="">選択してください</option>
+                <option value="1人分">1人分</option>
+                <option value="2人分">2人分</option>
+                <option value="3人分">3人分</option>
+                <option value="4人分">4人分</option>
+                <option value="5人分以上">5人分以上</option>
+            </select>
+
+            <label>材料</label>
+            <div id="ingredients">
+                <div
+                    class="ingredient-row"
+                    v-for="(ingredient, index) in form.ingredients"
+                    :key="index"
+                >
+                    <input
+                        type="text"
+                        v-model="ingredient.name"
+                        class="ingredient-name"
+                        placeholder="材料名"
+                    />
+                    <input
+                        type="text"
+                        v-model="ingredient.qty"
+                        class="ingredient-qty"
+                        placeholder="分量"
+                    />
+                </div>
+            </div>
+
+            <label>作り方</label>
+            <textarea
+                v-model="form.instructions"
+                class="auto-resize"
+                @input="resizeTextarea"
+                placeholder="作り方を入力してください"
+                required
+            ></textarea>
+
+            <div class="button-container">
+                <button
+                    type="button"
+                    class="save-button"
+                    @click="saveRecipe"
+                    :disabled="isSaving"
+                >
+                    {{ isSaving ? '保存中...' : '下書き保存' }}
+                </button>
+                <button
+                    type="submit"
+                    class="submit-button"
+                    :disabled="isSubmitting"
+                >
+                    {{ isSubmitting ? '更新中...' : 'レシピを更新' }}
+                </button>
+            </div>
         </form>
     </div>
 </template>
@@ -145,30 +136,25 @@ const originalRecipe = ref(null)
 const originalRecipeId = ref(null)
 const isLoading = ref(true)
 
-// 画像エラーハンドリング
 const handleImageError = (event) => {
     console.error('❌ 画像読み込みエラー:', event.target.src)
     imagePreview.value = ''
 }
 
-// 画像読み込み成功時
 const handleImageLoad = (event) => {
     console.log('✅ 画像読み込み成功:', event.target.src)
 }
 
-// 元のレシピデータを取得
 const fetchOriginalRecipe = async () => {
     try {
         const { $auth } = useNuxtApp()
-        
+
         if (!$auth?.currentUser) {
             throw new Error('認証が必要です')
         }
 
         const token = await $auth.currentUser.getIdToken()
         const recipeId = route.params.id
-
-        console.log('🔍 レシピ取得開始:', recipeId)
 
         const response = await fetch(`http://localhost/api/admin/recipes/${recipeId}`, {
             headers: {
@@ -183,18 +169,9 @@ const fetchOriginalRecipe = async () => {
         const data = await response.json()
         const recipe = data.data
 
-        console.log('📥 取得したレシピデータ:', {
-            id: recipe.id,
-            title: recipe.title,
-            image_url: recipe.image_url,
-            hasImageUrl: !!recipe.image_url
-        })
-
-        // 元のレシピデータを保存
         originalRecipe.value = recipe
         originalRecipeId.value = recipe.id
 
-        // フォームに元のデータを設定
         loadRecipeToForm(recipe)
 
     } catch (error) {
@@ -205,14 +182,12 @@ const fetchOriginalRecipe = async () => {
     }
 }
 
-// レシピデータをフォームに読み込み
 const loadRecipeToForm = (recipe) => {
     form.title = recipe.title || ''
     form.genre = recipe.genre || ''
     form.servings = recipe.servings || ''
     form.instructions = recipe.instructions || ''
 
-    // 材料の処理 - 下書きと元レシピで構造が違う
     if (recipe.ingredients) {
         if (Array.isArray(recipe.ingredients)) {
             form.ingredients = recipe.ingredients.length > 0 ? recipe.ingredients : [{ name: '', qty: '' }]

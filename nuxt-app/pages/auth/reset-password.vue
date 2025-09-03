@@ -58,11 +58,10 @@
 
 <script setup>
 definePageMeta({
-  layout: false  // 修正: authレイアウトではなくfalseに
+  layout: false
 })
 
 const route = useRoute()
-const router = useRouter()
 
 const form = ref({
   email: '',
@@ -75,22 +74,14 @@ const token = ref(null)
 
 onMounted(() => {
   token.value = route.query.token || route.params.token || null
-
   if (route.query.email) {
     form.value.email = route.query.email
   }
-
-  // トークンがない場合はリダイレクト（必要なら）
-  // if (!token.value) {
-  //   await navigateTo('/auth/login')
-  // }
 })
 
 const handleSubmit = async () => {
   errors.value = {}
-
   if (!validateForm()) return
-
   isSubmitting.value = true
 
   try {

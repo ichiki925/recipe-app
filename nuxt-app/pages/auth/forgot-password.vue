@@ -75,29 +75,26 @@ const isSubmitting = ref(false)
 // useAuth composableを使用
 const { resetPassword } = useAuth()
 
-// ⭐ フォーム全体のバリデーション状態
 const isFormValid = computed(() => {
-  return !errors.value.email && 
-         form.value.email.trim().length > 0
+  return !errors.value.email &&
+        form.value.email.trim().length > 0
 })
 
-// ⭐ メールバリデーション関数
 const validateEmail = (email) => {
   const trimmed = email.trim()
-  
+
   if (!trimmed) {
     return 'メールアドレスを入力してください'
   }
-  
+
   const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
   if (!emailPattern.test(trimmed)) {
     return '正しいメールアドレスを入力してください'
   }
-  
+
   return null
 }
 
-// ⭐ リアルタイムバリデーション
 const handleEmailInput = () => {
   errors.value.email = ''
 }
@@ -112,7 +109,7 @@ const handleEmailBlur = () => {
 const handleSubmit = async () => {
   // 最終バリデーション
   const emailError = validateEmail(form.value.email)
-  
+
   if (emailError) {
     errors.value.email = emailError
     return
@@ -125,24 +122,16 @@ const handleSubmit = async () => {
   successMessage.value = false
 
   try {
-    console.log('🔄 パスワード再設定リクエスト:', form.value.email)
-
-    // Firebase パスワードリセット機能を使用
     await resetPassword(form.value.email.trim())
-
-    console.log('✅ パスワード再設定メール送信成功')
     successMessage.value = true
-    
-    // エラーをクリア
+
     errors.value = {}
-    
-    // フォームをクリア
+
     form.value.email = ''
 
   } catch (error) {
     console.error('❌ パスワード再設定エラー:', error)
 
-    // Firebaseエラーコードの日本語化
     let errorMessage = 'エラーが発生しました。もう一度お試しください。'
 
     if (error.code) {
@@ -173,12 +162,10 @@ const handleSubmit = async () => {
   }
 }
 
-// フォームリセット関数
 const resetForm = () => {
   form.value.email = ''
   errors.value = {}
   successMessage.value = false
-  console.log('🔄 フォームをリセットしました')
 }
 </script>
 

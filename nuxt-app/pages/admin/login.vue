@@ -55,14 +55,10 @@ const form = ref({
 const errors = ref({})
 const localLoading = ref(false)
 
-
-// ログイン処理メソッド
 const handleLogin = async () => {
-  // バリデーションリセット
   errors.value = {}
   localLoading.value = true
 
-  // 簡単なバリデーション
   if (!form.value.email) {
     errors.value.email = 'メールアドレスを入力してください'
   }
@@ -70,26 +66,17 @@ const handleLogin = async () => {
     errors.value.password = 'パスワードを入力してください'
   }
 
-  // エラーがある場合は送信しない
   if (Object.keys(errors.value).length > 0) {
     localLoading.value = false
     return
   }
 
   try {
-    console.log('🚀 管理者ログイン開始:', form.value.email)
     const userData = await login(form.value.email, form.value.password)
 
-    console.log('✅ ログイン成功:', userData)
-
-    // 管理者かどうかをチェック
     if (userData && userData.role === 'admin') {
-      console.log('✅ 管理者権限確認完了')
-      // 管理者ダッシュボードにリダイレクト
       await navigateTo('/admin/dashboard')
     } else {
-      console.log('❌ 管理者権限なし')
-      // Firebase からログアウト
       const { logout } = useAuth()
       await logout()
       errors.value.general = '管理者権限がありません'
@@ -98,10 +85,8 @@ const handleLogin = async () => {
   } catch (error) {
     console.error('❌ ログインエラー:', error)
 
-    // エラーメッセージの設定
     let errorMessage = 'ログインに失敗しました'
 
-    // Firebase認証エラーの場合
     if (error.code) {
       switch (error.code) {
         case 'auth/user-not-found':
@@ -124,7 +109,6 @@ const handleLogin = async () => {
           break
       }
     }
-    // Laravel API エラーの場合
     else if (error.data) {
       errorMessage = error.data.error || error.data.message || 'サーバーエラーが発生しました'
     }
@@ -135,7 +119,6 @@ const handleLogin = async () => {
   }
 }
 
-// ページ離脱時のクリーンアップ
 onUnmounted(() => {
   localLoading.value = false
 })
@@ -288,7 +271,6 @@ onUnmounted(() => {
   margin-bottom: 0;
 }
 
-/* レスポンシブ対応 */
 @media (max-width: 768px) {
   .admin-login-page {
     min-height: 100vh;

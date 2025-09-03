@@ -1,6 +1,5 @@
 <template>
   <div class="recipe-create-container">
-    <!-- 左サイドバー：保存中のレシピ一覧 -->
     <aside class="saved-recipes-sidebar">
       <h3>保存中のレシピ</h3>
       <div class="saved-recipes-list">
@@ -25,16 +24,12 @@
       </div>
     </aside>
 
-    <!-- メインコンテンツエリア -->
     <div class="main-content">
-      <!-- 左側：画像プレビューエリア -->
       <div class="image-preview" @click="triggerImageInput">
-        <!-- 画像がない場合のプレースホルダー -->
         <div v-if="!imagePreview" class="no-image-placeholder">
 
           <div class="no-image-text">No Image</div>
         </div>
-        <!-- 画像がある場合 -->
         <img
           v-if="imagePreview"
           :src="imagePreview"
@@ -52,18 +47,15 @@
         @change="previewImage"
       />
 
-      <!-- 右側：入力フォーム -->
       <form class="recipe-form" @submit.prevent="submitRecipe">
       <h2>New Recipe</h2>
 
-      <!-- エラーメッセージ表示 -->
       <div v-if="errors.length > 0" class="error-messages">
         <div v-for="error in errors" :key="error" class="error-message">
           {{ error }}
         </div>
       </div>
 
-      <!-- 成功メッセージ表示 -->
       <div v-if="successMessage" class="success-message">
         {{ successMessage }}
       </div>
@@ -115,18 +107,17 @@
         required
       ></textarea>
 
-      <!-- 保存と投稿のボタン -->
       <div class="button-container">
-        <button 
-          type="button" 
+        <button
+          type="button"
           class="save-button"
           @click="saveRecipe"
           :disabled="isSaving"
         >
           {{ isSaving ? '保存中...' : '保存' }}
         </button>
-        <button 
-          type="submit" 
+        <button
+          type="submit"
           class="submit-button"
           :disabled="isSubmitting"
         >
@@ -165,14 +156,13 @@ const isSaving = ref(false)
 const savedRecipes = ref([])
 const currentEditingRecipe = ref(null)
 
-// 画像エラーハンドリング
 const handleImageError = (event) => {
   console.error('❌ 画像読み込みエラー:', event.target.src)
   imagePreview.value = ''
 }
 
 const handleImageLoad = (event) => {
-  console.log('✅ 画像読み込み成功:', event.target.src)
+  console.log('画像読み込み成功:', event.target.src)
 }
 
 const loadSavedRecipes = () => {
@@ -187,7 +177,6 @@ const loadSavedRecipes = () => {
   }
 }
 
-// 保存中のレシピを更新
 const updateSavedRecipes = () => {
   try {
     localStorage.setItem('savedRecipes', JSON.stringify(savedRecipes.value))
@@ -196,7 +185,6 @@ const updateSavedRecipes = () => {
   }
 }
 
-// 日付フォーマット
 const formatDate = (dateString) => {
   try {
     const date = new Date(dateString)
@@ -212,8 +200,6 @@ const formatDate = (dateString) => {
   }
 }
 
-
-// 保存機能
 const saveRecipe = () => {
   isSaving.value = true
 
@@ -229,7 +215,6 @@ const saveRecipe = () => {
       savedAt: new Date().toISOString()
     }
 
-    // 既存のレシピを更新または新規追加
     const existingIndex = savedRecipes.value.findIndex(r => r.id === recipeData.id)
     if (existingIndex !== -1) {
       savedRecipes.value[existingIndex] = recipeData
@@ -237,14 +222,12 @@ const saveRecipe = () => {
       savedRecipes.value.unshift(recipeData)
     }
 
-    // 最大10件まで保存
     if (savedRecipes.value.length > 10) {
       savedRecipes.value = savedRecipes.value.slice(0, 10)
     }
 
     updateSavedRecipes()
 
-    // ★ 修正：保存後はフォームをクリアして新規作成モードにする
     Object.assign(form, {
       title: '',
       genre: '',
@@ -255,7 +238,7 @@ const saveRecipe = () => {
 
     imagePreview.value = ''
     selectedFile.value = null
-    currentEditingRecipe.value = null // 編集モードを解除
+    currentEditingRecipe.value = null
 
     successMessage.value = 'レシピを保存しました'
     setTimeout(() => {
@@ -269,8 +252,6 @@ const saveRecipe = () => {
   }
 }
 
-
-// 保存済みレシピを読み込み
 const loadSavedRecipe = (savedRecipe) => {
   try {
     Object.assign(form, {
@@ -294,8 +275,6 @@ const loadSavedRecipe = (savedRecipe) => {
   }
 }
 
-
-// 保存済みレシピを削除
 const deleteSavedRecipe = (id) => {
   if (confirm('このレシピを削除しますか？')) {
     try {
@@ -312,8 +291,6 @@ const deleteSavedRecipe = (id) => {
   }
 }
 
-
-// 新規作成モードに切り替え
 const clearCurrentRecipe = () => {
   if (confirm('現在の編集内容をクリアして新規作成しますか？')) {
     Object.assign(form, {
@@ -354,7 +331,6 @@ const removeIngredient = (index) => {
   }
 }
 
-// 材料入力時の動的追加
 watch(
   () => form.ingredients,
   (newIngredients) => {
@@ -372,7 +348,6 @@ const resizeTextarea = (event) => {
   textarea.style.height = Math.max(80, textarea.scrollHeight) + 'px'
 }
 
-// 材料を文字列形式に変換
 const formatIngredients = () => {
   return form.ingredients
     .filter(ingredient => ingredient.name.trim() || ingredient.qty.trim())
@@ -396,7 +371,6 @@ const submitRecipe = async () => {
 
     const token = await $auth.currentUser.getIdToken()
 
-    // バリデーション
     if (!form.title.trim()) {
       errors.value.push('料理名は必須です')
     }
@@ -428,11 +402,6 @@ const submitRecipe = async () => {
       formData.append('image', selectedFile.value)
     }
 
-    console.log('🚀 APIリクエストを送信中...')
-
-
-
-    // Docker環境用の絶対URL（ここが重要な修正箇所）
     const response = await fetch('http://localhost/api/admin/recipes', {
       method: 'POST',
       body: formData,
@@ -441,8 +410,6 @@ const submitRecipe = async () => {
       }
     })
 
-
-
     if (!response.ok) {
       const errorText = await response.text()
       console.error('❌ API Error Response:', errorText)
@@ -450,14 +417,11 @@ const submitRecipe = async () => {
     }
 
     const data = await response.json()
-    console.log('✅ API response:', data)
 
     successMessage.value = 'レシピが投稿されました'
 
-    // 現在編集中のレシピのIDを保存（フォームリセット前に）
     const currentEditingId = currentEditingRecipe.value?.id
 
-    // フォームリセット
     Object.assign(form, {
       title: '',
       genre: '',
@@ -470,14 +434,11 @@ const submitRecipe = async () => {
     selectedFile.value = null
     currentEditingRecipe.value = null
 
-    // 保存中のレシピも削除（投稿成功時）
     if (currentEditingId) {
-      console.log('🗑️ 投稿成功により保存リストからレシピを削除:', currentEditingId)
       savedRecipes.value = savedRecipes.value.filter(r => r.id !== currentEditingId)
       updateSavedRecipes()
     }
 
-    // リダイレクト
     if (data.data?.id) {
       setTimeout(() => {
         router.push(`/admin/recipes/show/${data.data.id}`)
@@ -496,8 +457,6 @@ const submitRecipe = async () => {
   }
 }
 
-
-// 自動保存機能（オプション）
 let autoSaveTimer = null
 const startAutoSave = () => {
   if (autoSaveTimer) {
@@ -505,17 +464,14 @@ const startAutoSave = () => {
   }
 
   autoSaveTimer = setInterval(() => {
-    // 何かしらの入力があった場合のみ自動保存
     if (form.title || form.genre || form.instructions ||
         form.ingredients.some(ing => ing.name || ing.qty)) {
       saveRecipe()
     }
-  }, 60000) // 1分間隔で自動保存
+  }, 60000)
 }
 
-// フォーム変更時の自動保存設定
 watch(form, () => {
-  // 入力変更があったら自動保存タイマーをリセット
   if (autoSaveTimer) {
     clearInterval(autoSaveTimer)
     startAutoSave()
@@ -524,7 +480,6 @@ watch(form, () => {
 
 onMounted(() => {
   loadSavedRecipes()
-  // startAutoSave() // 自動保存を有効にする場合はコメントアウト
 })
 </script>
 

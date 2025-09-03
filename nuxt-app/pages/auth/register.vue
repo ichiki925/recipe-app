@@ -101,7 +101,6 @@ definePageMeta({
     layout: false
 })
 
-// 🔁 Firebaseエラーコード対応マップ
 const firebaseErrorMessages = {
     'auth/email-already-in-use': 'このメールアドレスは既に使用されています',
     'auth/invalid-email': '無効なメールアドレスです',
@@ -115,7 +114,6 @@ const translateFirebaseError = (code) => {
     return firebaseErrorMessages[code] || 'ユーザー登録でエラーが発生しました'
 }
 
-// リアクティブなフォームデータ
 const form = reactive({
     name: '',
     email: '',
@@ -127,12 +125,10 @@ const form = reactive({
 const errors = ref({})
 const loading = ref(false)
 
-// ⭐ パスワード一致チェック
 const passwordsMatch = computed(() => {
     return form.password && form.password_confirmation && form.password === form.password_confirmation
 })
 
-// ⭐ フォーム全体のバリデーション状態
 const isFormValid = computed(() => {
     return !errors.value.name &&
         !errors.value.email &&
@@ -145,7 +141,6 @@ const isFormValid = computed(() => {
         passwordsMatch.value
 })
 
-// ⭐ ユーザーネームバリデーション関数
 const validateUserName = (name) => {
     const trimmed = name.trim()
 
@@ -172,10 +167,9 @@ const validateUserName = (name) => {
         return '連続するスペースは使用できません'
     }
 
-    return null // バリデーション通過
+    return null
 }
 
-// ⭐ メールバリデーション関数
 const validateEmail = (email) => {
     const trimmed = email.trim()
 
@@ -191,7 +185,6 @@ const validateEmail = (email) => {
     return null
 }
 
-// ⭐ パスワードバリデーション関数
 const validatePassword = (password) => {
     if (!password) {
         return 'パスワードを入力してください'
@@ -208,7 +201,6 @@ const validatePassword = (password) => {
     return null
 }
 
-// ⭐ パスワード確認バリデーション関数
 const validatePasswordConfirmation = (passwordConfirm, password) => {
     if (!passwordConfirm) {
         return 'パスワード確認を入力してください'
@@ -221,7 +213,6 @@ const validatePasswordConfirmation = (passwordConfirm, password) => {
     return null
 }
 
-// ⭐ リアルタイムバリデーション
 const handleNameInput = () => {
     errors.value.name = ''
 }
@@ -277,7 +268,6 @@ const handlePasswordConfirmBlur = () => {
 
 // フォーム送信処理（バリデーション強化）
 const handleSubmit = async () => {
-    // 最終バリデーション
     const nameError = validateUserName(form.name)
     const emailError = validateEmail(form.email)
     const passwordError = validatePassword(form.password)
@@ -297,7 +287,6 @@ const handleSubmit = async () => {
     errors.value = {}
 
     try {
-        console.log('🚀 ユーザー登録処理開始:', form.email)
         const { register } = useAuth()
 
         await register({
@@ -307,7 +296,6 @@ const handleSubmit = async () => {
         })
 
         // 成功時の処理
-        console.log('✅ ユーザー登録成功！ログイン画面に遷移します')
         errors.value = {}
 
         await navigateTo('/auth/login?registered=true')
@@ -494,7 +482,6 @@ const handleSubmit = async () => {
     color: #9f9b9b;
 }
 
-/* スピナーアニメーション */
 .fa-spin {
     animation: fa-spin 1s infinite linear;
 }
