@@ -1,18 +1,14 @@
 <template>
     <div class="recipe-detail">
-        <!-- ローディング表示 -->
         <div v-if="loading" class="loading">
             レシピを読み込み中...
         </div>
 
-        <!-- エラー表示 -->
         <div v-else-if="error" class="error">
             {{ error }}
         </div>
 
-        <!-- レシピ詳細（ユーザー画面と同じレイアウト + 管理者サイドバー） -->
         <div v-else-if="recipe" class="recipe-page">
-            <!-- 左サイドバー（管理者専用） -->
             <aside class="admin-sidebar">
                 <div class="admin-actions">
                     <button @click="goToRecipeList" class="action-btn back-btn">
@@ -29,9 +25,9 @@
                         削除
                     </button>
                 </div>
-            
+
                 <div class="admin-info">
-                <h3>管理者情報</h3>
+                    <h3>管理者情報</h3>
                     <div class="info-item">
                         <span class="label">レシピID:</span>
                         <span class="value">{{ recipe.id }}</span>
@@ -47,123 +43,57 @@
                 </div>
             </aside>
 
-            <!-- メインコンテンツエリア -->
             <div class="recipe-create-container">
-            <!-- 左カラム -->
-            <div class="left-column">
-                <h2 class="recipe-title-heading">{{ recipe.title }}</h2>
+                <div class="left-column">
+                    <h2 class="recipe-title-heading">{{ recipe.title }}</h2>
 
-            <div class="image-preview">
-                <div v-if="!hasValidImage(recipe.image_url)" class="no-image-fallback">
-                    <div class="no-image-text">No Image</div>
-                </div>
-                <img
-                    v-else
-                    :src="getImageUrl(recipe.image_url)"
-                    :alt="recipe.title"
-                    class="preview-image"
-                    @error="handleImageError($event, recipe)"
-                    @load="handleImageLoad($event, recipe)"
-                />
-            </div>
+                    <RecipeImagePreview
+                        :image-url="getImageUrl(recipe.image_url)"
+                        :alt-text="recipe.title"
+                        @image-error="handleImageError"
+                    />
 
-            <div class="comment-section">
-                <ul id="comment-list">
-                    <li
-                    v-for="comment in displayedComments"
-                    :key="comment.id"
-                    class="comment-item"
-                    >
-                    <i class="fas fa-user comment-avatar-icon"></i>
-                    <span class="username" :title="comment.user?.name">
-                        {{ truncateUsername(comment.user?.name || 'ゲスト') }}
-                    </span>
-                    <span class="comment-body">{{ comment.content || comment.body }}</span>
-                    </li>
-                </ul>
+                    <RecipeComments
+                        :comments="recipe.comments || []"
+                        :is-admin="true"
+                    />
 
-                <!-- もっと見る/折りたたみボタン -->
-                <div v-if="hasMoreComments" class="comment-toggle-section">
-                    <button
-                    v-if="!showAllComments"
-                    @click="showAllComments = true"
-                    class="comment-toggle-btn"
-                    >
-                    もっと見る ({{ remainingCount }}件)
-                    </button>
-                    <button
-                    v-else
-                    @click="showAllComments = false"
-                    class="comment-toggle-btn"
-                    >
-                    表示を折りたたむ
-                    </button>
+                    <RecipeLikeButton
+                        :is-liked="false"
+                        :like-count="recipe.likes_count || 0"
+                        :is-admin="true"
+                    />
                 </div>
 
-                <!-- 管理者メモ：コメント投稿は無効 -->
-                <div class="admin-note">
-                    <i class="fas fa-info-circle"></i>
-                    管理者はコメント表示のみです
-                </div>
+                <div class="right-column">
+                    <div class="recipe-form">
+                        <label>ジャンル</label>
+                        <div class="recipe-info">{{ recipe.genre || '未設定' }}</div>
 
-                <div class="action-buttons">
-                    <!-- いいね表示のみ（クリック不可） -->
-                    <div class="like-display">
-                        <i class="far fa-heart heart-icon"></i>
-                        <span class="like-count">{{ recipe.likes_count || 0 }}</span>
+                        <RecipeIngredients
+                            :ingredients="recipe.ingredients_array || []"
+                            :servings="recipe.servings"
+                        />
+
+                        <RecipeInstructions
+                            :instructions="recipe.instructions_array || recipe.instructions"
+                        />
                     </div>
                 </div>
             </div>
         </div>
 
-            <!-- 右カラム -->
-            <div class="right-column">
-                <div class="recipe-form">
-                <label>ジャンル</label>
-                <div class="recipe-info">{{ recipe.genre || '未設定' }}</div>
-
-                <label>材料（{{ recipe.servings || '人数未設定' }}）</label>
-                <div id="ingredients">
-                    <div
-                    v-for="(ingredient, index) in recipe.ingredients_array"
-                    :key="index"
-                    class="ingredient-row"
-                    >
-                    <div class="ingredient-name">{{ ingredient.name }}</div>
-                    <div class="ingredient-qty">{{ ingredient.amount }}</div>
-                    </div>
+        <div v-if="showDeleteModal" class="modal-overlay" @click="showDeleteModal = false">
+            <div class="modal-content" @click.stop>
+                <h3>レシピの削除</h3>
+                <p>「{{ recipe?.title }}」を削除しますか？</p>
+                <p class="warning">この操作は取り消すことができません。</p>
+                <div class="modal-actions">
+                    <button @click="showDeleteModal = false" class="cancel-btn">キャンセル</button>
+                    <button @click="deleteRecipe" class="confirm-delete-btn" :disabled="deleting">
+                        {{ deleting ? '削除中...' : '削除する' }}
+                    </button>
                 </div>
-
-                <label>作り方</label>
-                <div class="recipe-body">
-                    <p v-if="typeof recipe.instructions === 'string'">{{ recipe.instructions }}</p>
-                    <ol v-else-if="Array.isArray(recipe.instructions_array)">
-                        <li
-                            v-for="(step, index) in recipe.instructions_array"
-                            :key="index"
-                            class="instruction-step"
-                        >
-                            {{ step }}
-                        </li>
-                    </ol>
-                </div>
-            </div>
-        </div>
-    </div>
-    </div>
-
-    <!-- 削除確認モーダル -->
-    <div v-if="showDeleteModal" class="modal-overlay" @click="showDeleteModal = false">
-        <div class="modal-content" @click.stop>
-        <h3>レシピの削除</h3>
-        <p>「{{ recipe?.title }}」を削除しますか？</p>
-        <p class="warning">この操作は取り消すことができません。</p>
-            <div class="modal-actions">
-                <button @click="showDeleteModal = false" class="cancel-btn">キャンセル</button>
-                <button @click="deleteRecipe" class="confirm-delete-btn" :disabled="deleting">
-                    {{ deleting ? '削除中...' : '削除する' }}
-                </button>
-            </div>
             </div>
         </div>
     </div>
@@ -174,8 +104,13 @@ definePageMeta({
     layout: 'admin'
 })
 
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRoute, useRouter, useHead } from '#app'
+import RecipeImagePreview from '~/components/RecipeImagePreview.vue'
+import RecipeComments from '~/components/RecipeComments.vue'
+import RecipeLikeButton from '~/components/RecipeLikeButton.vue'
+import RecipeIngredients from '~/components/RecipeIngredients.vue'
+import RecipeInstructions from '~/components/RecipeInstructions.vue'
 
 useHead({
     link: [
@@ -189,56 +124,42 @@ useHead({
 const route = useRoute()
 const router = useRouter()
 
-// 画像URL処理関数
+const recipe = ref(null)
+const loading = ref(true)
+const error = ref('')
+const showDeleteModal = ref(false)
+const deleting = ref(false)
+
+const recipeId = route.params.id
+
 const getImageUrl = (imageUrl) => {
-    console.log('🖼️ Original image URL:', imageUrl)
-    
     if (!imageUrl) {
         return '/images/no-image.png'
     }
-    
-    // 相対URLの場合、絶対URLに変換
+
     if (imageUrl.startsWith('/storage/')) {
-        const fullUrl = `http://localhost${imageUrl}`
-        console.log('🔗 Converted to full URL:', fullUrl)
-        return fullUrl
+        return `http://localhost${imageUrl}`
     }
 
     return imageUrl
 }
 
-const hasValidImage = (imageUrl) => {
-    if (!imageUrl ||
-        imageUrl === '' ||
-        imageUrl === null ||
-        imageUrl.includes('/images/no-image.png') ||
-        imageUrl.includes('no-image.png')) {
-        return false
-    }
-    return true
-    }
-
-
-const handleImageError = (event, recipe) => {
+const handleImageError = (event) => {
     console.error('❌ Image load failed:', {
-        recipe_id: recipe.id,
-        recipe_title: recipe.title,
-        image_url: recipe.image_url,
+        recipe_id: recipe.value?.id,
+        recipe_title: recipe.value?.title,
+        image_url: recipe.value?.image_url,
         attempted_src: event.target.src
     })
 
-    // 無限ループを防ぐため、エラーハンドラーを削除
     event.target.onerror = null
 
-    // 画像要素を削除
     const img = event.target
     const parent = img.parentElement
 
     if (parent) {
-        // 画像を削除
         img.remove()
 
-        // プレースホルダーを作成（既に存在しない場合のみ）
         if (!parent.querySelector('.no-image-fallback')) {
             const placeholder = document.createElement('div')
             placeholder.className = 'no-image-fallback'
@@ -250,83 +171,17 @@ const handleImageError = (event, recipe) => {
     }
 }
 
-// 画像読み込み成功時
-const handleImageLoad = (event, recipe) => {
-    console.log('✅ Image loaded successfully:', {
-        recipe_id: recipe.id,
-        recipe_title: recipe.title,
-        loaded_src: event.target.src
-    })
-}
-
-// データ定義
-const recipe = ref(null)
-const loading = ref(true)
-const error = ref('')
-const showDeleteModal = ref(false)
-const deleting = ref(false)
-const showAllComments = ref(false)
-
-// レシピID取得
-const recipeId = route.params.id
-
-// 表示するコメントを制御
-const displayedComments = computed(() => {
-    if (!recipe.value?.comments) return []
-
-    if (showAllComments.value) {
-        return [...recipe.value.comments]
-        } else {
-        return [...recipe.value.comments].slice(0, 3)
-    }
-})
-
-// 残りのコメント数
-const remainingCount = computed(() => {
-    if (!recipe.value?.comments) return 0
-    return Math.max(0, recipe.value.comments.length - 3)
-})
-
-// もっと見るボタンの表示判定
-const hasMoreComments = computed(() => {
-    if (!recipe.value?.comments) return false
-    return recipe.value.comments.length > 3
-})
-
-// ユーザー名の省略処理
-const truncateUsername = (username) => {
-    if (!username) return 'ゲスト'
-    return username.length > 10 ? username.substring(0, 10) + '...' : username
-}
-
-// 初期化
-onMounted(() => {
-    fetchRecipe()
-})
-
-// レシピデータ取得
 const fetchRecipe = async () => {
     loading.value = true
     error.value = ''
     recipe.value = null
 
     try {
-        console.log('🔍 レシピ取得開始:', {
-            recipeId,
-            timestamp: new Date().toISOString()
-        })
-
-        // 認証確認
         const { $auth } = useNuxtApp()
 
         if (!$auth?.currentUser) {
             throw new Error('認証が必要です')
         }
-
-        console.log('🔑 認証ユーザー確認:', {
-            uid: $auth.currentUser.uid,
-            email: $auth.currentUser.email
-        })
 
         const token = await $auth.currentUser.getIdToken()
 
@@ -334,11 +189,7 @@ const fetchRecipe = async () => {
             throw new Error('認証トークンの取得に失敗しました')
         }
 
-        console.log('🎫 認証トークン取得成功')
-
-        // APIリクエスト
         const apiUrl = `http://localhost/api/admin/recipes/${recipeId}`
-        console.log('📡 APIリクエスト送信:', apiUrl)
 
         const response = await fetch(apiUrl, {
             method: 'GET',
@@ -349,16 +200,7 @@ const fetchRecipe = async () => {
             }
         })
 
-        console.log('📊 APIレスポンス受信:', {
-            status: response.status,
-            statusText: response.statusText,
-            ok: response.ok,
-            contentType: response.headers.get('content-type')
-        })
-
-        // レスポンステキストを取得
         const responseText = await response.text()
-        console.log('📄 レスポンステキスト:', responseText.substring(0, 500) + (responseText.length > 500 ? '...' : ''))
 
         if (!response.ok) {
             console.error('❌ HTTPエラー:', {
@@ -367,7 +209,6 @@ const fetchRecipe = async () => {
                 responseText
             })
 
-            // エラーレスポンスの解析を試行
             try {
                 const errorData = JSON.parse(responseText)
                 throw new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`)
@@ -376,7 +217,6 @@ const fetchRecipe = async () => {
             }
         }
 
-        // JSONパース
         let responseData
         try {
             responseData = JSON.parse(responseText)
@@ -385,28 +225,8 @@ const fetchRecipe = async () => {
             throw new Error('サーバーからの応答が不正です')
         }
 
-        console.log('✅ レスポンスデータパース成功:', {
-            status: responseData.status,
-            hasData: !!responseData.data,
-            dataKeys: responseData.data ? Object.keys(responseData.data) : []
-        })
-
-        // データ構造の確認と設定
         if (responseData.status === 'success' && responseData.data) {
             recipe.value = responseData.data
-
-            console.log('✅ レシピデータ設定完了:', {
-                id: recipe.value.id,
-                title: recipe.value.title,
-                hasIngredients: !!recipe.value.ingredients,
-                hasInstructions: !!recipe.value.instructions,
-                ingredientsArrayLength: recipe.value.ingredients_array?.length || 0,
-                instructionsArrayLength: recipe.value.instructions_array?.length || 0,
-                commentsCount: recipe.value.comments?.length || 0,
-                hasAdmin: !!recipe.value.admin,
-                imageUrl: recipe.value.image_url
-            })
-
         } else {
             console.error('❌ 予期しないレスポンス構造:', responseData)
             throw new Error('レスポンスデータの形式が不正です')
@@ -419,7 +239,6 @@ const fetchRecipe = async () => {
             recipeId
         })
 
-        // エラーメッセージの設定
         if (err.message.includes('401') || err.message.includes('認証')) {
             error.value = '認証が無効です。再ログインしてください。'
         } else if (err.message.includes('403')) {
@@ -436,66 +255,21 @@ const fetchRecipe = async () => {
 
     } finally {
         loading.value = false
-        console.log('🏁 レシピ取得処理完了:', {
-            loading: loading.value,
-            hasError: !!error.value,
-            hasRecipe: !!recipe.value,
-            recipeId
-        })
     }
 }
 
-// デバッグ用の追加メソッドも定義してください
-const debugInfo = () => {
-    console.log('🐛 デバッグ情報:', {
-        route: route.params,
-        recipeId,
-        loading: loading.value,
-        error: error.value,
-        hasRecipe: !!recipe.value,
-        recipeTitle: recipe.value?.title,
-        currentUser: useNuxtApp().$auth?.currentUser?.uid
-    })
-}
-
-// 材料文字列を配列に変換
-const parseIngredients = (ingredientsStr) => {
-    if (!ingredientsStr) return []
-
-    return ingredientsStr.split('\n').map(line => {
-        const parts = line.trim().split(/\s+/)
-        return {
-            name: parts[0] || '',
-            amount: parts.slice(1).join(' ') || ''
-        }
-    }).filter(ingredient => ingredient.name)
-}
-
-// 作り方文字列を配列に変換
-const parseInstructions = (instructionsStr) => {
-    if (!instructionsStr) return []
-
-    return instructionsStr.split('\n')
-        .map(line => line.trim())
-        .filter(line => line.length > 0)
-}
-
-// レシピ一覧画面へ遷移（修正）
 const goToRecipeList = () => {
     router.push('/admin/recipes')
 }
 
-// 編集画面へ遷移
 const editRecipe = () => {
     router.push(`/admin/recipes/edit/${recipeId}`)
 }
 
-// 削除確認モーダル表示
 const confirmDelete = () => {
     showDeleteModal.value = true
 }
 
-// レシピ削除実行
 const deleteRecipe = async () => {
     deleting.value = true
 
@@ -508,9 +282,6 @@ const deleteRecipe = async () => {
 
         const token = await $auth.currentUser.getIdToken()
 
-        console.log('🗑️ レシピ削除開始:', recipeId)
-
-        // Docker環境用の絶対URLで認証ヘッダー付きで削除
         const response = await fetch(`http://localhost/api/admin/recipes/${recipeId}`, {
             method: 'DELETE',
             headers: {
@@ -526,25 +297,16 @@ const deleteRecipe = async () => {
             throw new Error(`HTTP ${response.status}: ${response.statusText}`)
         }
 
-        const result = await response.json()
-        console.log('✅ 削除成功:', result)
-
-        // 削除成功 → 一覧画面に戻る
         alert('レシピが削除されました')
 
-        // LocalStorageに削除フラグを設定
         localStorage.setItem('recipeDeleted', 'true')
         localStorage.setItem('deletedRecipeId', recipeId)
 
-        // 一覧画面に戻る（シンプルに）
         await router.push('/admin/recipes')
-
-
 
     } catch (err) {
         console.error('❌ 削除エラー:', err)
 
-        // より詳細なエラー処理
         let errorMessage = '削除に失敗しました。もう一度お試しください。'
 
         if (err.message.includes('401') || err.message.includes('認証')) {
@@ -563,6 +325,10 @@ const deleteRecipe = async () => {
         showDeleteModal.value = false
     }
 }
+
+onMounted(() => {
+    fetchRecipe()
+})
 </script>
 
 <style scoped>
@@ -579,7 +345,6 @@ const deleteRecipe = async () => {
         margin: 0 auto;
     }
 
-    /* 左サイドバー（管理者専用） */
     .admin-sidebar {
         width: 300px;
         background-color: #fff;
@@ -676,7 +441,6 @@ const deleteRecipe = async () => {
         color: #dc3545;
     }
 
-    /* メインコンテンツエリア */
     .recipe-create-container {
         display: flex;
         gap: 40px;
@@ -685,7 +449,6 @@ const deleteRecipe = async () => {
         flex: 1;
     }
 
-    /* 左カラム */
     .left-column {
         display: flex;
         flex-direction: column;
@@ -703,206 +466,29 @@ const deleteRecipe = async () => {
         text-align: center;
     }
 
-    .image-preview {
-        width: 100%;
-        aspect-ratio: 1 / 1;
-        background-color: #f0f0f0;
-        border-radius: 12px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        overflow: hidden;
-        position: relative;
-        height: 300px;
-    }
-
-    .image-preview img {
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-    }
-
-    /* No Image フォールバック用スタイル */
-    .no-image-fallback {
-        width: 100%;
-        height: 100%;
-        background-color: #f0f0f0;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        color: #999;
-        border-radius: 12px;
-    }
-
-    .no-image-text {
-        font-size: 18px;
-        font-weight: 500;
-    }
-
-    .comment-section {
-        width: 100%;
-    }
-
-    .comment-item {
-        display: flex;
-        align-items: center;
-        margin-bottom: 10px;
-    }
-    
-    .comment-avatar-icon {
-        width: 28px;
-        height: 28px;
-        border-radius: 50%;
-        margin: 8px;
-        font-size: 16px;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        background-color: #eee;
-        color: #666;
-    }
-    
-    .username {
-        margin-right: 2px;
-        font-size: 10px;
-        white-space: nowrap;
-        max-width: 80px;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        font-weight: 600;
-        color: #333;
-        cursor: default;
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif !important;
-    }
-    
-    .comment-body {
-        flex: 1;
-        font-size: 12px;
-        font-family: sans-serif;
-        line-height: 1.4;
-        word-wrap: break-word;
-    }
-    
-    .comment-toggle-section {
-        margin-top: 10px;
-        margin-bottom: 10px;
-        text-align: center;
-    }
-    
-    .comment-toggle-btn {
-        background: none;
-        border: 1px solid #bbb;
-        padding: 6px 12px;
-        border-radius: 4px;
-        font-size: 11px;
-        color: #333;
-        cursor: pointer;
-        transition: all 0.2s ease;
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif !important;
-    }
-    
-    .comment-toggle-btn:hover {
-        background-color: #f5f5f5;
-    }
-    
-    .admin-note {
-        background-color: #e3f2fd;
-        color: #1976d2;
-        padding: 8px 12px;
-        border-radius: 4px;
-        font-size: 12px;
-        text-align: center;
-        margin: 15px 0;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 6px;
-    }
-    
-    .like-display {
-        display: flex;
-        align-items: center;
-        gap: 4px;
-        color: #333;
-        justify-content: center;
-    }
-    
-    .heart-icon {
-        font-size: 18px;
-        color: #dc3545;
-    }
-    
-    .like-count {
-        font-size: 12px;
-        color: #333;
-        font-family: cursive;
-    }
-    
-    /* 右カラム */
     .right-column {
         width: 400px;
         min-height: 100%;
     }
-    
+
     .recipe-form {
         width: 100%;
     }
-    
+
     .recipe-form label {
         display: block;
         font-weight: bold;
         margin-top: 25px;
         margin-bottom: 10px;
     }
-    
+
     .recipe-info {
         padding: 10px;
         background-color: #f8f9fa;
         border-radius: 4px;
         margin-bottom: 15px;
     }
-    
-    .ingredient-row {
-        display: flex;
-        gap: 0px;
-        margin-bottom: 10px;
-    }
-    
-    .ingredient-name,
-    .ingredient-qty {
-        width: 100%;
-        padding: 10px;
-        font-size: 14px;
-        box-sizing: border-box;
-        background-color: transparent;
-        border: none;
-        border-bottom: 1px solid #ccc;
-        border-radius: 0;
-    }
-    
-    .ingredient-name {
-        flex: 2;
-    }
-    
-    .ingredient-qty {
-        flex: 1;
-    }
-    
-    .recipe-body {
-        padding: 15px;
-        background-color: #f8f9fa;
-        border-radius: 4px;
-        white-space: pre-wrap;
-        line-height: 1.6;
-    }
-    
-    .instruction-step {
-        margin-bottom: 8px;
-        line-height: 1.5;
-    }
-    
-    /* モーダル */
+
     .modal-overlay {
         position: fixed;
         top: 0;
@@ -915,7 +501,7 @@ const deleteRecipe = async () => {
         justify-content: center;
         z-index: 1000;
     }
-    
+
     .modal-content {
         background: white;
         padding: 30px;
@@ -924,24 +510,24 @@ const deleteRecipe = async () => {
         width: 90%;
         text-align: center;
     }
-    
+
     .modal-content h3 {
         margin-top: 0;
         color: #dc3545;
     }
-    
+
     .warning {
         color: #856404;
         font-size: 14px;
     }
-    
+
     .modal-actions {
         display: flex;
         gap: 10px;
         justify-content: center;
         margin-top: 20px;
     }
-    
+
     .cancel-btn {
         padding: 8px 20px;
         background-color: #6c757d;
@@ -950,7 +536,7 @@ const deleteRecipe = async () => {
         border-radius: 4px;
         cursor: pointer;
     }
-    
+
     .confirm-delete-btn {
         padding: 8px 20px;
         background-color: #dc3545;
@@ -959,57 +545,51 @@ const deleteRecipe = async () => {
         border-radius: 4px;
         cursor: pointer;
     }
-    
+
     .confirm-delete-btn:disabled {
         opacity: 0.6;
         cursor: not-allowed;
     }
-    
-    /* レスポンシブ */
+
     @media (max-width: 768px) {
     .recipe-page {
         flex-direction: column;
         gap: 20px;
     }
-    
+
     .admin-sidebar {
         width: 100%;
         order: 1;
     }
-    
+
     .recipe-create-container {
         flex-direction: column;
         gap: 30px;
         order: 2;
     }
-    
+
     .left-column {
         width: 100%;
         min-width: auto;
         gap: 20px;
     }
-    
+
     .right-column {
         width: 100%;
     }
-    
+
     .admin-actions {
         flex-direction: row;
         flex-wrap: wrap;
     }
-    
+
     .action-btn {
         flex: 1;
         min-width: 120px;
     }
-    
+
     .recipe-title-heading {
         font-size: 18px;
-    }
-    
-    .image-preview {
-        max-width: 280px;
-        max-height: 280px;
     }
 }
 </style>
