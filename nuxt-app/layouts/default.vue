@@ -19,17 +19,17 @@
                 Recipes
               </NuxtLink>
             </li>
-            <li v-if="isAuthenticated">
+            <li v-if="isLoggedIn">
               <NuxtLink to="/user/favorite" :class="{ active: $route.path === '/user/favorite' }">
                 Favorite
               </NuxtLink>
             </li>
-            <li v-if="isAuthenticated">
+            <li v-if="isLoggedIn">
               <NuxtLink to="/user/profile" :class="{ active: $route.path === '/user/profile' }">
                 Profile
               </NuxtLink>
             </li>
-            <li v-if="isAuthenticated">
+            <li v-if="isLoggedIn">
               <a href="#" @click.prevent="handleLogout" class="logout-link">
                 Logout
               </a>
@@ -45,83 +45,20 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed, watch } from 'vue'
+const { logout, isLoggedIn } = useAuth()
 
-const isAuthenticated = ref(false)
-
-const { logout, user, isLoggedIn } = useAuth()
-
-// お気に入り状態管理用のグローバルストア
 const favoriteStore = useState('favorites', () => new Set())
 
-// お気に入り件数の計算
-const favoriteCount = computed(() => {
-  return favoriteStore.value.size
-})
-
-// 認証状態の確認
-const checkAuthStatus = () => {
-  try {
-    if (isLoggedIn.value && user.value) {
-      isAuthenticated.value = true
-      console.log('🔐 Layout: ユーザー認証済み', user.value.email)
-    } else {
-      isAuthenticated.value = false
-      console.log('⚠️ Layout: 未認証ユーザー')
-    }
-  } catch (error) {
-    console.error('❌ Layout: 認証確認エラー:', error)
-    isAuthenticated.value = false
-  }
-}
-
-
-// Firebase認証対応ログアウト処理
 const handleLogout = async () => {
   try {
-    console.log('🚪 Layout: ログアウト開始')
     await logout()
-    isAuthenticated.value = false
-    
-    // お気に入り情報もクリア
     favoriteStore.value.clear()
-    
-    console.log('✅ Layout: ログアウト成功')
-
   } catch (error) {
     console.error('❌ Layout: ログアウト失敗:', error)
   }
 }
-
-onMounted(() => {
-  checkAuthStatus()
-})
-
-
-// ユーザー状態の変化を監視
-watch([user, isLoggedIn], () => {
-  checkAuthStatus()
-})
-
-
 </script>
 
 <style>
 @import "@/assets/css/common.css";
-
-/* ナビゲーションリンクのスタイル統一 */
-.nav-link {
-  text-decoration: none;
-  color: inherit;
-  cursor: pointer;
-}
-
-.nav-link:hover {
-  color: inherit;
-}
-
-.nav-link.active {
-  /* アクティブスタイルを適用 */
-  font-weight: bold;
-}
 </style>

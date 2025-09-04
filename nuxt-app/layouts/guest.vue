@@ -1,4 +1,3 @@
-<!-- layouts/guest.vue -->
 <template>
     <div>
         <Head>
