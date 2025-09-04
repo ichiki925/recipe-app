@@ -110,9 +110,8 @@ definePageMeta({
     .welcome-page {
         background-color: #ffffff;
         padding: 15px;
-        /* スマホでは上部に配置し、必要に応じてスクロール可能にする */
         align-items: flex-start;
-        padding-top: 10vh; /* 上部に少しだけ余白を作る */
+        padding-top: 10vh;
     }
 
     .welcome-container {
@@ -120,7 +119,6 @@ definePageMeta({
         border-radius: 0;
         max-width: 100%;
         padding: 1rem;
-        /* コンテンツが画面に収まるように調整 */
         margin-bottom: 2rem;
     }
 
@@ -133,21 +131,20 @@ definePageMeta({
         margin-bottom: 1.5rem;
     }
 
-    /* 非常に小さな画面の場合 */
     @media screen and (max-height: 600px) {
         .welcome-page {
             padding-top: 5vh;
         }
-        
+
         .welcome-container {
             padding: 1rem 1rem 2rem;
         }
-        
+
         .title {
             font-size: 1.3rem;
             margin-bottom: 0.3rem;
         }
-        
+
         .subtitle {
             font-size: 0.85rem;
             margin-bottom: 1rem;

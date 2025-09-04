@@ -27,7 +27,6 @@
     <div class="main-content">
       <div class="image-preview" @click="triggerImageInput">
         <div v-if="!imagePreview" class="no-image-placeholder">
-
           <div class="no-image-text">No Image</div>
         </div>
         <img
@@ -48,83 +47,83 @@
       />
 
       <form class="recipe-form" @submit.prevent="submitRecipe">
-      <h2>New Recipe</h2>
+        <h2>New Recipe</h2>
 
-      <div v-if="errors.length > 0" class="error-messages">
-        <div v-for="error in errors" :key="error" class="error-message">
-          {{ error }}
+        <div v-if="errors.length > 0" class="error-messages">
+          <div v-for="error in errors" :key="error" class="error-message">
+            {{ error }}
+          </div>
         </div>
-      </div>
 
-      <div v-if="successMessage" class="success-message">
-        {{ successMessage }}
-      </div>
-
-      <label>料理名</label>
-      <input type="text" v-model="form.title" class="recipe-title" required />
-
-      <label>ジャンル</label>
-      <input type="text" v-model="form.genre" class="recipe-title" />
-
-      <label>人数</label>
-      <select v-model="form.servings" class="servings-input" required>
-        <option value="">選択してください</option>
-        <option value="1人分">1人分</option>
-        <option value="2人分">2人分</option>
-        <option value="3人分">3人分</option>
-        <option value="4人分">4人分</option>
-        <option value="5人分以上">5人分以上</option>
-      </select>
-
-      <label>材料</label>
-      <div id="ingredients">
-        <div
-          class="ingredient-row"
-          v-for="(ingredient, index) in form.ingredients"
-          :key="index"
-        >
-          <input
-            type="text"
-            v-model="ingredient.name"
-            class="ingredient-name"
-            placeholder="材料名"
-          />
-          <input
-            type="text"
-            v-model="ingredient.qty"
-            class="ingredient-qty"
-            placeholder="分量"
-          />
+        <div v-if="successMessage" class="success-message">
+          {{ successMessage }}
         </div>
-      </div>
 
-      <label>作り方</label>
-      <textarea
-        v-model="form.instructions"
-        class="auto-resize"
-        @input="resizeTextarea"
-        placeholder="作り方を入力してください"
-        required
-      ></textarea>
+        <label>料理名</label>
+        <input type="text" v-model="form.title" class="recipe-title" required />
 
-      <div class="button-container">
-        <button
-          type="button"
-          class="save-button"
-          @click="saveRecipe"
-          :disabled="isSaving"
-        >
-          {{ isSaving ? '保存中...' : '保存' }}
-        </button>
-        <button
-          type="submit"
-          class="submit-button"
-          :disabled="isSubmitting"
-        >
-          {{ isSubmitting ? '投稿中...' : '投稿する' }}
-        </button>
-      </div>
-    </form>
+        <label>ジャンル</label>
+        <input type="text" v-model="form.genre" class="recipe-title" />
+
+        <label>人数</label>
+        <select v-model="form.servings" class="servings-input" required>
+          <option value="">選択してください</option>
+          <option value="1人分">1人分</option>
+          <option value="2人分">2人分</option>
+          <option value="3人分">3人分</option>
+          <option value="4人分">4人分</option>
+          <option value="5人分以上">5人分以上</option>
+        </select>
+
+        <label>材料</label>
+        <div id="ingredients">
+          <div
+            class="ingredient-row"
+            v-for="(ingredient, index) in form.ingredients"
+            :key="index"
+          >
+            <input
+              type="text"
+              v-model="ingredient.name"
+              class="ingredient-name"
+              placeholder="材料名"
+            />
+            <input
+              type="text"
+              v-model="ingredient.qty"
+              class="ingredient-qty"
+              placeholder="分量"
+            />
+          </div>
+        </div>
+
+        <label>作り方</label>
+        <textarea
+          v-model="form.instructions"
+          class="auto-resize"
+          @input="resizeTextarea"
+          placeholder="作り方を入力してください"
+          required
+        ></textarea>
+
+        <div class="button-container">
+          <button
+            type="button"
+            class="save-button"
+            @click="saveRecipe"
+            :disabled="isSaving"
+          >
+            {{ isSaving ? '保存中...' : '保存' }}
+          </button>
+          <button
+            type="submit"
+            class="submit-button"
+            :disabled="isSubmitting"
+          >
+            {{ isSubmitting ? '投稿中...' : '投稿する' }}
+          </button>
+        </div>
+      </form>
     </div>
   </div>
 </template>
@@ -159,10 +158,6 @@ const currentEditingRecipe = ref(null)
 const handleImageError = (event) => {
   console.error('❌ 画像読み込みエラー:', event.target.src)
   imagePreview.value = ''
-}
-
-const handleImageLoad = (event) => {
-  console.log('画像読み込み成功:', event.target.src)
 }
 
 const loadSavedRecipes = () => {
@@ -291,24 +286,6 @@ const deleteSavedRecipe = (id) => {
   }
 }
 
-const clearCurrentRecipe = () => {
-  if (confirm('現在の編集内容をクリアして新規作成しますか？')) {
-    Object.assign(form, {
-      title: '',
-      genre: '',
-      servings: '',
-      ingredients: [{ name: '', qty: '' }],
-      instructions: ''
-    })
-
-    imagePreview.value = ''
-    selectedFile.value = null
-    currentEditingRecipe.value = null
-    errors.value = []
-    successMessage.value = ''
-  }
-}
-
 const triggerImageInput = () => {
   imageInput.value?.click()
 }
@@ -322,12 +299,6 @@ const previewImage = (event) => {
       imagePreview.value = e.target.result
     }
     reader.readAsDataURL(file)
-  }
-}
-
-const removeIngredient = (index) => {
-  if (form.ingredients.length > 1) {
-    form.ingredients.splice(index, 1)
   }
 }
 

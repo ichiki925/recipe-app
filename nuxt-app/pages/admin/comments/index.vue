@@ -2,11 +2,10 @@
   <div class="comments-page">
     <h1>Comments</h1>
 
-    <!-- シンプルな検索フォーム（最小限） -->
     <div class="simple-search">
-      <input 
-        v-model="searchFilters.keyword" 
-        type="text" 
+      <input
+        v-model="searchFilters.keyword"
+        type="text"
         placeholder="コメント・ユーザー名・レシピ名で検索"
         @input="debouncedSearch"
         class="search-input"
@@ -44,9 +43,9 @@
         </tr>
       </tbody>
     </table>
-    <!-- ページネーション -->
+
     <div class="pagination" v-if="totalPages > 1">
-      <button 
+      <button
         @click="goToPage(currentPage - 1)"
         :disabled="currentPage <= 1"
         class="pagination-btn"
@@ -54,8 +53,8 @@
         ＜
       </button>
 
-      <span 
-        v-for="page in totalPages" 
+      <span
+        v-for="page in totalPages"
         :key="page"
         :class="{ active: page === currentPage }"
         @click="goToPage(page)"
@@ -64,7 +63,7 @@
         {{ page }}
       </span>
 
-      <button 
+      <button
         @click="goToPage(currentPage + 1)"
         :disabled="currentPage >= totalPages"
         class="pagination-btn"
@@ -80,47 +79,33 @@ definePageMeta({
   layout: 'admin'
 })
 
-import { ref, computed, onMounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useAuth } from '~/composables/useAuth'
 import { useRoute, useRouter } from '#app'
 
-// データ定義
 const comments = ref([])
 const loading = ref(false)
 const apiStatus = ref('未実行')
-const debugInfo = ref(null)
-const rawApiResponse = ref(null)
-
-
-// ページネーション関連
 const currentPage = ref(1)
 const totalPages = ref(1)
-const perPage = 10 // 1ページあたり10件
+const perPage = 10
 
-// 検索フィルター（シンプル版）
 const searchFilters = ref({
   keyword: ''
 })
 
-// ルーター
 const route = useRoute()
 const router = useRouter()
 
-// 認証
 const { getIdToken } = useAuth()
 
-
-// 初期データ読み込み
 onMounted(async () => {
-  // URLクエリからページ番号を取得
   currentPage.value = parseInt(route.query.page) || 1
   searchFilters.value.keyword = route.query.keyword || ''
 
   await loadComments()
 })
 
-// コメント一覧取得
-// コメント一覧取得
 const loadComments = async () => {
   loading.value = true
   apiStatus.value = '実行中...'
@@ -142,14 +127,10 @@ const loadComments = async () => {
       }
     })
 
-    // Resource形式に対応（meta情報あり）
     comments.value = response.data
     totalPages.value = response.meta?.last_page || 1
     currentPage.value = response.meta?.current_page || 1
     apiStatus.value = `成功 (${comments.value.length}件)`
-
-    console.log('✅ コメント一覧取得:', comments.value)
-
   } catch (apiError) {
     console.error('❌ API接続失敗:', apiError)
     apiStatus.value = `エラー: ${apiError.message}`
@@ -161,31 +142,12 @@ const loadComments = async () => {
   }
 }
 
-
-// 🔧 安全にユーザー名を取得
-const getUserName = (comment) => {
-  if (comment.user && comment.user.name) {
-    return comment.user.name
-  }
-  return '削除されたユーザー'
-}
-
-// 🔧 安全にレシピタイトルを取得
-const getRecipeTitle = (comment) => {
-  if (comment.recipe && comment.recipe.title) {
-    return comment.recipe.title
-  }
-  return '削除されたレシピ'
-}
-
-// 検索実行
 const searchComments = async () => {
-  currentPage.value = 1 // 検索時は1ページ目に戻る
+  currentPage.value = 1
   updateUrl()
   await loadComments()
 }
 
-// 検索クリア
 const clearSearch = () => {
   searchFilters.value.keyword = ''
   currentPage.value = 1
@@ -193,7 +155,6 @@ const clearSearch = () => {
   loadComments()
 }
 
-// ページ遷移
 const goToPage = (page) => {
   if (page < 1 || page > totalPages.value) return
   currentPage.value = page
@@ -201,7 +162,6 @@ const goToPage = (page) => {
   loadComments()
 }
 
-// URL更新
 const updateUrl = () => {
   const query = {}
   if (searchFilters.value.keyword) query.keyword = searchFilters.value.keyword
@@ -209,7 +169,6 @@ const updateUrl = () => {
   router.push({ path: '/admin/comments', query })
 }
 
-// デバウンス検索（入力中の連続検索を防ぐ）
 let searchTimeout
 const debouncedSearch = () => {
   clearTimeout(searchTimeout)
@@ -222,13 +181,11 @@ const debouncedSearch = () => {
   }, 500)
 }
 
-// 日付フォーマット
 const formatDate = (datetime) => {
   const date = new Date(datetime)
   return date.toISOString().split('T')[0]
 }
 
-// コメント削除
 const deleteComment = async (id) => {
   if (!confirm('本当に削除しますか？')) return
 
@@ -244,13 +201,8 @@ const deleteComment = async (id) => {
         'Content-Type': 'application/json'
       }
     })
-
-    console.log(`✅ API経由でコメント${id}を削除しました`)
-
-    // ✅ 削除後、一覧を再読み込み
     await loadComments()
-    
-    // ページに表示するコメントがない場合、前のページに戻る
+
     if (comments.value.length === 0 && currentPage.value > 1) {
       currentPage.value = currentPage.value - 1
       updateUrl()
@@ -263,200 +215,197 @@ const deleteComment = async (id) => {
   }
 }
 </script>
+
 <style scoped>
 body {
-    background-color: #fff;
+  background-color: #fff;
 }
 
 h1 {
-    font-family: cursive;
-    text-align: center;
-    margin-top: 30px;
+  font-family: cursive;
+  text-align: center;
+  margin-top: 30px;
 }
 
-/* シンプルな検索フォーム */
 .simple-search {
-    width: 90%;
-    margin: 15px auto;
-    display: flex;
-    align-items: center;
-    gap: 10px;
+  width: 90%;
+  margin: 15px auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .search-input {
-    flex: 1;
-    padding: 8px 12px;
-    border: 1px solid #aaa;
-    border-radius: 4px;
-    font-size: 14px;
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid #aaa;
+  border-radius: 4px;
+  font-size: 14px;
 }
 
 .clear-btn {
-    background-color: #6c757d;
-    color: white;
-    padding: 8px 12px;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 12px;
+  background-color: #6c757d;
+  color: white;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
 }
 
 .clear-btn:hover {
-    background-color: #545b62;
+  background-color: #545b62;
 }
 
 table {
-    width: 90%;
-    margin: 20px auto;
-    border-collapse: collapse;
-    background-color: #fff;
-    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
-    border-radius: 8px;
-    overflow: hidden;
+  width: 90%;
+  margin: 20px auto;
+  border-collapse: collapse;
+  background-color: #fff;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+  border-radius: 8px;
+  overflow: hidden;
 }
 
 thead {
-    background-color: #f0f0f0;
+  background-color: #f0f0f0;
 }
 
 thead th {
-    padding: 12px;
-    text-align: left;
-    font-size: 14px;
-    color: #555;
-    border-bottom: 1px solid #bbb;
+  padding: 12px;
+  text-align: left;
+  font-size: 14px;
+  color: #555;
+  border-bottom: 1px solid #bbb;
 }
 
 tbody td {
-    padding: 12px;
-    font-size: 14px;
-    border-bottom: 1px solid #eee;
-    vertical-align: top;
+  padding: 12px;
+  font-size: 14px;
+  border-bottom: 1px solid #eee;
+  vertical-align: top;
 }
 
 tbody tr:hover {
-    background-color: #f9f9f9;
+  background-color: #f9f9f9;
 }
 
 button {
-    background-color: #ff6b6b;
-    color: white;
-    padding: 6px 12px;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 13px;
+  background-color: #ff6b6b;
+  color: white;
+  padding: 6px 12px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
 }
 
 button:hover {
-    background-color: #e63946;
+  background-color: #e63946;
 }
 
-/* ページネーション */
 .pagination {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    gap: 10px;
-    margin: 30px 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  margin: 30px 0;
 }
 
 .pagination-btn {
-    background-color: #f5f5f5;
-    color: #333;
-    border: 1px solid #ccc;
-    padding: 8px 16px;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 14px;
+  background-color: #f5f5f5;
+  color: #333;
+  border: 1px solid #ccc;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
 }
 
 .pagination-btn:hover:not(:disabled) {
-    background-color: #e9e9e9;
+  background-color: #e9e9e9;
 }
 
 .pagination-btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .pagination-number {
-    padding: 8px 12px;
-    cursor: pointer;
-    border-radius: 4px;
-    font-size: 14px;
-    color: #333;
+  padding: 8px 12px;
+  cursor: pointer;
+  border-radius: 4px;
+  font-size: 14px;
+  color: #333;
 }
 
 .pagination-number:hover {
-    background-color: #f0f0f0;
+  background-color: #f0f0f0;
 }
 
 .pagination-number.active {
-    background-color: #ff6b6b;
-    color: white;
+  background-color: #ff6b6b;
+  color: white;
 }
 
-
-
 @media screen and (max-width: 768px) {
-    .simple-search {
-        flex-direction: column;
-        gap: 8px;
-    }
+  .simple-search {
+    flex-direction: column;
+    gap: 8px;
+  }
 
-    .search-input {
-        width: 100%;
-    }
+  .search-input {
+    width: 100%;
+  }
 
-    table,
-    thead,
-    tbody,
-    th,
-    td,
-    tr {
-        display: block;
-    }
+  table,
+  thead,
+  tbody,
+  th,
+  td,
+  tr {
+    display: block;
+  }
 
-    thead {
-        display: none;
-    }
+  thead {
+    display: none;
+  }
 
-    tbody tr {
-        background-color: #fff;
-        margin: 10px;
-        padding: 10px;
-        border-radius: 8px;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
-    }
+  tbody tr {
+    background-color: #fff;
+    margin: 10px;
+    padding: 10px;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  }
 
-    tbody td {
-        padding: 8px 0;
-        font-size: 14px;
-        border-bottom: none;
-    }
+  tbody td {
+    padding: 8px 0;
+    font-size: 14px;
+    border-bottom: none;
+  }
 
-    tbody td::before {
-        content: attr(data-label);
-        font-weight: bold;
-        display: inline-block;
-        width: 80px;
-    }
+  tbody td::before {
+    content: attr(data-label);
+    font-weight: bold;
+    display: inline-block;
+    width: 80px;
+  }
 
-    button {
-        font-size: 13px;
-        padding: 4px 8px;
-    }
+  button {
+    font-size: 13px;
+    padding: 4px 8px;
+  }
 
-    .pagination {
-        flex-wrap: wrap;
-        gap: 5px;
-    }
+  .pagination {
+    flex-wrap: wrap;
+    gap: 5px;
+  }
 
-    .pagination-btn,
-    .pagination-number {
-        padding: 6px 10px;
-        font-size: 12px;
-    }
+  .pagination-btn,
+  .pagination-number {
+    padding: 6px 10px;
+    font-size: 12px;
+  }
 }
 </style>

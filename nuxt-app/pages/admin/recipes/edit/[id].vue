@@ -4,7 +4,6 @@
             <div v-if="!imagePreview" class="no-image-placeholder">
                 <div class="no-image-text">No Image</div>
             </div>
-
             <img
                 v-if="imagePreview"
                 :src="imagePreview"
@@ -31,7 +30,6 @@
                     {{ error }}
                 </div>
             </div>
-
 
             <div v-if="successMessage" class="success-message">
                 {{ successMessage }}
@@ -141,10 +139,6 @@ const handleImageError = (event) => {
     imagePreview.value = ''
 }
 
-const handleImageLoad = (event) => {
-    console.log('✅ 画像読み込み成功:', event.target.src)
-}
-
 const fetchOriginalRecipe = async () => {
     try {
         const { $auth } = useNuxtApp()
@@ -210,39 +204,23 @@ const loadRecipeToForm = (recipe) => {
         form.ingredients = [{ name: '', qty: '' }]
     }
 
-    // 画像の処理 - 下書きと元レシピで構造が違う
-    console.log('🔍 レシピ画像URL確認:', {
-        recipe_image_url: recipe.image_url,
-        recipe_imagePreview: recipe.imagePreview
-    })
-
     if (recipe.imagePreview) {
-        // 下書きの場合
         imagePreview.value = recipe.imagePreview
-        console.log('✅ 下書きから画像設定:', recipe.imagePreview)
     } else if (recipe.image_url && recipe.image_url !== '/images/no-image.png' && recipe.image_url.trim() !== '') {
-        // 元レシピの場合 - 絶対URLに変換
         if (recipe.image_url.startsWith('/storage/')) {
-        imagePreview.value = `http://localhost${recipe.image_url}`
-        console.log('✅ 元レシピから画像設定（絶対URL）:', imagePreview.value)
+            imagePreview.value = `http://localhost${recipe.image_url}`
         } else {
-        imagePreview.value = recipe.image_url
-        console.log('✅ 元レシピから画像設定（そのまま）:', imagePreview.value)
+            imagePreview.value = recipe.image_url
         }
     } else {
         imagePreview.value = ''
-        console.log('❌ 画像なし')
     }
-
-    console.log('📝 最終的な画像プレビュー:', imagePreview.value)
 }
 
-// 下書き保存機能
 const saveRecipe = () => {
     isSaving.value = true
 
     try {
-        // 編集下書きのIDは "edit_" + originalRecipeId で固定
         const draftId = `edit_${originalRecipeId.value}`
 
         const recipeData = {
@@ -258,7 +236,6 @@ const saveRecipe = () => {
             originalRecipeId: originalRecipeId.value
         }
 
-        // localStorage から既存の保存レシピを取得
         let savedRecipes = []
         try {
             const saved = localStorage.getItem('savedRecipes')
@@ -269,7 +246,6 @@ const saveRecipe = () => {
             console.error('保存レシピの読み込みエラー:', error)
         }
 
-        // 既存のレシピを更新または新規追加
         const existingIndex = savedRecipes.findIndex(r => r.id === recipeData.id)
         if (existingIndex !== -1) {
             savedRecipes[existingIndex] = recipeData
@@ -277,7 +253,6 @@ const saveRecipe = () => {
             savedRecipes.unshift(recipeData)
         }
 
-        // 最大10件まで保存
         if (savedRecipes.length > 10) {
             savedRecipes = savedRecipes.slice(0, 10)
         }
@@ -297,17 +272,6 @@ const saveRecipe = () => {
     }
 }
 
-// 元のレシピに戻る
-const clearCurrentRecipe = () => {
-    if (confirm('下書きの編集内容を破棄して元のレシピに戻りますか？')) {
-        loadRecipeToForm(originalRecipe.value)
-        currentEditingRecipe.value = null
-        errors.value = []
-        successMessage.value = ''
-    }
-}
-
-// 下書きがあるかチェックして読み込み
 const loadDraftIfExists = () => {
     try {
         const saved = localStorage.getItem('savedRecipes')
@@ -317,7 +281,6 @@ const loadDraftIfExists = () => {
             const existingDraft = savedRecipes.find(r => r.id === draftId)
 
             if (existingDraft) {
-                console.log('📝 下書きを発見:', existingDraft.title)
                 loadRecipeToForm(existingDraft)
                 currentEditingRecipe.value = existingDraft
             }
@@ -326,8 +289,6 @@ const loadDraftIfExists = () => {
         console.error('下書き読み込みエラー:', error)
     }
 }
-
-
 
 const triggerImageInput = () => {
     imageInput.value?.click()
@@ -345,7 +306,6 @@ const previewImage = (event) => {
     }
 }
 
-// 材料入力時の動的追加
     watch(
     () => form.ingredients,
     (newIngredients) => {
@@ -363,7 +323,6 @@ const resizeTextarea = (event) => {
     textarea.style.height = Math.max(80, textarea.scrollHeight) + 'px'
 }
 
-// 材料を文字列形式に変換
 const formatIngredients = () => {
     return form.ingredients
         .filter(ingredient => ingredient.name.trim() || ingredient.qty.trim())
@@ -387,7 +346,6 @@ const submitRecipe = async () => {
 
         const token = await $auth.currentUser.getIdToken()
 
-        // バリデーション
         if (!form.title.trim()) {
             errors.value.push('料理名は必須です')
         }
@@ -435,29 +393,25 @@ const submitRecipe = async () => {
             throw new Error(`HTTP ${response.status}: ${response.statusText}`)
         }
 
-        const data = await response.json()
-        console.log('✅ API response:', data)
-
         successMessage.value = 'レシピが更新されました'
 
-        // 下書きレシピを削除（更新成功時）
         const currentEditingId = currentEditingRecipe.value?.id
         if (currentEditingId) {
-        try {
-            const saved = localStorage.getItem('savedRecipes')
-            if (saved) {
-                let savedRecipes = JSON.parse(saved)
-                savedRecipes = savedRecipes.filter(r => r.id !== currentEditingId)
-                localStorage.setItem('savedRecipes', JSON.stringify(savedRecipes))
+            try {
+                const saved = localStorage.getItem('savedRecipes')
+                if (saved) {
+                    let savedRecipes = JSON.parse(saved)
+                    savedRecipes = savedRecipes.filter(r => r.id !== currentEditingId)
+                    localStorage.setItem('savedRecipes', JSON.stringify(savedRecipes))
+                }
+            } catch (error) {
+                console.error('下書き削除エラー:', error)
             }
-        } catch (error) {
-            console.error('下書き削除エラー:', error)
-        }
         }
 
         currentEditingRecipe.value = null
 
-        // リダイレクト
+
         setTimeout(() => {
             router.push(`/admin/recipes/show/${recipeId}`)
         }, 1500)
@@ -472,7 +426,6 @@ const submitRecipe = async () => {
 
 onMounted(() => {
     fetchOriginalRecipe().then(() => {
-        // 元レシピ読み込み後に下書きがあるかチェック
         loadDraftIfExists()
     })
 })

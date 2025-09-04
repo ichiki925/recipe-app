@@ -1,6 +1,5 @@
 <template>
   <div class="recipe-page">
-    <!-- 左サイドバー -->
     <RecipeSearchSection
       user-type="admin"
       :initial-keyword="searchKeyword"
@@ -10,7 +9,6 @@
       @create-recipe="goToCreate"
     />
 
-    <!-- メイン：レシピ一覧 -->
     <section class="recipe-list">
       <div v-if="loading" class="loading">
         レシピを読み込み中...
@@ -46,7 +44,6 @@
         </div>
       </div>
 
-      <!-- ページネーション -->
       <div v-if="totalPages > 1" class="pagination">
         <button
           v-if="currentPage > 1"
@@ -94,7 +91,6 @@ useHead({
   ]
 })
 
-// データ定義
 const searchKeyword = ref('')
 const currentPage = ref(1)
 const totalPages = ref(1)
@@ -106,7 +102,6 @@ const route = useRoute()
 const router = useRouter()
 const config = useRuntimeConfig()
 
-// ページネーション表示用
 const displayPages = computed(() => {
   const pages = []
   const maxDisplay = 5
@@ -122,17 +117,14 @@ const displayPages = computed(() => {
   return pages
 })
 
-// レシピ詳細画面へ遷移
 const goToRecipeDetail = (recipeId) => {
   router.push(`/admin/recipes/show/${recipeId}`)
 }
 
-// 新規作成画面へ遷移
 const goToCreate = () => {
   router.push('/admin/recipes/create')
 }
 
-// 削除フラグをチェックする関数
 const checkDeleteFlag = () => {
   if (typeof localStorage === 'undefined') return
   if (localStorage.getItem('recipeDeleted') === 'true') {
@@ -149,7 +141,7 @@ const checkUpdateFlag = () => {
     setTimeout(fetchRecipes, 500)
   }
 }
-// 初期化
+
 onMounted(() => {
   searchKeyword.value = route.query.keyword || ''
   currentPage.value = parseInt(route.query.page) || 1
@@ -167,7 +159,6 @@ if (typeof window !== 'undefined') {
   })
 }
 
-// 検索実行
 const onSearch = (keyword) => {
   const k = (keyword || '').trim().normalize('NFC')
   searchKeyword.value = k
@@ -183,14 +174,12 @@ const handleClearSearch = () => {
   fetchRecipes()
 }
 
-// ページ移動
 const goToPage = (page) => {
   currentPage.value = page
   updateUrl()
   fetchRecipes()
 }
 
-// URL更新
 const updateUrl = () => {
   try {
     const query = {}
@@ -202,7 +191,6 @@ const updateUrl = () => {
   }
 }
 
-// レシピデータ取得
 const fetchRecipes = async () => {
   loading.value = true
   error.value   = ''
@@ -235,7 +223,6 @@ const fetchRecipes = async () => {
   }
 }
 
-// URLクエリ変更の監視（修正版）
 watch(() => route.query, (newQuery) => {
   try {
     searchKeyword.value = newQuery.keyword || ''
@@ -417,7 +404,6 @@ watch(() => route.query, (newQuery) => {
     color: white;
 }
 
-/* レスポンシブ対応 */
 @media (max-width: 768px) {
     .recipe-page {
         flex-direction: column;

@@ -1,7 +1,5 @@
 <template>
   <div class="recipe-page">
-
-    <!-- 左サイドバー -->
     <RecipeSearchSection
       user-type="user"
       :initial-keyword="searchKeyword"
@@ -10,20 +8,17 @@
       @clear-search="handleClearSearch"
     />
 
-    <!-- メイン：お気に入りレシピ一覧 -->
     <section class="recipe-list">
       <h2 class="page-title">
         <i class="fas fa-heart"></i>
         お気に入りレシピ ({{ totalRecipes }}件)
       </h2>
 
-      <!-- ローディング表示 -->
       <div v-if="isLoading" class="loading">
         <i class="fas fa-spinner fa-spin"></i>
         読み込み中...
       </div>
 
-      <!-- レシピが0件の場合のメッセージ -->
       <div v-else-if="favoriteRecipes.length === 0" class="no-recipes">
         <div class="empty-state">
           <i class="far fa-heart empty-heart"></i>
@@ -74,7 +69,6 @@
         </div>
       </div>
 
-      <!-- ページネーション -->
       <div class="pagination" v-if="!isLoading && totalPages > 1">
         <button
           v-if="currentPage > 1"
@@ -120,38 +114,31 @@ useHead({
   ]
 })
 
-// 認証関連
-const { user, isLoggedIn, initAuth } = useAuth()
+const { user, initAuth } = useAuth()
 
-// データ定義（他のページと統一）
 const searchKeyword = ref('')
 const currentPage = ref(1)
 const totalPages = ref(1)
 const totalRecipes = ref(0)
 const isLoading = ref(false)
 
-// お気に入りレシピデータ
 const favoriteRecipes = ref([])
 
 const route = useRoute()
 const router = useRouter()
 
-// お気に入り状態管理用のグローバルストア
 const favoriteStore = useState('favorites', () => new Set())
 
-// APIベースのお気に入りレシピ取得（検索対応）
 const fetchFavoriteRecipes = async () => {
   if (!user.value) return
 
   try {
     isLoading.value = true
-    console.log('🔍 お気に入り検索:', searchKeyword.value, 'ページ:', currentPage.value)
 
     const config = useRuntimeConfig()
     const { $auth } = useNuxtApp()
     const token = await $auth.currentUser.getIdToken(true)
 
-    // 新しいAPIエンドポイントを使用
     const response = await $fetch('/user/liked-recipes', {
       baseURL: config.public.apiBaseUrl,
       headers: {
@@ -161,13 +148,10 @@ const fetchFavoriteRecipes = async () => {
       query: {
         keyword: searchKeyword.value || '',
         page: currentPage.value,
-        per_page: 6 // お気に入りページは6件表示
+        per_page: 6
       }
     })
 
-    console.log('📦 お気に入りAPI応答:', response)
-
-    // レシピデータを更新
     favoriteRecipes.value = (response.data || []).map(recipe => ({
       id: recipe.id,
       title: recipe.title,
@@ -178,18 +162,14 @@ const fetchFavoriteRecipes = async () => {
       admin: recipe.admin
     }))
 
-    // ページネーション情報更新
     currentPage.value = response.current_page || 1
     totalPages.value = response.last_page || 1
     totalRecipes.value = response.total || 0
 
-    // ストア同期（お気に入りページで表示されているものは全てお気に入り）
     favoriteRecipes.value.forEach(recipe => {
       favoriteStore.value.add(recipe.id)
     })
     favoriteStore.value = new Set(favoriteStore.value)
-
-    console.log(`✅ ${favoriteRecipes.value.length}件のお気に入りレシピを取得しました`)
 
   } catch (error) {
     console.error('❌ お気に入りレシピ取得エラー:', error)
@@ -197,9 +177,7 @@ const fetchFavoriteRecipes = async () => {
     totalRecipes.value = 0
     totalPages.value = 1
 
-    // 401エラーの場合はログイン画面にリダイレクト
     if (error.status === 401 || error.statusCode === 401) {
-      console.log('🔒 認証エラーのためログイン画面にリダイレクト')
       await navigateTo('/auth/login')
     }
   } finally {
@@ -207,13 +185,10 @@ const fetchFavoriteRecipes = async () => {
   }
 }
 
-// 詳細ページへの遷移
 const goToRecipeDetail = (recipeId) => {
-  console.log('📖 お気に入りページから詳細ページへ遷移:', recipeId)
   navigateTo(`/user/show/${recipeId}`)
 }
 
-// 検索処理（他のページと同じ）
 const handleSearch = (keyword) => {
   searchKeyword.value = keyword
   currentPage.value = 1
@@ -241,14 +216,10 @@ const updateUrl = () => {
   router.push({ path: '/user/favorite', query })
 }
 
-// お気に入りから削除する機能
 const toggleLike = async (recipe) => {
   if (!user.value) return
 
   try {
-    console.log(`💔 レシピ${recipe.id}「${recipe.title}」をお気に入りから削除中...`)
-
-    // 楽観的更新: UIから即座に削除
     const recipeElement = document.querySelector(`[data-recipe-id="${recipe.id}"]`)
     if (recipeElement) {
       recipeElement.style.transition = 'opacity 0.3s ease, transform 0.3s ease'
@@ -256,7 +227,6 @@ const toggleLike = async (recipe) => {
       recipeElement.style.transform = 'scale(0.8)'
     }
 
-    // ストアから削除
     favoriteStore.value.delete(recipe.id)
 
     const config = useRuntimeConfig()
@@ -272,21 +242,15 @@ const toggleLike = async (recipe) => {
       }
     })
 
-    console.log('✅ お気に入り削除API応答:', response)
-
-    // APIが成功したらデータを再取得（検索結果も更新される）
     await fetchFavoriteRecipes()
 
-    // ストア変更を強制的にトリガー
     favoriteStore.value = new Set(favoriteStore.value)
 
   } catch (error) {
     console.error('❌ お気に入り削除エラー:', error)
 
-    // エラー時は楽観的更新をロールバック
     favoriteStore.value.add(recipe.id)
 
-    // アニメーションを元に戻す
     const recipeElement = document.querySelector(`[data-recipe-id="${recipe.id}"]`)
     if (recipeElement) {
       recipeElement.style.opacity = '1'
@@ -297,27 +261,19 @@ const toggleLike = async (recipe) => {
   }
 }
 
-// コンポーネント初期化
 onMounted(async () => {
-  console.log('🔍 お気に入りページの認証チェック開始...')
 
   try {
     await initAuth()
-    console.log('👤 認証チェック結果:', user.value ? user.value.email : 'null')
 
     if (!user.value) {
-      console.log('⚠️ 認証失敗 - ログインページにリダイレクト')
       await navigateTo('/auth/login')
       return
     }
 
-    console.log('✅ 認証成功:', user.value.email, 'お気に入りページを表示')
-
-    // URLクエリの設定
     searchKeyword.value = route.query.keyword || ''
     currentPage.value = parseInt(route.query.page) || 1
 
-    // お気に入りレシピを取得
     await fetchFavoriteRecipes()
 
   } catch (error) {
@@ -326,11 +282,10 @@ onMounted(async () => {
   }
 })
 
-// URLクエリの監視（他のページと同じ）
-watch(() => route.query, (newQuery, oldQuery) => {
+watch(() => route.query, (newQuery) => {
   const newKeyword = newQuery.keyword || ''
   const newPage = parseInt(newQuery.page) || 1
-  
+
   const oldKeyword = searchKeyword.value
   const oldPage = currentPage.value
 
@@ -339,17 +294,14 @@ watch(() => route.query, (newQuery, oldQuery) => {
   if (newKeyword !== oldKeyword) {
     searchKeyword.value = newKeyword
     shouldFetch = true
-    console.log('🔍 検索キーワード変更:', oldKeyword, '→', newKeyword)
   }
 
   if (newPage !== oldPage) {
     currentPage.value = newPage
     shouldFetch = true
-    console.log('📄 ページ変更:', oldPage, '→', newPage)
   }
 
   if (shouldFetch) {
-    console.log('🔄 URLクエリ変更によりデータ再取得')
     fetchFavoriteRecipes()
   }
 }, { immediate: false })

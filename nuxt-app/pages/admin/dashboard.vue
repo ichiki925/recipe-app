@@ -231,14 +231,8 @@ onMounted(async () => {
 
   await initAuth()
 
-  console.log('🔍 認証状態:', {
-    isLoggedIn: isLoggedIn.value,
-    isAdmin: isAdmin.value,
-    user: user.value
-  })
-
   if (!isLoggedIn.value || !isAdmin.value) {
-    console.log('❌ 認証失敗またはadmin権限なし')
+    console.error('❌ 認証失敗またはadmin権限なし')
     await navigateTo('/admin/login')
     return
   }
@@ -247,7 +241,7 @@ onMounted(async () => {
     const idToken = await $auth.currentUser?.getIdToken()
 
     if (!idToken) {
-      console.log('❌ IDトークンが取得できませんでした')
+      console.error('❌ IDトークンが取得できませんでした')
       await navigateTo('/admin/login')
       return
     }

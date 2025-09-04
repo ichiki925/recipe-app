@@ -14,7 +14,6 @@
         レシピが見つかりませんでした。
       </div>
 
-
       <div v-else class="recipe-grid">
         <div
           v-for="recipe in recipes"
@@ -87,8 +86,6 @@
 <script setup>
 import { ref, onMounted, watch } from 'vue'
 
-
-// FontAwesome CSS読み込み
 useHead({
   link: [
     {
@@ -99,16 +96,12 @@ useHead({
   ]
 })
 
-// 認証関連
 const { user, isLoggedIn, initAuth } = useAuth()
 
-
-// データ定義
 const searchKeyword = ref('')
 const currentPage = ref(1)
 const totalPages = ref(1)
 
-// お気に入り状態を含むレシピデータ
 const recipes = ref([])
 const isLoading = ref(false)
 
@@ -126,7 +119,7 @@ const getImageUrl = (imageUrl) => {
 }
 
 // 画像エラーハンドリング
-const handleImageError = (event, recipe) => {
+const handleImageError = (event) => {
     event.target.onerror = null
     const parent = event.target.parentElement
     event.target.style.display = 'none'
@@ -139,7 +132,7 @@ const handleImageError = (event, recipe) => {
 }
 
 // お気に入り状態管理用のグローバルストア
-const favoriteStore = useState('favorites', () => new Set()) // 初期値として1と6をお気に入り
+const favoriteStore = useState('favorites', () => new Set())
 
 // コンポーネント初期化
 onMounted(async () => {
@@ -153,7 +146,6 @@ onMounted(async () => {
     }
 
     favoriteStore.value.clear()
-    console.log('🔄 ログイン時：ストアをクリア')
 
     // URLクエリの設定
     searchKeyword.value = route.query.keyword || ''
@@ -203,49 +195,20 @@ const updateUrl = () => {
 const fetchRecipes = async () => {
   isLoading.value = true
   try {
-    console.log('🔍 検索:', searchKeyword.value, 'ページ:', currentPage.value)
-
     const config = useRuntimeConfig()
     let headers = {}
 
     if (user.value) {
       const { $auth } = useNuxtApp()
 
-      console.log('🔑 認証情報確認:', {
-        hasUser: !!user.value,
-        userEmail: user.value?.email,
-        hasAuth: !!$auth,
-        hasCurrentUser: !!$auth.currentUser
-      })
-
       try {
-        const token = await $auth.currentUser.getIdToken(true) // forceRefresh=true
+        const token = await $auth.currentUser.getIdToken(true)
         headers.Authorization = `Bearer ${token}`
-        
-        console.log('🔑 トークン生成成功:', {
-          tokenLength: token?.length,
-          tokenPreview: token?.substring(0, 50) + '...'
-        })
-        
       } catch (tokenError) {
-        console.error('🔑 トークン取得エラー:', tokenError)
-        // トークン取得失敗時はログイン画面にリダイレクト
         await navigateTo('/auth/login')
         return
       }
-    } else {
-      console.log('🔑 ユーザー未認証')
     }
-
-    console.log('📡 APIリクエスト送信:', {
-      baseURL: config.public.apiBaseUrl,
-      hasAuthHeader: !!headers.Authorization,
-      query: {
-        keyword: searchKeyword.value || '',
-        page: currentPage.value,
-        per_page: 9
-      }
-    })
 
 
     const response = await $fetch('/recipes/search', {
@@ -258,74 +221,33 @@ const fetchRecipes = async () => {
       }
     })
 
-    console.log('📦 API応答（完全版）:', response)
-
-    // 🔍 APIの各レシピのis_liked状態を詳細確認
-    if (response.data) {
-      console.log('🔍 各レシピのis_liked状態:')
-      response.data.forEach(r => {
-        console.log(`レシピ${r.id}: is_liked=${r.is_liked}, likes_count=${r.likes_count}`)
-      })
-    }
-
     recipes.value = (response.data || []).map(r => ({
       id: r.id,
       title: r.title,
       genre: r.genre,
       likes: r.likes_count ?? 0,
-      isFavorited: !!r.is_liked,     // ログイン時だけ付与される想定のフラグ
+      isFavorited: !!r.is_liked,
       image_url: r.image_url,
       admin: r.admin
     }))
 
-    // 🔍 変換後のレシピ状態も確認
-    console.log('🔍 変換後のレシピ状態:')
-    recipes.value.forEach(r => {
-      console.log(`レシピ${r.id}(${r.title}): isFavorited=${r.isFavorited}`)
-    })
-
     const isFirstLoad = favoriteStore.value.size === 0
-    const hasApiFavorites = recipes.value.some(r => r.isFavorited)
-
-    console.log('🔍 状態確認:', {
-      isFirstLoad,
-      hasApiFavorites, 
-      storeSize: favoriteStore.value.size,
-      apiFavoriteIds: recipes.value.filter(r => r.isFavorited).map(r => r.id),
-      currentStoreIds: Array.from(favoriteStore.value)
-    })
 
     if (isFirstLoad) {
-      console.log('🔄 ログイン直後またはページ初期化：APIの状態でストアを初期化')
-      // ストアが空の場合は必ずAPIの状態をストアに同期
       recipes.value.forEach(recipe => {
         if (recipe.isFavorited) {
           favoriteStore.value.add(recipe.id)
-          console.log(`🔄 ストアに復元: レシピ${recipe.id} → お気に入り追加`)
         }
       })
-      // ストアが更新されたことを確認
-      console.log('🔄 ストア更新後:', Array.from(favoriteStore.value))
-      // 🔥 強制的にreactivityをトリガー
       favoriteStore.value = new Set(favoriteStore.value)
     } else {
-      console.log('🔄 通常時：ストアを優先')
-      // 通常時：ストアを優先（画面遷移時の保持）
       recipes.value.forEach(recipe => {
         const shouldBeFavorited = favoriteStore.value.has(recipe.id)
         if (recipe.isFavorited !== shouldBeFavorited) {
           recipe.isFavorited = shouldBeFavorited
-          console.log(`🔄 レシピ${recipe.id}: ストア優先で${shouldBeFavorited}に更新`)
         }
       })
     }
-
-    // 🔍 最終的なレシピ状態を確認
-    console.log('🔍 最終的なレシピ状態:')
-    recipes.value.forEach(r => {
-      console.log(`レシピ${r.id}(${r.title}): isFavorited=${r.isFavorited}, inStore=${favoriteStore.value.has(r.id)}`)
-    })
-
 
     // ページネーション情報更新
     currentPage.value = Number(response.current_page ?? 1)
@@ -334,9 +256,7 @@ const fetchRecipes = async () => {
     } catch (e) {
     console.error('❌ レシピ取得エラー:', e)
 
-    // 401エラーの場合はログイン画面にリダイレクト
     if (e.status === 401 || e.statusCode === 401) {
-      console.log('🔒 認証エラーのためログイン画面にリダイレクト')
       await navigateTo('/auth/login')
     }
   } finally {
@@ -344,26 +264,20 @@ const fetchRecipes = async () => {
   }
 }
 
-// 一覧ページ（index.vue）のtoggleFavorite関数を以下に完全に置き換えてください
-
 const toggleLike = async (recipe, event) => {
   if (event) {
     event.preventDefault()
     event.stopPropagation()
   }
 
-  console.log('🖱️ ハートクリック:', recipe.title)
-
   if (!user.value) {
     alert('ログインが必要です')
     return
   }
 
-  // 元の状態を保存
   const originalState = recipe.isFavorited
   const originalLikes = recipe.likes
 
-  // 🔧 楽観的更新（即座にUIを更新）
   recipe.isFavorited = !originalState
   recipe.likes = originalState ? recipe.likes - 1 : recipe.likes + 1
 
@@ -372,15 +286,11 @@ const toggleLike = async (recipe, event) => {
     const token = await $auth.currentUser.getIdToken(true)
     const config = useRuntimeConfig()
 
-    console.log('📡 API呼び出し開始...')
-
     const response = await $fetch(`/recipes/${recipe.id}/toggle-like`, {
       baseURL: config.public.apiBaseUrl,
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
     })
-
-    console.log('✅ いいね切り替え成功:', response)
 
     if (response && typeof response.is_liked !== 'undefined') {
       const newLikedState = !!response.is_liked
@@ -389,18 +299,15 @@ const toggleLike = async (recipe, event) => {
       recipe.likes = newLikesCount
       if (newLikedState) favoriteStore.value.add(recipe.id)
       else favoriteStore.value.delete(recipe.id)
-      // reactivity を促す
       favoriteStore.value = new Set(favoriteStore.value)
     }
 
   } catch (error) {
     console.error('❌ いいね更新エラー:', error)
 
-    // 🔧 エラー時は元の状態に戻す（楽観的更新のロールバック）
     recipe.isFavorited = originalState
     recipe.likes = originalLikes
 
-    // ストアも元の状態に戻す
     if (originalState) {
       favoriteStore.value.add(recipe.id)
     } else {
@@ -411,14 +318,10 @@ const toggleLike = async (recipe, event) => {
   }
 }
 
-
-
-// URLクエリの監視
-watch(() => route.query, (newQuery, oldQuery) => {
-  // 🔧 実際に値が変わった場合のみ更新
+watch(() => route.query, (newQuery) => {
   const newKeyword = newQuery.keyword || ''
   const newPage = parseInt(newQuery.page) || 1
-  
+
   const oldKeyword = searchKeyword.value
   const oldPage = currentPage.value
 
@@ -427,37 +330,28 @@ watch(() => route.query, (newQuery, oldQuery) => {
   if (newKeyword !== oldKeyword) {
     searchKeyword.value = newKeyword
     shouldFetch = true
-    console.log('🔍 検索キーワード変更:', oldKeyword, '→', newKeyword)
   }
 
   if (newPage !== oldPage) {
     currentPage.value = newPage
     shouldFetch = true
-    console.log('📄 ページ変更:', oldPage, '→', newPage)
   }
 
   if (shouldFetch) {
-    console.log('🔄 URLクエリ変更によりデータ再取得')
     fetchRecipes()
   }
 }, { immediate: false }) // 初回実行を防ぐ
 
 watch(favoriteStore, (newFavorites) => {
-  console.log('🔄 一覧ページ: ストア変更を検知')
-  
-  // 現在表示中のレシピの状態を同期
   recipes.value.forEach(recipe => {
     const shouldBeFavorited = newFavorites.has(recipe.id)
     if (recipe.isFavorited !== shouldBeFavorited) {
-      console.log(`🔄 レシピ${recipe.id}の状態を同期: ${recipe.isFavorited} → ${shouldBeFavorited}`)
       recipe.isFavorited = shouldBeFavorited
     }
   })
 }, { deep: true })
 
 </script>
-
-
 
 <style scoped>
 @import "@/assets/css/common.css";
@@ -527,7 +421,6 @@ watch(favoriteStore, (newFavorites) => {
     object-fit: cover;
 }
 
-
 .no-image-fallback {
     width: 100%;
     height: 100%;
@@ -551,14 +444,11 @@ watch(favoriteStore, (newFavorites) => {
     text-align: center;
 }
 
-
 .recipe-title {
   margin-top: 10px;
   font-weight: bold;
   color: #333;
 }
-
-
 
 .recipe-genre {
   color: #555;
@@ -592,7 +482,6 @@ watch(favoriteStore, (newFavorites) => {
   position: relative;
   z-index: 1;
 }
-
 
 .like-button:hover {
   background-color: #f8f9fa;
@@ -641,7 +530,6 @@ watch(favoriteStore, (newFavorites) => {
   padding: 40px;
   font-size: 16px;
 }
-
 
 @keyframes heartBeat {
   0% { transform: scale(1); }
