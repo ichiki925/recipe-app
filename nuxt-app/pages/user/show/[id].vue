@@ -631,7 +631,7 @@ watch(favoriteStore, (newFavorites) => {
     background-color: #f8f9fa;
     border-radius: 4px;
     margin-bottom: 15px;
-}
+  }
 
 @media (max-width: 768px) {
     .recipe-create-container {

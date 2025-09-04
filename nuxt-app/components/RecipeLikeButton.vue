@@ -52,7 +52,9 @@ const handleToggleLike = () => {
 <style scoped>
 .action-buttons {
     display: flex;
-    justify-content: center;
+    justify-content: flex-start;
+    width: 100%;
+    margin-top: -20px;
 }
 
 .icon-button {
@@ -78,25 +80,28 @@ const handleToggleLike = () => {
     align-items: center;
     gap: 4px;
     color: #333;
-    justify-content: center;
+    justify-content: flex-start;
 }
 
 .like-count {
     font-size: 10px;
 }
 
-.heart-icon-filled {
+.icon-button .heart-icon-filled,
+.like-display .heart-icon-filled {
     color: #dc3545 !important;
     font-size: 18px !important;
 }
 
-.heart-icon-outline {
+.icon-button .heart-icon-outline,
+.like-display .heart-icon-outline {
     color: #666 !important;
     font-size: 18px !important;
 }
 
-.heart-icon {
+.icon-button .heart-icon,
+.like-display .heart-icon {
     font-size: 18px;
-    color: #dc3545;
+    color: #dc3545 !important;
 }
 </style>
