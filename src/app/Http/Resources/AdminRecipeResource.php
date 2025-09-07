@@ -16,7 +16,7 @@ class AdminRecipeResource extends JsonResource
             $path = ltrim(str_replace('/storage/', '', $raw), '/');
 
             if (Storage::disk('public')->exists($path)) {
-                $imageFull = url(Storage::url($path));
+                $imageFullUrl = url(Storage::url($path));
             }
         }
 
@@ -31,8 +31,8 @@ class AdminRecipeResource extends JsonResource
             'ingredients_array' => $this->parseIngredients($this->ingredients),
             'instructions_array' => $this->parseInstructions($this->instructions),
             'image_url'      => $raw,
-            'image_full_url' => $imageFull,
-            'image'          => $imageFull,
+            'image_full_url' => $imageFullUrl,
+            'image'          => $imageFullUrl,
             'is_published' => (bool) $this->is_published,
             'views_count' => $this->views_count ?? 0,
             'likes_count' => $this->likes_count ?? 0,
