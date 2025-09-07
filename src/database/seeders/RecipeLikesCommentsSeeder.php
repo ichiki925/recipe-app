@@ -12,10 +12,8 @@ class RecipeLikesCommentsSeeder extends Seeder
 {
     public function run()
     {
-        // 一般ユーザーのみを取得（管理者は除外）
         $users = User::where('role', 'user')->get();
 
-        // アクティブなレシピのみを取得
         $recipes = Recipe::whereNull('deleted_at')->get();
 
         if ($users->isEmpty()) {
@@ -28,10 +26,8 @@ class RecipeLikesCommentsSeeder extends Seeder
             return;
         }
 
-        // ランダムにいいねを作成
         $likesCreated = 0;
         foreach ($recipes as $recipe) {
-            // 各レシピに対して、ユーザーの30-80%がいいねする
             $likeCount = rand(ceil($users->count() * 0.3), ceil($users->count() * 0.8));
             $randomUsers = $users->random($likeCount);
 
@@ -45,13 +41,11 @@ class RecipeLikesCommentsSeeder extends Seeder
                     ]);
                     $likesCreated++;
                 } catch (\Exception $e) {
-                    // 重複エラーの場合はスキップ
                     continue;
                 }
             }
         }
 
-        // コメントのサンプルデータ
         $commentTexts = [
             'とても美味しかったです！家族にも好評でした。',
             'レシピ通りに作ったら上手にできました。ありがとうございます。',
@@ -70,16 +64,15 @@ class RecipeLikesCommentsSeeder extends Seeder
             '次回は少しアレンジしてみようと思います。',
         ];
 
-        // ランダムにコメントを作成
+
         $commentsCreated = 0;
         foreach ($recipes as $recipe) {
-            // 各レシピに対して0-5個のコメントを作成
             $commentCount = rand(0, 5);
-            
+
             for ($i = 0; $i < $commentCount; $i++) {
                 $randomUser = $users->random();
                 $randomCommentText = $commentTexts[array_rand($commentTexts)];
-                
+
                 RecipeComment::create([
                     'content' => $randomCommentText,
                     'user_id' => $randomUser->id,
@@ -91,7 +84,6 @@ class RecipeLikesCommentsSeeder extends Seeder
             }
         }
 
-        // レシピのいいね数を更新
         foreach ($recipes as $recipe) {
             $recipe->updateLikesCount();
         }

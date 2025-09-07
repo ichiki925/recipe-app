@@ -62,16 +62,13 @@ class LikeController extends Controller
             ], 200);
         }
 
-        // いいね作成
         $like = RecipeLike::create([
             'user_id' => $user->id,
             'recipe_id' => $recipe->id
         ]);
 
-        // リレーションを読み込み
         $like->load(['user', 'recipe']);
 
-        // レシピのいいね数を更新
         $recipe->refresh();
 
         return response()->json([
@@ -106,7 +103,6 @@ class LikeController extends Controller
         $recipe = $like->recipe;
         $like->delete();
 
-        // レシピのいいね数を更新
         $recipe->refresh();
 
         return response()->json([
@@ -120,7 +116,6 @@ class LikeController extends Controller
     {
         $user = auth()->user();
 
-        // いいねを検索
         $like = RecipeLike::where('user_id', $user->id)
                         ->where('recipe_id', $recipe->id)
                         ->first();
@@ -133,10 +128,8 @@ class LikeController extends Controller
             ], 200);
         }
 
-        // いいね削除
         $like->delete();
 
-        // レシピのいいね数を更新
         $recipe->refresh();
 
         return response()->json([
@@ -146,88 +139,8 @@ class LikeController extends Controller
         ], 200);
     }
 
-
-    // public function userLikes(Request $request)
-    // {
-    //     try {
-    //         Log::info('userLikes メソッドが呼び出されました');
-
-    //         $user = $request->user();
-
-    //         Log::info('認証ユーザー情報: ' . ($user ? 'ID:' . $user->id . ', Email:' . $user->email : 'null'));
-
-    //         if (!$user) {
-    //             Log::error('ユーザーが認証されていません');
-    //             return response()->json([
-    //                 'success' => false,
-    //                 'message' => 'ユーザーが認証されていません',
-    //                 'data' => [],
-    //                 'current_page' => 1,
-    //                 'last_page' => 1,
-    //                 'total' => 0
-    //             ], 401);
-    //         }
-
-    //         $likedRecipeIds = RecipeLike::where('user_id', $user->id)
-    //                                     ->pluck('recipe_id')
-    //                                     ->toArray();
-            
-    //         Log::info('ユーザーがいいねしたレシピID: ' . json_encode($likedRecipeIds));
-
-    //         if (empty($likedRecipeIds)) {
-    //             return response()->json([
-    //                 'success' => true,
-    //                 'data' => [],
-    //                 'current_page' => 1,
-    //                 'last_page' => 1,
-    //                 'total' => 0
-    //             ]);
-    //         }
-
-    //         // レシピ情報を取得
-    //         $likedRecipes = Recipe::whereIn('id', $likedRecipeIds)
-    //                             ->where('is_published', true)
-    //                             ->with('admin')
-    //                             ->withCount('likes')
-    //                             ->orderByRaw('FIELD(id, ' . implode(',', $likedRecipeIds) . ')')
-    //                             ->get();
-
-    //         Log::info('取得したレシピ数: ' . $likedRecipes->count());
-
-    //         // 各レシピにいいね状態を追加
-    //         $likedRecipes->transform(function ($recipe) {
-    //             $recipe->is_liked = true;
-    //             return $recipe;
-    //         });
-
-    //         return response()->json([
-    //             'success' => true,
-    //             'data' => $likedRecipes->toArray(),
-    //             'current_page' => 1,
-    //             'last_page' => 1,
-    //             'per_page' => $likedRecipes->count(),
-    //             'total' => $likedRecipes->count()
-    //         ]);
-    //     } catch (\Exception $e) {
-    //         Log::error('userLikes エラー: ' . $e->getMessage());
-    //         Log::error('スタックトレース: ' . $e->getTraceAsString());
-            
-    //         return response()->json([
-    //             'success' => false,
-    //             'message' => 'お気に入りレシピの取得に失敗しました',
-    //             'error' => $e->getMessage(),
-    //             'data' => [],
-    //             'current_page' => 1,
-    //             'last_page' => 1,
-    //             'total' => 0
-    //         ], 500);
-    //     }
-    // }
-
     public function stats()
     {
-        // 管理者のみアクセス可能（ルートでミドルウェア設定）
-
         $stats = [
             'total_likes' => RecipeLike::count(),
             'today_likes' => RecipeLike::whereDate('created_at', today())->count(),
@@ -240,13 +153,11 @@ class LikeController extends Controller
                                         ->count(),
         ];
 
-        // 人気レシピ Top 5
         $popularRecipes = Recipe::published()
                             ->orderBy('likes_count', 'desc')
                             ->take(5)
                             ->get(['id', 'title', 'likes_count']);
 
-        // 最近いいねが多いユーザー Top 5
         $activeUsers = RecipeLike::selectRaw('user_id, COUNT(*) as likes_given')
                                 ->with('user:id,name,username')
                                 ->whereBetween('created_at', [now()->subDays(30), now()])
@@ -279,13 +190,11 @@ class LikeController extends Controller
             ], 403);
         }
 
-        // 既存のいいねを検索
         $existingLike = RecipeLike::where('user_id', $user->id)
                             ->where('recipe_id', $recipe->id)
                             ->first();
 
         if ($existingLike) {
-            // いいねを削除
             $existingLike->delete();
             $isLiked = false;
             Log::info('Like removed', [
@@ -293,7 +202,6 @@ class LikeController extends Controller
                 'recipe_id' => $recipe->id
             ]);
         } else {
-            // いいねを追加
             RecipeLike::create([
                 'user_id' => $user->id,
                 'recipe_id' => $recipe->id
@@ -305,7 +213,6 @@ class LikeController extends Controller
             ]);
         }
 
-        // 🔧 いいね数を強制的に更新
         $likesCount = $recipe->refreshLikesCount();
 
         Log::info('Toggle like completed', [

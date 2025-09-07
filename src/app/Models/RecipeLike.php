@@ -1,6 +1,5 @@
 <?php
 
-// app/Models/RecipeLike.php
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -17,29 +16,16 @@ class RecipeLike extends Model
         'recipe_id',
     ];
 
-    // ==================== Relationships ====================
-
-    /**
-     * いいねしたユーザー
-     */
     public function user()
     {
         return $this->belongsTo(User::class);
     }
 
-    /**
-     * いいねされたレシピ
-     */
     public function recipe()
     {
         return $this->belongsTo(Recipe::class);
     }
 
-    // ==================== Events ====================
-
-    /**
-     * いいね作成時にレシピのいいね数を更新
-     */
     protected static function booted()
     {
         static::created(function ($like) {

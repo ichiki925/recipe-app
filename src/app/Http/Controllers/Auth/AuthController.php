@@ -96,7 +96,7 @@ class AuthController extends Controller
             ]);
 
             return response()->json([
-                'success' => true,  // 🔧 統一性のため追加
+                'success' => true,
                 'user' => [
                     'id' => $user->id,
                     'firebase_uid' => $user->firebase_uid,

@@ -80,7 +80,7 @@ class AdminCommentResource extends JsonResource
     }
 
     /**
-     * 不適切なコンテンツかチェック
+     * 機能的なコメントに簡略化
      */
     private function checkInappropriateContent()
     {

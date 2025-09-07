@@ -16,12 +16,8 @@ class RecipeController extends Controller
 {
     private const IMAGE_DIRECTORY = 'recipe_images';
 
-    
-
     public function index(Request $request)
     {
-        \Log::info('=== Public Recipe Index (未ログイン向け) ===');
-
         $query = Recipe::with(['admin'])
             ->published()
             ->withCount('likes')
@@ -57,17 +53,10 @@ class RecipeController extends Controller
     {
         $user = $request->user();
 
-        \Log::info('=== User Recipe Index (ログインユーザー向け) ===', [
-            'user_id' => $user->id,
-            'user_email' => $user->email,
-            'is_admin' => $user->isAdmin()
-        ]);
-
         $query = Recipe::with(['admin'])
             ->published()
             ->withCount('likes')
             ->search($request->keyword);
-
 
         $recipes = $query->latest()->paginate(9);
 
@@ -123,18 +112,13 @@ class RecipeController extends Controller
             ]);
         }
 
-        \Log::info('=== Liked Recipes (お気に入りページ用) ===', [
-            'user_id' => $user->id,
-            'keyword' => $request->keyword
-        ]);
-
         $query = Recipe::with(['admin'])
             ->published()
             ->withCount('likes')
             ->whereHas('likes', function($q) use ($user) {
                 $q->where('user_id', $user->id);
             })
-            ->search($request->keyword); // 既存の検索ロジックを使用
+            ->search($request->keyword);
 
         $recipes = $query->latest()->paginate($request->get('per_page', 6));
 
@@ -148,7 +132,7 @@ class RecipeController extends Controller
                 'image_full_url' => $recipe->image_url
                     ? asset($recipe->image_url)
                     : asset('images/no-image.png'),
-                'is_liked' => true, // お気に入りページなので常にtrue
+                'is_liked' => true,
                 'admin' => [
                     'id' => $recipe->admin->id,
                     'name' => $recipe->admin->name
@@ -165,92 +149,12 @@ class RecipeController extends Controller
         ]);
     }
 
-    // public function search(Request $request)
-    // {
-    //     try {
-    //         $keyword = $request->get('keyword', '');
-    //         $perPage = $request->get('per_page', 9);
-            
-    //         $user = null;
-
-    //         if ($request->hasHeader('Authorization')) {
-    //             try {
-    //                 // Firebaseミドルウェアの処理を手動実行
-    //                 $firebaseMiddleware = app(\App\Http\Middleware\FirebaseAuth::class);
-    //                 $firebaseMiddleware->handle($request, function ($req) {
-    //                     return $req;
-    //                 });
-    //                 $user = $request->user();
-                    
-    //                 \Log::info('手動認証成功:', ['user_id' => $user ? $user->id : null]);
-    //             } catch (\Exception $e) {
-    //                 \Log::info('手動認証失敗 - 未ログインとして処理:', ['error' => $e->getMessage()]);
-    //                 $user = null;
-    //             }
-    //         }
-
-    //         $query = Recipe::published()
-    //             ->with('admin')
-    //             ->withCount('likes')
-    //             ->search($request->keyword);
-
-    //         $recipes = $query->latest()->paginate($perPage);
-
-    //         $recipesData = collect($recipes->items())->map(function($recipe) use ($user) {
-    //             $isLiked = false;
-
-    //             // ユーザーがログインしている場合のみお気に入り状態をチェック
-    //             if ($user && !($user->isAdmin() ?? false)) {
-    //                 $isLiked = \DB::table('recipe_likes')
-    //                     ->where('user_id', $user->id)
-    //                     ->where('recipe_id', $recipe->id)
-    //                     ->exists();
-    //             }
-
-
-    //             return [
-    //                 'id' => $recipe->id,
-    //                 'title' => $recipe->title,
-    //                 'genre' => $recipe->genre,
-    //                 'likes_count' => $recipe->likes_count ?? 0,
-    //                 'image_url' => $recipe->image_url,
-    //                 'is_liked' => $isLiked,
-    //                 'admin' => [
-    //                     'id' => $recipe->admin->id,
-    //                     'name' => $recipe->admin->name
-    //                 ]
-    //             ];
-    //         });
-
-    //         return response()->json([
-    //             'current_page' => $recipes->currentPage(),
-    //             'data' => $recipesData,
-    //             'last_page' => $recipes->lastPage(),
-    //             'per_page' => $recipes->perPage(),
-    //             'total' => $recipes->total()
-    //         ]);
-
-    //     } catch (\Exception $e) {
-    //         \Log::error('Recipe search error', ['error' => $e->getMessage()]);
-
-
-    //         return response()->json([
-    //             'current_page' => 1,
-    //             'data' => [],
-    //             'last_page' => 1,
-    //             'per_page' => 9,
-    //             'total' => 0
-    //         ]);
-    //     }
-    // }
-
     public function search(Request $request)
     {
         try {
             $keyword = (string) $request->get('keyword', '');
             $perPage = (int) $request->get('per_page', 9);
 
-            // 認証（ミドルウェアに依存しつつ、無い場合は手動でフォールバック）
             $user = $request->user();
             if (!$user && $request->hasHeader('Authorization')) {
                 try {
@@ -258,8 +162,7 @@ class RecipeController extends Controller
                         ->handle($request, fn($req) => $req);
                     $user = $request->user();
                 } catch (\Throwable $e) {
-                    // 認証失敗でもゲストとして続行
-                    \Log::info('Auth fallback failed: ' . $e->getMessage());
+                    // 認証失敗は無視してゲストとして処理
                 }
             }
 
@@ -314,27 +217,20 @@ class RecipeController extends Controller
         }
     }
 
-
-
     public function create()
     {
         return response()->json(['message' => 'Use POST /admin/recipes to create recipe']);
     }
 
-
     public function store(Request $request)
     {
         try {
-            \Log::info('=== Recipe store method START ===');
-
-            // Firebase認証ユーザーを取得
             $user = $request->user();
 
             if (!$user || !$user->isAdmin()) {
                 return response()->json(['error' => '認証または権限エラー'], 403);
             }
 
-            // バリデーション
             $request->validate([
                 'title' => 'required|string|max:255',
                 'servings' => 'required|string',
@@ -343,22 +239,16 @@ class RecipeController extends Controller
                 'image' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:10240'
             ]);
 
-            \Log::info('Validation passed');
-
-            // 画像アップロード処理（統一されたメソッドを使用）
             $imageUrl = null;
             if ($request->hasFile('image')) {
                 try {
-                    \Log::info('Image upload starting...');
                     $imageUrl = $this->handleImageUploadSecure($request->file('image'));
-                    \Log::info('Image saved successfully:', ['final_url' => $imageUrl]);
                 } catch (\Exception $e) {
                     \Log::error('Image upload failed: ' . $e->getMessage());
                     $imageUrl = null;
                 }
             }
 
-            // レシピ作成
             $recipe = Recipe::create([
                 'title' => $request->title,
                 'genre' => $request->genre ?? '',
@@ -370,12 +260,6 @@ class RecipeController extends Controller
                 'is_published' => true,
                 'views_count' => 0,
                 'likes_count' => 0
-            ]);
-
-            \Log::info('Recipe created successfully:', [
-                'recipe_id' => $recipe->id,
-                'admin_id' => $recipe->admin_id,
-                'saved_image_url' => $recipe->image_url
             ]);
 
             return response()->json([
@@ -400,11 +284,7 @@ class RecipeController extends Controller
             ], 422);
 
         } catch (\Exception $e) {
-            \Log::error('Recipe store error:', [
-                'message' => $e->getMessage(),
-                'file' => $e->getFile(),
-                'line' => $e->getLine()
-            ]);
+            \Log::error('Recipe store error: ' . $e->getMessage());
 
             return response()->json([
                 'status' => 'error',
@@ -442,12 +322,6 @@ class RecipeController extends Controller
     public function update(Request $request, Recipe $recipe)
     {
         try {
-            // 📝 本番用：簡潔なログ
-            \Log::info('Recipe update started', [
-                'recipe_id' => $recipe->id,
-                'admin_id' => auth()->id()
-            ]);
-
             $request->validate([
                 'title' => 'required|string|max:255',
                 'genre' => 'nullable|string|max:100',
@@ -458,12 +332,9 @@ class RecipeController extends Controller
                 'is_published' => 'boolean'
             ]);
 
-            // 画像更新処理
             if ($request->hasFile('image')) {
-                // 🔒 セキュリティ強化された画像アップロード
                 $newImageUrl = $this->handleImageUploadSecure($request->file('image'));
 
-                // 古い画像削除
                 if ($recipe->image_url && $recipe->image_url !== '/images/no-image.png') {
                     $this->deleteOldImage($recipe->image_url);
                 }
@@ -471,7 +342,6 @@ class RecipeController extends Controller
                 $recipe->image_url = $newImageUrl;
             }
 
-            // レシピデータ更新
             $recipe->update([
                 'title' => $request->title,
                 'genre' => $request->genre,
@@ -483,18 +353,12 @@ class RecipeController extends Controller
 
             $recipe->load(['admin', 'comments', 'likes']);
 
-            // 📝 成功時は簡潔なログ
-            \Log::info('Recipe updated successfully', [
-                'recipe_id' => $recipe->id
-            ]);
-
             return response()->json([
                 'message' => 'レシピが更新されました',
                 'data' => new AdminRecipeResource($recipe)
             ]);
 
         } catch (\Illuminate\Validation\ValidationException $e) {
-            // 📝 バリデーションエラーは詳細に
             \Log::warning('Recipe update validation failed', [
                 'recipe_id' => $recipe->id,
                 'errors' => $e->errors()
@@ -507,7 +371,6 @@ class RecipeController extends Controller
             ], 422);
 
         } catch (\Exception $e) {
-            // 📝 エラー時は詳細なログ
             \Log::error('Recipe update failed', [
                 'recipe_id' => $recipe->id,
                 'admin_id' => auth()->id(),
@@ -526,7 +389,6 @@ class RecipeController extends Controller
 
     public function destroy(Recipe $recipe)
     {
-        // 統一されたメソッドを使用
         if ($recipe->image_url) {
             $this->deleteOldImage($recipe->image_url);
         }
@@ -541,13 +403,6 @@ class RecipeController extends Controller
     public function adminDestroy($id)
     {
         try {
-            \Log::info('=== Admin Recipe Delete START ===', [
-                'recipe_id' => $id,
-                'timestamp' => now(),
-                'user_id' => auth()->id() ?? 'not_authenticated'
-            ]);
-
-            // 認証確認
             $user = request()->user();
             if (!$user) {
                 \Log::warning('Delete attempt without authentication');
@@ -565,7 +420,6 @@ class RecipeController extends Controller
                 ], 403);
             }
 
-            // レシピを取得（削除済みも含める）
             $recipe = Recipe::withTrashed()->find($id);
 
             if (!$recipe) {
@@ -576,43 +430,25 @@ class RecipeController extends Controller
                 ], 404);
             }
 
-            \Log::info('Recipe found for deletion', [
-                'recipe_id' => $recipe->id,
-                'recipe_title' => $recipe->title,
-                'is_already_deleted' => $recipe->trashed()
-            ]);
-
-            // 関連データを削除（コメント、いいねなど）
             if ($recipe->comments()->exists()) {
                 $commentsCount = $recipe->comments()->count();
                 $recipe->comments()->delete();
-                \Log::info('Comments deleted', ['count' => $commentsCount]);
             }
 
             if ($recipe->likes()->exists()) {
                 $likesCount = $recipe->likes()->count();
                 $recipe->likes()->delete();
-                \Log::info('Likes deleted', ['count' => $likesCount]);
             }
 
-            // 統一されたメソッドを使用
             if ($recipe->image_url) {
                 $this->deleteOldImage($recipe->image_url);
             }
 
-            // レシピを完全削除
             if ($recipe->trashed()) {
-                $recipe->forceDelete(); // 既にソフトデリートされている場合は完全削除
-                \Log::info('Recipe force deleted');
+                $recipe->forceDelete();
             } else {
-                $recipe->delete(); // ソフトデリート
-                \Log::info('Recipe soft deleted');
+                $recipe->delete();
             }
-
-            \Log::info('=== Admin Recipe Delete COMPLETED ===', [
-                'recipe_id' => $id,
-                'success' => true
-            ]);
 
             return response()->json([
                 'status' => 'success',
@@ -645,28 +481,12 @@ class RecipeController extends Controller
     public function adminIndex(Request $request)
     {
         try {
-            \Log::info('=== Admin Index START ===', [
-                'request_params' => $request->all(),
-                'timestamp' => now()
-            ]);
-
-            $query = Recipe::with(['admin', 'comments.user'])
-                            ->withCount(['comments', 'likes']);
-
             $query = Recipe::with(['admin', 'comments.user'])
                 ->withCount(['comments', 'likes'])
                 ->search($request->keyword);
 
             $recipes = $query->orderBy('updated_at', 'desc')->paginate(9);
 
-            \Log::info('Recipes retrieved', [
-                'total' => $recipes->total(),
-                'current_page' => $recipes->currentPage(),
-                'last_page' => $recipes->lastPage(),
-                'per_page' => $recipes->perPage()
-            ]);
-
-            // カスタムレスポンス形式で返す
             return response()->json([
                 'current_page' => $recipes->currentPage(),
                 'data' => AdminRecipeResource::collection($recipes->items()),
@@ -717,13 +537,6 @@ class RecipeController extends Controller
     public function restore($id)
     {
         try {
-            \Log::info('=== Recipe Restore START ===', [
-                'recipe_id' => $id,
-                'admin_id' => auth()->id(),
-                'timestamp' => now()
-            ]);
-
-            // 認証確認
             $user = request()->user();
             if (!$user) {
                 return response()->json([
@@ -739,7 +552,6 @@ class RecipeController extends Controller
                 ], 403);
             }
 
-            // 削除済みレシピを取得
             $recipe = Recipe::withTrashed()->find($id);
 
             if (!$recipe) {
@@ -756,9 +568,8 @@ class RecipeController extends Controller
                 ], 422);
             }
 
-            // レシピを復元し、updated_atを現在時刻に更新
             $recipe->restore();
-            $recipe->touch(); // updated_atを現在時刻に更新
+            $recipe->touch();
 
             \Log::info('Recipe restored successfully', [
                 'recipe_id' => $recipe->id,
@@ -793,20 +604,9 @@ class RecipeController extends Controller
         }
     }
 
-
-
-
     public function adminShow($id)
     {
         try {
-
-            // 📝 簡潔なログ
-            \Log::info('Admin show recipe', [
-                'recipe_id' => $id,
-                'admin_id' => auth()->id()
-            ]);
-
-            // 認証チェック（詳細なエラー分離を維持）
             $user = request()->user();
             if (!$user) {
                 return response()->json([
@@ -822,7 +622,6 @@ class RecipeController extends Controller
                 ], 403);
             }
 
-            // レシピ取得（並び順を維持）
             $recipe = Recipe::withTrashed()
                 ->with([
                     'admin',
@@ -842,7 +641,6 @@ class RecipeController extends Controller
                     ], 404);
                 }
 
-
                 return response()->json([
                     'status' => 'success',
                     'message' => 'レシピを取得しました',
@@ -851,7 +649,6 @@ class RecipeController extends Controller
 
 
         } catch (\Exception $e) {
-            // 📝 エラー時は必要な情報のみ
             \Log::error('Admin show recipe failed', [
                 'recipe_id' => $id,
                 'admin_id' => auth()->id(),
@@ -873,13 +670,6 @@ class RecipeController extends Controller
     public function permanentDelete($id)
     {
         try {
-            \Log::info('=== Recipe Permanent Delete START ===', [
-                'recipe_id' => $id,
-                'admin_id' => auth()->id(),
-                'timestamp' => now()
-            ]);
-
-            // 認証確認
             $user = request()->user();
             if (!$user) {
                 return response()->json([
@@ -895,7 +685,6 @@ class RecipeController extends Controller
                 ], 403);
             }
 
-            // 削除済みレシピを取得
             $recipe = Recipe::withTrashed()->find($id);
 
             if (!$recipe) {
@@ -912,26 +701,21 @@ class RecipeController extends Controller
                 ], 422);
             }
 
-            // 関連データを完全削除
             if ($recipe->comments()->withTrashed()->exists()) {
                 $commentsCount = $recipe->comments()->withTrashed()->count();
                 $recipe->comments()->withTrashed()->forceDelete();
-                \Log::info('Comments permanently deleted', ['count' => $commentsCount]);
             }
 
             if ($recipe->likes()->exists()) {
                 $likesCount = $recipe->likes()->count();
                 $recipe->likes()->delete();
-                \Log::info('Likes permanently deleted', ['count' => $likesCount]);
             }
 
-            // 画像ファイルを削除
             if ($recipe->image_url) {
                 try {
                     $imagePath = str_replace('/storage/', '', $recipe->image_url);
                     if (Storage::disk('public')->exists($imagePath)) {
                         Storage::disk('public')->delete($imagePath);
-                        \Log::info('Image file permanently deleted', ['path' => $imagePath]);
                     }
                 } catch (\Exception $e) {
                     \Log::error('Image deletion failed', ['error' => $e->getMessage()]);
@@ -940,7 +724,6 @@ class RecipeController extends Controller
 
             $recipeTitle = $recipe->title;
 
-            // レシピを完全削除
             $recipe->forceDelete();
 
             \Log::info('Recipe permanently deleted successfully', [
@@ -978,16 +761,14 @@ class RecipeController extends Controller
     private function handleImageUploadSecure($uploadedFile)
     {
         try {
-            // 📏 ファイルサイズチェック（5MB制限）
-            $maxSize = 5 * 1024 * 1024; // 5MB
+            $maxSize = 5 * 1024 * 1024;
             if ($uploadedFile->getSize() > $maxSize) {
                 throw new \Exception('ファイルサイズが大きすぎます（5MB以下にしてください）');
             }
 
-            // 🛡️ MIMEタイプの厳密チェック
             $allowedMimes = [
                 'image/jpeg',
-                'image/png', 
+                'image/png',
                 'image/gif',
                 'image/webp'
             ];
@@ -996,7 +777,6 @@ class RecipeController extends Controller
                 throw new \Exception('許可されていないファイル形式です');
             }
 
-            // 📝 拡張子とMIMEタイプの整合性チェック
             $extension = strtolower($uploadedFile->getClientOriginalExtension());
             $mimeType = $uploadedFile->getMimeType();
 
@@ -1008,21 +788,17 @@ class RecipeController extends Controller
                 'webp' => ['image/webp']
             ];
 
-            if (!isset($validCombinations[$extension]) || 
+            if (!isset($validCombinations[$extension]) ||
                 !in_array($mimeType, $validCombinations[$extension])) {
                 throw new \Exception('ファイル拡張子とファイル形式が一致しません');
             }
 
-            // 🔐 ファイル名のサニタイズ（予測困難な名前生成）
             $timestamp = time();
-            $randomString = bin2hex(random_bytes(8)); // より安全なランダム文字列
+            $randomString = bin2hex(random_bytes(8));
             $filename = $timestamp . '_' . $randomString . '.' . $extension;
 
-            // 📁 安全なディレクトリ保存
             $path = $uploadedFile->storeAs(self::IMAGE_DIRECTORY, $filename, 'public');
 
-
-            // ✅ ファイル保存確認
             if (!Storage::disk('public')->exists($path)) {
                 throw new \Exception('ファイルの保存に失敗しました');
             }
@@ -1054,7 +830,6 @@ class RecipeController extends Controller
                 'path' => $oldImagePath ?? 'unknown',
                 'error' => $e->getMessage()
             ]);
-            // 古い画像削除の失敗は致命的ではないので、例外を再発生させない
         }
     }
 }

@@ -18,7 +18,7 @@ class CommentResource extends JsonResource
             'formatted_date' => $this->created_at->format('Y年m月d日 H:i'),
             'time_ago' => $this->created_at->diffForHumans(),
 
-            // 🔧 コメント投稿者情報（アバター含む）
+            // コメント投稿者情報（アバター含む）
             'user' => $this->when($this->relationLoaded('user'), [
                 'id' => $this->user->id,
                 'name' => $this->user->name,

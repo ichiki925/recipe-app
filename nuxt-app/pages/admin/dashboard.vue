@@ -89,15 +89,17 @@ definePageMeta({
   layout: 'admin'
 })
 
-const { user, isLoggedIn, isAdmin, initAuth } = useAuth()
+const { isLoggedIn, isAdmin, initAuth } = useAuth()
 const { $auth } = useNuxtApp()
 
 const dashboardData = ref({
   stats: {},
-  deleted_recipes: [],
-  recent_activities: [],
-  popular_recipes: []
+  deleted_recipes: []
 })
+
+// 将来実装予定の機能
+// const recentActivities = ref([])  // 最近の活動
+// const popularRecipes = ref([])    // 人気レシピTop5
 
 const isLoading = ref(true)
 const isProcessing = ref(false)

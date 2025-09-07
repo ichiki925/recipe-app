@@ -26,7 +26,7 @@ class RecipeLikeResource extends JsonResource
             'recipe' => $this->recipe ? [
                 'id' => $this->recipe->id,
                 'title' => $this->recipe->title,
-                'image_url' => $this->recipe->image_url ?? '/images/no-image.png', // 修正
+                'image_url' => $this->recipe->image_url ?? '/images/no-image.png',
             ] : null,
 
             // 管理者用の詳細情報

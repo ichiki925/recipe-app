@@ -7,7 +7,6 @@ use App\Models\Recipe;
 
 class RefreshRecipeSearchReading extends Command
 {
-    // 使い方: php artisan recipes:refresh-reading --missing --chunk=500 --dry --no-touch
     protected $signature = 'recipes:refresh-reading
         {--missing : search_reading が空(null/空文字)のレコードだけ処理}
         {--chunk=500 : 1回に処理する件数}
@@ -45,9 +44,8 @@ class RefreshRecipeSearchReading extends Command
             foreach ($recipes as $r) {
                 if ($dryRun) { $updated++; continue; }
 
-                // savingイベント(booted)を発火させて search_reading を再生成したいので save() を使う
                 if ($noTouch) {
-                    $r->timestamps = false;  // updated_at を触らない
+                    $r->timestamps = false;
                     $r->save();
                     $r->timestamps = true;
                 } else {

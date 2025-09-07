@@ -56,16 +56,14 @@ class RecipeResource extends JsonResource
     {
         if (!$raw) return null;
 
-        // すでに絶対URLならそのまま
         if (preg_match('#^https?://#', $raw)) {
             return $raw;
         }
 
-        // /storage/... を public ディスクのパスに変換して存在確認
         if (strpos($raw, '/storage/') === 0) {
-            $path = ltrim(str_replace('/storage/', '', $raw), '/'); // e.g. recipe_images/xxx.jpg
+            $path = ltrim(str_replace('/storage/', '', $raw), '/');
             if (Storage::disk('public')->exists($path)) {
-                return url(Storage::url($path)); // 例: http://localhost/storage/recipe_images/xxx.jpg
+                return url(Storage::url($path));
             }
         }
 

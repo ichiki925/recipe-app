@@ -82,7 +82,7 @@ class CommentController extends Controller
 
             \Log::info('Comment created successfully', ['comment_id' => $comment->id]);
 
-            // 🔧 userリレーションを事前にロード（Resourceで使うため）
+            // userリレーションを事前にロード（Resourceで使うため）
             $comment->load(['user:id,name,username,avatar_url']);
 
             \Log::info('Comment with user loaded', [
@@ -92,7 +92,7 @@ class CommentController extends Controller
             ]);
 
 
-            // ✅ Resourceで整形して返却
+            // Resourceで整形して返却
             return response()->json([
                 'message' => 'コメントを投稿しました',
                 'data' => new CommentResource($comment)

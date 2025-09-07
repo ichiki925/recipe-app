@@ -1,6 +1,5 @@
 <?php
 
-// app/Models/Recipe.php
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -46,119 +45,76 @@ class Recipe extends Model
         'deleted_at',
     ];
 
-    // リレーション
-
-    /**
-     * レシピの投稿者（管理者）
-     */
     public function admin()
     {
         return $this->belongsTo(User::class, 'admin_id');
     }
 
-    /**
-     * レシピへのいいね
-     */
     public function likes()
     {
         return $this->hasMany(RecipeLike::class);
     }
 
-    /**
-     * いいねしたユーザー
-     */
     public function likedByUsers()
     {
         return $this->belongsToMany(User::class, 'recipe_likes')->withTimestamps();
     }
 
-    /**
-     * レシピへのコメント
-     */
     public function comments()
     {
         return $this->hasMany(RecipeComment::class)->orderBy('created_at', 'desc');
     }
 
-    // ==================== Accessors & Mutators ====================
-
-    /**
-     * 画像URL取得（デフォルト画像対応）
-     */
     public function getImageFullUrlAttribute(): string
     {
         // DBに '/storage/recipe_images/foo.jpg' が入っている想定
         $value = $this->attributes['image_url'] ?? '';
 
-        // 値がなければ即フォールバック
         if (!$value) {
             return url('/images/no-image.png');
         }
 
-        // '/storage/...' → 'recipe_images/...'
         $path = ltrim(str_replace('/storage/', '', $value), '/');
 
-        // 物理ファイルがあるかを public ディスクで確認
         if (Storage::disk('public')->exists($path)) {
-            // Storage::url($path) は '/storage/...' を返すので absolute に
             return url(Storage::url($path));
         }
 
-        // ファイルが無いときは既定画像
         return url('/images/no-image.png');
     }
 
     /**
-     * 🔧 いいね数を取得（リアルタイム計算 + キャッシュ併用）
+     *  いいね数を取得（リアルタイム計算 + キャッシュ併用）
      */
     public function getLikesCountAttribute($value)
     {
-        // DBのlikes_countカラムがnullまたは0の場合のみリアルタイム計算
         if (is_null($value) || $value === 0) {
             return $this->likes()->count();
         }
 
-        // それ以外はDBの値を使用（パフォーマンス重視）
         return $value;
     }
 
-    /**
-     * 材料を配列に変換
-     */
     public function getIngredientsArrayAttribute()
     {
         return array_filter(array_map('trim', explode("\n", $this->ingredients)));
     }
 
-    /**
-     * 作り方を配列に変換
-     */
     public function getInstructionsArrayAttribute()
     {
         return array_filter(array_map('trim', explode("\n", $this->instructions)));
     }
 
-    // ==================== Scopes ====================
-
-    /**
-     * 公開済みレシピのみ
-     */
     public function scopePublished($query)
     {
         return $query->where('is_published', true);
     }
 
-    /**
-     * 人気順（いいね数降順）
-     */
     public function scopePopular($query)
     {
         return $query->orderBy('likes_count', 'desc');
     }
 
-    /**
-     * 最新順
-     */
     public function scopeLatest($query)
     {
         return $query->orderBy('created_at', 'desc');
@@ -180,14 +136,11 @@ class Recipe extends Model
             ->orWhere('genre', 'LIKE', $likeRaw)
             ->orWhere('ingredients', 'LIKE', $likeRaw)
             ->orWhere('instructions', 'LIKE', $likeRaw)
-            ->orWhere('search_reading', 'LIKE', $likeRaw)   // 生の文字列でも検索
-            ->orWhere('search_reading', 'LIKE', $likeHira); // ひらがな正規化でも検索
+            ->orWhere('search_reading', 'LIKE', $likeRaw)
+            ->orWhere('search_reading', 'LIKE', $likeHira);
         });
     }
 
-    /**
-     * ジャンル別
-     */
     public function scopeByGenre($query, $genre)
     {
         if (empty($genre)) {
@@ -210,10 +163,7 @@ class Recipe extends Model
             $hira = \App\Support\JaString::normalizeToHiragana($plain);
             $recipe->search_reading = trim($hira . ' ' . $plain);
         });
-
     }
-
-    // ==================== Methods ====================
 
     public function updateLikesCount()
     {
@@ -239,8 +189,7 @@ class Recipe extends Model
     public function refreshLikesCount()
     {
         $this->likes_count = $this->likes()->count();
-        $this->saveQuietly(); // イベントを発火させずに保存
+        $this->saveQuietly();
         return $this->likes_count;
     }
-
 }

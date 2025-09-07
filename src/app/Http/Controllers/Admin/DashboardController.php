@@ -368,7 +368,7 @@ class DashboardController extends Controller
         ]);
     }
 
-    
+
 
     /**
      * 月次レポートを取得
@@ -425,7 +425,7 @@ class DashboardController extends Controller
                 }
             }
 
-            return round($size / 1024 / 1024, 2); // MB単位
+            return round($size / 1024 / 1024, 2);
         } catch (\Exception $e) {
             return 0;
         }

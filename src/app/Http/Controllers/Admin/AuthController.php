@@ -108,7 +108,7 @@ class AuthController extends Controller
                 ]);
 
                 return response()->json([
-                    'success' => false,  // 🔧 統一性のため追加
+                    'success' => false,
                     'error' => 'Admin access required'
                 ], 403);
             }
@@ -119,7 +119,7 @@ class AuthController extends Controller
             ]);
 
             return response()->json([
-                'success' => true,  // 🔧 統一性のため追加
+                'success' => true,
                 'admin' => [
                     'id' => $user->id,
                     'firebase_uid' => $user->firebase_uid,

@@ -11,7 +11,6 @@ class RecipeSeeder extends Seeder
 {
     public function run()
     {
-        // 管理者ユーザーを取得（存在しない場合は作成）
         $admin = User::where('role', 'admin')->first();
         if (!$admin) {
             $admin = User::create([
@@ -23,7 +22,6 @@ class RecipeSeeder extends Seeder
             ]);
         }
 
-        // 通常のアクティブなレシピ（拡張版）
         $activeRecipes = [
             [
                 'title' => '基本のハンバーグ',
@@ -245,12 +243,10 @@ class RecipeSeeder extends Seeder
             ],
         ];
 
-        // アクティブなレシピを作成
         foreach ($activeRecipes as $recipeData) {
             Recipe::create($recipeData);
         }
 
-        // 削除済みレシピを作成
         foreach ($deletedRecipes as $recipeData) {
             Recipe::create($recipeData);
         }

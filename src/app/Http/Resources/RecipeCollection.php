@@ -43,7 +43,7 @@ class RecipeCollection extends ResourceCollection
                         : false,
                 ];
             }),
-            // ページネーション
+
             'meta' => [
                 'current_page' => $this->currentPage(),
                 'last_page' => $this->lastPage(),

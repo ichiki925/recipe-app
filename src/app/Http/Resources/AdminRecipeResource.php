@@ -13,10 +13,10 @@ class AdminRecipeResource extends JsonResource
         $imageFullUrl = null;
         $raw = $this->image_url;
         if (is_string($raw) && strpos($raw, '/storage/') === 0) {
-            $path = ltrim(str_replace('/storage/', '', $raw), '/'); // 'recipe_images/xxx.jpg'
+            $path = ltrim(str_replace('/storage/', '', $raw), '/');
 
             if (Storage::disk('public')->exists($path)) {
-                $imageFull = url(Storage::url($path)); // 例: http://localhost/storage/recipe_images/xxx.jpg
+                $imageFull = url(Storage::url($path));
             }
         }
 
@@ -53,12 +53,12 @@ class AdminRecipeResource extends JsonResource
                 'class' => $this->is_published ? 'published' : 'draft',
                 'color' => $this->is_published ? 'success' : 'warning',
             ],
-            
+
             // 削除情報（ソフトデリート対応）
             'is_deleted' => $this->trashed(),
             'deleted_at' => $this->deleted_at ? $this->deleted_at->format('Y-m-d H:i:s') : null,
             'deleted_at_human' => $this->deleted_at ? $this->deleted_at->diffForHumans() : null,
-            
+
             // 日時情報
             'created_at' => $this->created_at->format('Y-m-d H:i:s'),
             'updated_at' => $this->updated_at->format('Y-m-d H:i:s'),
@@ -66,20 +66,20 @@ class AdminRecipeResource extends JsonResource
             'updated_at_human' => $this->updated_at->diffForHumans(),
             'created_at_formatted' => $this->created_at->format('Y年m月d日 H:i'),
             'updated_at_formatted' => $this->updated_at->format('Y年m月d日 H:i'),
-            
+
             // 統計情報
             'stats' => [
                 'total_interactions' => ($this->likes_count ?? 0) + ($this->whenLoaded('comments', function() {
                     return $this->comments->count();
                 }, 0)),
-                'engagement_rate' => ($this->views_count ?? 0) > 0 ? 
+                'engagement_rate' => ($this->views_count ?? 0) > 0 ?
                     round((($this->likes_count ?? 0) + ($this->whenLoaded('comments', function() {
                         return $this->comments->count();
                     }, 0))) / $this->views_count * 100, 2) : 0,
-                'likes_per_view' => ($this->views_count ?? 0) > 0 ? 
+                'likes_per_view' => ($this->views_count ?? 0) > 0 ?
                     round(($this->likes_count ?? 0) / $this->views_count * 100, 2) : 0,
             ],
-            
+
             // 最新のコメント情報（管理用）
             'latest_comments' => $this->whenLoaded('comments', function () {
                 return $this->comments->take(3)->map(function ($comment) {
@@ -98,7 +98,7 @@ class AdminRecipeResource extends JsonResource
                     return [
                         'id' => $comment->id,
                         'content' => $comment->content ?? $comment->body ?? '',
-                        'body' => $comment->content ?? $comment->body ?? '', // 両方に対応
+                        'body' => $comment->content ?? $comment->body ?? '',
                         'user' => [
                             'id' => $comment->user->id ?? null,
                             'name' => $comment->user->name ?? 'ゲスト',
@@ -118,7 +118,7 @@ class AdminRecipeResource extends JsonResource
                     ];
                 });
             }, []),
-            
+
             // 管理者向けアクション用URL
             'urls' => [
                 'show' => "/admin/recipes/{$this->id}",
@@ -141,16 +141,15 @@ class AdminRecipeResource extends JsonResource
             ->map(function($line) {
                 $line = trim($line);
                 if (empty($line)) return null;
-                
-                // スペースで分割して材料名と分量に分ける
+
                 $parts = preg_split('/\s+/', $line, 2);
                 return [
                     'name' => $parts[0] ?? '',
                     'amount' => $parts[1] ?? ''
                 ];
             })
-            ->filter() // null値を除去
-            ->values() // インデックスを再振り
+            ->filter()
+            ->values()
             ->toArray();
     }
 
