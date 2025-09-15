@@ -1,6 +1,7 @@
 // plugins/firebase.client.js - 新しいプロジェクト設定
 import { initializeApp } from 'firebase/app'
 import { getAuth } from 'firebase/auth'
+import { getStorage } from 'firebase/storage'
 
 export default defineNuxtPlugin(() => {
     const config = useRuntimeConfig()
@@ -17,15 +18,17 @@ export default defineNuxtPlugin(() => {
 
     const app = initializeApp(firebaseConfig)
     const auth = getAuth(app)
+    const storage = getStorage(app)
 
     // グローバルに firebase を設定
     if (process.client) {
-        window.firebase = { auth: () => auth }
+        window.firebase = { auth: () => auth, storage: () => storage }
     }
 
     return {
         provide: {
-        auth
+            auth,
+            storage
         }
     }
 })
