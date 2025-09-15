@@ -18,22 +18,18 @@ class FirebaseAuth
     public function __construct()
     {
         try {
-            $projectId = env('FIREBASE_PROJECT_ID');
-            $clientEmail = env('FIREBASE_CLIENT_EMAIL');
-            $privateKey = env('FIREBASE_PRIVATE_KEY');
-
             if (config('app.env') === 'local' || config('app.debug')) {
                 $this->auth = null;
                 return;
             }
 
-            $credentials = config('firebase.credentials');
+            $credentialsPath = config('firebase.credentials');
 
-            if (!$credentials || empty($credentials['project_id']) || empty($credentials['client_email'])) {
-                throw new \Exception('Firebase credentials incomplete');
+            if (!$credentialsPath || !file_exists($credentialsPath)) {
+                throw new \Exception('Firebase credentials file not found: ' . $credentialsPath);
             }
 
-            $factory = (new Factory)->withServiceAccount($credentials);
+            $factory = (new Factory)->withServiceAccount($credentialsPath);
             $this->auth = $factory->createAuth();
 
         } catch (\Exception $e) {
