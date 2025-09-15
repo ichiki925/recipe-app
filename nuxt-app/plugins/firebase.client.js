@@ -21,7 +21,7 @@ export default defineNuxtPlugin(() => {
     const storage = getStorage(app)
 
     // グローバルに firebase を設定
-    if (process.meta.client) {
+    if (process.client) {
         window.firebase = { auth: () => auth, storage: () => storage }
     }
 
