@@ -215,6 +215,7 @@ const saveRecipe = async () => {
 
     // 画像がある場合はFirebase Storageに一時保存
     if (selectedFile.value?.file) {
+      // 新規選択画像の場合
       try {
         const tempImageData = await uploadTempImage(selectedFile.value.file)
         recipeData.tempImageUrl = tempImageData.url
@@ -224,6 +225,11 @@ const saveRecipe = async () => {
         console.error('画像一時保存エラー:', error)
         recipeData.hasImage = false
       }
+    } else if (selectedFile.value?.isTemp) {
+      // 既に一時保存済みの画像の場合
+      recipeData.tempImageUrl = selectedFile.value.tempImageUrl
+      recipeData.tempImagePath = selectedFile.value.tempImagePath
+      console.log('既存の一時保存画像を再利用')
     }
 
     // 既存のレシピを更新する場合、古い一時画像を削除
@@ -263,6 +269,12 @@ const saveRecipe = async () => {
     currentEditingRecipe.value = null
 
     console.log('レシピ保存完了')
+
+    successMessage.value = 'レシピを保存しました'
+    setTimeout(() => {
+      successMessage.value = ''
+    }, 3000)
+
   } catch (error) {
     console.error('保存エラー:', error)
     errors.value.push('保存に失敗しました')
@@ -273,6 +285,11 @@ const saveRecipe = async () => {
 
 const loadSavedRecipe = (savedRecipe) => {
   try {
+    console.log('🔍 loadSavedRecipe開始:', savedRecipe.id)
+    console.log('🔍 savedRecipe.hasImage:', savedRecipe.hasImage)
+    console.log('🔍 savedRecipe.tempImageUrl:', savedRecipe.tempImageUrl)
+    console.log('🔍 savedRecipe.tempImagePath:', savedRecipe.tempImagePath)
+
     Object.assign(form, {
       title: savedRecipe.title,
       genre: savedRecipe.genre,
@@ -283,16 +300,17 @@ const loadSavedRecipe = (savedRecipe) => {
 
     currentEditingRecipe.value = savedRecipe
 
-    // 一時保存された画像がある場合は復元
     if (savedRecipe.hasImage && savedRecipe.tempImageUrl) {
+      console.log('✅ 画像復元処理開始')
       imagePreview.value = savedRecipe.tempImageUrl
       selectedFile.value = {
         tempImageUrl: savedRecipe.tempImageUrl,
         tempImagePath: savedRecipe.tempImagePath,
         isTemp: true
       }
-      console.log('画像復元完了')
+      console.log('✅ imagePreview設定完了:', imagePreview.value)
     } else {
+      console.log('❌ 画像復元スキップ - hasImage:', savedRecipe.hasImage, 'tempImageUrl:', !!savedRecipe.tempImageUrl)
       imagePreview.value = ''
       selectedFile.value = null
     }
