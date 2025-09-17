@@ -17,6 +17,10 @@ services:
       - ./src:/var/www/
     networks:
       - recipe-network
+    environment:
+      - FIREBASE_PROJECT_ID=recipe-app-new-6d490
+      - FIREBASE_STORAGE_BUCKET=recipe-app-new-6d490.firebasestorage.app
+      - FIREBASE_CREDENTIALS=storage/app/firebase-service-account.json
 
   mysql:
     image: mysql:8.0

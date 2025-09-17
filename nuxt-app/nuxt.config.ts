@@ -21,6 +21,7 @@ export default defineNuxtConfig({
     port: 3000
   },
 
+  // nuxt.config.ts（TSの場合）
   nitro: {
     devProxy: {
       '/api': {

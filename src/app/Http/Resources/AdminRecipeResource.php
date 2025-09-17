@@ -12,13 +12,22 @@ class AdminRecipeResource extends JsonResource
     {
         $imageFullUrl = null;
         $raw = $this->image_url;
-        if (is_string($raw) && strpos($raw, '/storage/') === 0) {
-            $path = ltrim(str_replace('/storage/', '', $raw), '/');
-
-            if (Storage::disk('public')->exists($path)) {
-                $imageFullUrl = url(Storage::url($path));
+        
+        if (is_string($raw)) {
+            // Firebase Storage URL の場合
+            if (strpos($raw, 'firebasestorage.googleapis.com') !== false || 
+                strpos($raw, 'firebasestorage.app') !== false) {
+                $imageFullUrl = $raw;
+            }
+            // ローカルストレージの場合
+            elseif (strpos($raw, '/storage/') === 0) {
+                $path = ltrim(str_replace('/storage/', '', $raw), '/');
+                if (Storage::disk('public')->exists($path)) {
+                    $imageFullUrl = url(Storage::url($path));
+                }
             }
         }
+
 
 
         return [

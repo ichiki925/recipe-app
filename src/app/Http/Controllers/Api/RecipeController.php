@@ -11,11 +11,11 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
 use Intervention\Image\ImageManagerStatic as Image;
+use Kreait\Firebase\Factory;
+
 
 class RecipeController extends Controller
 {
-    private const IMAGE_DIRECTORY = 'recipe_images';
-
     public function index(Request $request)
     {
         $query = Recipe::with(['admin'])
@@ -236,18 +236,18 @@ class RecipeController extends Controller
                 'servings' => 'required|string',
                 'ingredients' => 'required|string',
                 'instructions' => 'required|string',
-                'image' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:10240'
+                'image' => 'nullable|image|mimes:jpeg,jpg,png,webp|max:5120'
             ]);
 
             $imageUrl = null;
+
             if ($request->hasFile('image')) {
-                try {
-                    $imageUrl = $this->handleImageUploadSecure($request->file('image'));
-                } catch (\Exception $e) {
-                    \Log::error('Image upload failed: ' . $e->getMessage());
-                    $imageUrl = null;
-                }
+                $imageUrl = $this->uploadToFirebaseStorage($request->file('image'));
+                \Log::info('Image uploaded to Firebase Storage', [
+                    'url' => $imageUrl
+                ]);
             }
+
 
             $recipe = Recipe::create([
                 'title' => $request->title,
@@ -328,18 +328,14 @@ class RecipeController extends Controller
                 'servings' => 'required|in:1人分,2人分,3人分,4人分,5人分以上',
                 'ingredients' => 'required|string',
                 'instructions' => 'required|string',
-                'image' => 'nullable|image|mimes:jpeg,jpg,png,gif,heic,webp|max:10240',
+                'image' => 'nullable|image|mimes:jpeg,jpg,png,webp|max:5120',
                 'is_published' => 'boolean'
             ]);
 
+            // 画像アップロード処理
             if ($request->hasFile('image')) {
-                $newImageUrl = $this->handleImageUploadSecure($request->file('image'));
-
-                if ($recipe->image_url && $recipe->image_url !== '/images/no-image.png') {
-                    $this->deleteOldImage($recipe->image_url);
-                }
-
-                $recipe->image_url = $newImageUrl;
+                $imageUrl = $this->uploadToFirebaseStorage($request->file('image'));
+                $recipe->image_url = $imageUrl;
             }
 
             $recipe->update([
@@ -351,32 +347,16 @@ class RecipeController extends Controller
                 'is_published' => $request->get('is_published', $recipe->is_published)
             ]);
 
-            $recipe->load(['admin', 'comments', 'likes']);
-
             return response()->json([
+                'status' => 'success',
                 'message' => 'レシピが更新されました',
                 'data' => new AdminRecipeResource($recipe)
             ]);
 
-        } catch (\Illuminate\Validation\ValidationException $e) {
-            \Log::warning('Recipe update validation failed', [
-                'recipe_id' => $recipe->id,
-                'errors' => $e->errors()
-            ]);
-
-            return response()->json([
-                'status' => 'error',
-                'message' => 'バリデーションエラー',
-                'errors' => $e->errors()
-            ], 422);
-
         } catch (\Exception $e) {
             \Log::error('Recipe update failed', [
                 'recipe_id' => $recipe->id,
-                'admin_id' => auth()->id(),
-                'error' => $e->getMessage(),
-                'file' => $e->getFile(),
-                'line' => $e->getLine()
+                'error' => $e->getMessage()
             ]);
 
             return response()->json([
@@ -662,8 +642,6 @@ class RecipeController extends Controller
         }
     }
 
-
-
     /**
      * レシピを完全削除
      */
@@ -758,78 +736,58 @@ class RecipeController extends Controller
         }
     }
 
-    private function handleImageUploadSecure($uploadedFile)
+    private function uploadToFirebaseStorage($file)
     {
         try {
-            $maxSize = 5 * 1024 * 1024;
-            if ($uploadedFile->getSize() > $maxSize) {
-                throw new \Exception('ファイルサイズが大きすぎます（5MB以下にしてください）');
-            }
+            $factory = (new Factory)
+                ->withServiceAccount(storage_path('app/firebase-service-account.json'))
+                ->withProjectId(env('FIREBASE_PROJECT_ID'))
+                ->withDefaultStorageBucket(env('FIREBASE_STORAGE_BUCKET'));
 
-            $allowedMimes = [
-                'image/jpeg',
-                'image/png',
-                'image/gif',
-                'image/webp'
-            ];
+            $storage = $factory->createStorage();
+            $bucket = $storage->getBucket();
 
-            if (!in_array($uploadedFile->getMimeType(), $allowedMimes)) {
-                throw new \Exception('許可されていないファイル形式です');
-            }
+            $microtime = microtime(true);
+            $timestamp = number_format($microtime, 6, '', '');
+            $cleanFileName = preg_replace('/[^a-zA-Z0-9.-]/', '_', $file->getClientOriginalName());
+            $fileName = "recipes/{$timestamp}_{$cleanFileName}";
 
-            $extension = strtolower($uploadedFile->getClientOriginalExtension());
-            $mimeType = $uploadedFile->getMimeType();
+            // デバッグログ追加
+            \Log::info('Firebase upload attempt', [
+                'original_name' => $file->getClientOriginalName(),
+                'generated_name' => $fileName,
+                'file_size' => $file->getSize()
+            ]);
 
-            $validCombinations = [
-                'jpg' => ['image/jpeg'],
-                'jpeg' => ['image/jpeg'],
-                'png' => ['image/png'],
-                'gif' => ['image/gif'],
-                'webp' => ['image/webp']
-            ];
+            $bucket->upload(
+                file_get_contents($file->getPathname()),
+                [
+                    'name' => $fileName,
+                    'metadata' => [
+                        'contentType' => $file->getMimeType(),
+                        'metadata' => [
+                            'uploaded_at' => date('Y-m-d H:i:s'),
+                            'original_name' => $file->getClientOriginalName()
+                        ]
+                    ]
+                ]
+            );
 
-            if (!isset($validCombinations[$extension]) ||
-                !in_array($mimeType, $validCombinations[$extension])) {
-                throw new \Exception('ファイル拡張子とファイル形式が一致しません');
-            }
+            \Log::info('Firebase upload success', ['file_name' => $fileName]);
 
-            $timestamp = time();
-            $randomString = bin2hex(random_bytes(8));
-            $filename = $timestamp . '_' . $randomString . '.' . $extension;
 
-            $path = $uploadedFile->storeAs(self::IMAGE_DIRECTORY, $filename, 'public');
+            $encodedFileName = urlencode($fileName);
+            $downloadUrl = "https://firebasestorage.googleapis.com/v0/b/" . env('FIREBASE_STORAGE_BUCKET') . "/o/{$encodedFileName}?alt=media";
 
-            if (!Storage::disk('public')->exists($path)) {
-                throw new \Exception('ファイルの保存に失敗しました');
-            }
-
-            return '/storage/' . $path;
+            return $downloadUrl;
 
         } catch (\Exception $e) {
-            \Log::error('Secure image upload failed', [
+            \Log::error('Firebase Storage upload failed', [
                 'error' => $e->getMessage(),
-                'file_size' => $uploadedFile->getSize(),
-                'mime_type' => $uploadedFile->getMimeType(),
-                'extension' => $uploadedFile->getClientOriginalExtension()
+                'file_name' => $file->getClientOriginalName() ?? 'unknown'
             ]);
-            throw $e;
-        }
-    }
 
-    private function deleteOldImage($imageUrl)
-    {
-        try {
-            $oldImagePath = str_replace('/storage/', '', $imageUrl);
-
-            if (Storage::disk('public')->exists($oldImagePath)) {
-                Storage::disk('public')->delete($oldImagePath);
-                \Log::info('Old image deleted', ['path' => $oldImagePath]);
-            }
-        } catch (\Exception $e) {
-            \Log::warning('Old image deletion failed', [
-                'path' => $oldImagePath ?? 'unknown',
-                'error' => $e->getMessage()
-            ]);
+            throw new \Exception('画像のアップロードに失敗しました: ' . $e->getMessage());
         }
     }
 }

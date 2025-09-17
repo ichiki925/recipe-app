@@ -108,11 +108,14 @@ definePageMeta({
     layout: 'admin'
 })
 
-import { ref, reactive, watch, onMounted } from 'vue'
+import { ref, reactive, watch, onMounted, nextTick  } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
+import { getStorage, ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage'
+
 
 const router = useRouter()
 const route = useRoute()
+const config = useRuntimeConfig()
 
 const form = reactive({
     title: '',
@@ -134,9 +137,79 @@ const originalRecipe = ref(null)
 const originalRecipeId = ref(null)
 const isLoading = ref(true)
 
+const uploadTempImage = async (file) => {
+    try {
+        const { $auth } = useNuxtApp()
+        const currentUser = $auth.currentUser
+        if (!currentUser) {
+            throw new Error('認証が必要です')
+        }
+
+        const storage = getStorage()
+        const fileName = `${Date.now()}_${file.name}`
+        const tempPath = `temp/${currentUser.uid}/${fileName}`
+        const imageRef = storageRef(storage, tempPath)
+
+        console.log('Firebase Storageに一時保存中:', tempPath)
+
+        const snapshot = await uploadBytes(imageRef, file)
+        const downloadURL = await getDownloadURL(snapshot.ref)
+
+        console.log('一時保存完了:', downloadURL)
+        return {
+            url: downloadURL,
+            path: tempPath
+        }
+    } catch (error) {
+        console.error('Firebase Storage一時保存エラー:', error)
+        throw error
+    }
+}
+
+const deleteTempImage = async (tempPath) => {
+    try {
+        const storage = getStorage()
+        const imageRef = storageRef(storage, tempPath)
+        await deleteObject(imageRef)
+        console.log('一時保存画像を削除:', tempPath)
+    } catch (error) {
+        console.error('一時保存画像削除エラー:', error)
+    }
+}
+
 const handleImageError = (event) => {
-    console.error('❌ 画像読み込みエラー:', event.target.src)
-    imagePreview.value = ''
+    console.error('画像読み込みエラー:', event.target.src)
+    if (event.target.src !== '/images/no-image.png') {
+        event.target.src = '/images/no-image.png'
+    }
+}
+
+const handleImageLoad = () => {
+    console.log('画像読み込み完了')
+}
+
+const getImageUrl = (imageUrl) => {
+    if (!imageUrl || imageUrl === '/images/no-image.png' || imageUrl.trim() === '') {
+        return ''
+    }
+
+    // Firebase Storage URLの場合はそのまま返す
+    if (imageUrl.includes('firebasestorage.googleapis.com') || 
+        imageUrl.includes('firebasestorage.app')) {
+        return imageUrl
+    }
+
+    // ローカルストレージの場合
+    if (imageUrl.startsWith('/storage/')) {
+        return `${config.public.apiBaseUrl}${imageUrl}`
+    }
+
+    // data:URLまたは絶対URLの場合はそのまま
+    if (imageUrl.startsWith('data:') || imageUrl.startsWith('http')) {
+        return imageUrl
+    }
+
+    return imageUrl
 }
 
 const fetchOriginalRecipe = async () => {
@@ -150,22 +223,17 @@ const fetchOriginalRecipe = async () => {
         const token = await $auth.currentUser.getIdToken()
         const recipeId = route.params.id
 
-        const response = await fetch(`http://localhost/api/admin/recipes/${recipeId}`, {
+        const data = await $fetch(`/admin/recipes/${recipeId}`, {
+            baseURL: config.public.apiBaseUrl,
             headers: {
-                'Authorization': `Bearer ${token}`
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
             }
         })
 
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-        }
-
-        const data = await response.json()
         const recipe = data.data
-
         originalRecipe.value = recipe
         originalRecipeId.value = recipe.id
-
         loadRecipeToForm(recipe)
 
     } catch (error) {
@@ -206,18 +274,13 @@ const loadRecipeToForm = (recipe) => {
 
     if (recipe.imagePreview) {
         imagePreview.value = recipe.imagePreview
-    } else if (recipe.image_url && recipe.image_url !== '/images/no-image.png' && recipe.image_url.trim() !== '') {
-        if (recipe.image_url.startsWith('/storage/')) {
-            imagePreview.value = `http://localhost${recipe.image_url}`
-        } else {
-            imagePreview.value = recipe.image_url
-        }
     } else {
-        imagePreview.value = ''
+        const imageUrl = recipe.image_full_url || recipe.image_url
+        imagePreview.value = getImageUrl(imageUrl)
     }
 }
 
-const saveRecipe = () => {
+const saveRecipe = async () => {
     isSaving.value = true
 
     try {
@@ -230,10 +293,31 @@ const saveRecipe = () => {
             servings: form.servings,
             ingredients: [...form.ingredients],
             instructions: form.instructions,
-            imagePreview: imagePreview.value,
+            hasImage: !!selectedFile.value,
             savedAt: new Date().toISOString(),
             isEditDraft: true,
             originalRecipeId: originalRecipeId.value
+        }
+
+        // 画像がある場合はFirebase Storageに一時保存
+        if (selectedFile.value?.file) {
+            try {
+                const tempImageData = await uploadTempImage(selectedFile.value.file)
+                recipeData.tempImageUrl = tempImageData.url
+                recipeData.tempImagePath = tempImageData.path
+                console.log('画像を一時保存:', selectedFile.value.file.name)
+            } catch (error) {
+                console.error('画像一時保存エラー:', error)
+                recipeData.hasImage = false
+            }
+        } else if (selectedFile.value?.isTemp) {
+            // 既に一時保存済みの画像の場合
+            recipeData.tempImageUrl = selectedFile.value.tempImageUrl
+            recipeData.tempImagePath = selectedFile.value.tempImagePath
+        } else if (imagePreview.value && !selectedFile.value) {
+            // 元画像のまま変更なしの場合
+            recipeData.originalImageUrl = imagePreview.value
+            recipeData.hasImage = true
         }
 
         let savedRecipes = []
@@ -246,21 +330,32 @@ const saveRecipe = () => {
             console.error('保存レシピの読み込みエラー:', error)
         }
 
+        // 既存の編集下書きがあれば古い一時画像を削除
         const existingIndex = savedRecipes.findIndex(r => r.id === recipeData.id)
         if (existingIndex !== -1) {
+            const oldRecipe = savedRecipes[existingIndex]
+            if (oldRecipe.tempImagePath && oldRecipe.tempImagePath !== recipeData.tempImagePath) {
+                await deleteTempImage(oldRecipe.tempImagePath)
+            }
             savedRecipes[existingIndex] = recipeData
         } else {
             savedRecipes.unshift(recipeData)
         }
 
         if (savedRecipes.length > 10) {
+            const removedRecipes = savedRecipes.slice(10)
+            for (const recipe of removedRecipes) {
+                if (recipe.tempImagePath) {
+                    await deleteTempImage(recipe.tempImagePath)
+                }
+            }
             savedRecipes = savedRecipes.slice(0, 10)
         }
 
         localStorage.setItem('savedRecipes', JSON.stringify(savedRecipes))
         currentEditingRecipe.value = recipeData
 
-        successMessage.value = '下書きを保存しました'
+        console.log('編集下書き保存完了')
         setTimeout(() => {
             router.push('/admin/dashboard')
         }, 1500)
@@ -283,6 +378,24 @@ const loadDraftIfExists = () => {
             if (existingDraft) {
                 loadRecipeToForm(existingDraft)
                 currentEditingRecipe.value = existingDraft
+
+                // 画像復元処理を追加
+                if (existingDraft.hasImage) {
+                    if (existingDraft.tempImageUrl) {
+                        // 一時保存画像の場合
+                        imagePreview.value = existingDraft.tempImageUrl
+                        selectedFile.value = {
+                            tempImageUrl: existingDraft.tempImageUrl,
+                            tempImagePath: existingDraft.tempImagePath,
+                            isTemp: true
+                        }
+                    } else if (existingDraft.originalImageUrl) {
+                        // 元画像そのままの場合
+                        imagePreview.value = existingDraft.originalImageUrl
+                        selectedFile.value = null
+                    }
+                    console.log('編集下書きの画像を復元:', imagePreview.value)
+                }
             }
         }
     } catch (error) {
@@ -294,19 +407,41 @@ const triggerImageInput = () => {
     imageInput.value?.click()
 }
 
-const previewImage = (event) => {
+const previewImage = async (event) => {
     const file = event.target.files[0]
-    if (file) {
-        selectedFile.value = file
-        const reader = new FileReader()
-        reader.onload = (e) => {
-            imagePreview.value = e.target.result
-        }
-        reader.readAsDataURL(file)
+    if (!file) return
+
+    console.log('画像ファイル選択:', file.name, file.type, file.size)
+
+    if (file.size > 5 * 1024 * 1024) {
+        errors.value.push('ファイルサイズは5MB以下にしてください')
+        return
     }
+
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp']
+    if (!allowedTypes.includes(file.type)) {
+        errors.value.push('JPEG、PNG、WebP形式の画像のみアップロード可能です')
+        return
+    }
+
+    selectedFile.value = {
+        file,
+        serverUpload: true
+    }
+
+    const reader = new FileReader()
+    reader.onload = (e) => {
+        imagePreview.value = e.target.result
+        console.log('画像プレビュー表示完了')
+    }
+    reader.onerror = () => {
+        console.error('画像読み込みエラー')
+        errors.value.push('画像の読み込みに失敗しました')
+    }
+    reader.readAsDataURL(file)
 }
 
-    watch(
+watch(
     () => form.ingredients,
     (newIngredients) => {
         const last = newIngredients[newIngredients.length - 1]
@@ -346,6 +481,7 @@ const submitRecipe = async () => {
 
         const token = await $auth.currentUser.getIdToken()
 
+        // バリデーション
         if (!form.title.trim()) {
             errors.value.push('料理名は必須です')
         }
@@ -367,19 +503,27 @@ const submitRecipe = async () => {
         }
 
         const formData = new FormData()
-        formData.append('title', form.title)
+        formData.append('title', form.title.trim())
         formData.append('genre', form.genre || '')
-        formData.append('servings', form.servings)
+        formData.append('servings', form.servings.toString())
         formData.append('ingredients', ingredientsText)
-        formData.append('instructions', form.instructions)
+        formData.append('instructions', form.instructions.trim())
         formData.append('_method', 'PUT')
 
-        if (selectedFile.value) {
-            formData.append('image', selectedFile.value)
+        // 画像処理
+        if (selectedFile.value?.isTemp) {
+            // 一時保存画像の場合
+            formData.append('temp_image_url', selectedFile.value.tempImageUrl)
+            console.log('一時保存画像URLをサーバーに送信:', selectedFile.value.tempImageUrl)
+        } else if (selectedFile.value?.file instanceof File) {
+            // 新規選択画像の場合
+            formData.append('image', selectedFile.value.file)
+            console.log('画像ファイルをサーバーに送信:', selectedFile.value.file.name)
         }
 
         const recipeId = route.params.id
-        const response = await fetch(`http://localhost/api/admin/recipes/${recipeId}`, {
+
+        const response = await fetch(`${config.public.apiBaseUrl}/api/admin/recipes/${recipeId}`, {
             method: 'POST',
             body: formData,
             headers: {
@@ -389,18 +533,29 @@ const submitRecipe = async () => {
 
         if (!response.ok) {
             const errorText = await response.text()
-            console.error('❌ API Error Response:', errorText)
+            console.error('API Error Response:', errorText)
             throw new Error(`HTTP ${response.status}: ${response.statusText}`)
         }
 
+        const data = await response.json()
+        console.log('API成功:', data)
+
         successMessage.value = 'レシピが更新されました'
 
+        // 投稿成功時に下書きと一時画像を削除
         const currentEditingId = currentEditingRecipe.value?.id
         if (currentEditingId) {
             try {
                 const saved = localStorage.getItem('savedRecipes')
                 if (saved) {
                     let savedRecipes = JSON.parse(saved)
+                    const draftToDelete = savedRecipes.find(r => r.id === currentEditingId)
+
+                    // 一時保存画像があれば削除
+                    if (draftToDelete?.tempImagePath) {
+                        await deleteTempImage(draftToDelete.tempImagePath)
+                    }
+
                     savedRecipes = savedRecipes.filter(r => r.id !== currentEditingId)
                     localStorage.setItem('savedRecipes', JSON.stringify(savedRecipes))
                 }
@@ -411,23 +566,57 @@ const submitRecipe = async () => {
 
         currentEditingRecipe.value = null
 
-
         setTimeout(() => {
             router.push(`/admin/recipes/show/${recipeId}`)
         }, 1500)
 
     } catch (error) {
-        console.error('❌ API error:', error)
-        errors.value = [`API呼び出しエラー: ${error.message}`]
+        console.error('API error:', error)
+        errors.value = [`レシピの更新に失敗しました: ${error.message}`]
     } finally {
         isSubmitting.value = false
     }
 }
 
-onMounted(() => {
-    fetchOriginalRecipe().then(() => {
-        loadDraftIfExists()
-    })
+onMounted(async () => {
+    await fetchOriginalRecipe()
+
+    // URLパラメータから下書きIDを取得
+    const draftId = route.query.draft
+
+    if (draftId) {
+        // パラメータがある場合は該当する下書きを読み込み
+        const saved = localStorage.getItem('savedRecipes')
+        if (saved) {
+            const savedRecipes = JSON.parse(saved)
+            const existingDraft = savedRecipes.find(r => r.id === draftId)
+            if (existingDraft) {
+                loadRecipeToForm(existingDraft)
+                currentEditingRecipe.value = existingDraft
+
+                // 画像復元処理を修正
+                if (existingDraft.hasImage) {
+                    if (existingDraft.tempImageUrl) {
+                        // 一時保存画像の場合
+                        imagePreview.value = existingDraft.tempImageUrl
+                        selectedFile.value = {
+                            tempImageUrl: existingDraft.tempImageUrl,
+                            tempImagePath: existingDraft.tempImagePath,
+                            isTemp: true
+                        }
+                    } else if (existingDraft.originalImageUrl) {
+                        // 元画像そのままの場合
+                        imagePreview.value = existingDraft.originalImageUrl
+                        selectedFile.value = null
+                    }
+                    console.log('編集下書きの画像を復元:', imagePreview.value)
+                }
+            }
+        }
+    }
+
+    // パラメータがない場合は通常の下書き検索
+    loadDraftIfExists()
 })
 </script>
 

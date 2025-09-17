@@ -48,7 +48,7 @@
                     <h2 class="recipe-title-heading">{{ recipe.title }}</h2>
 
                     <RecipeImagePreview
-                        :image-url="getImageUrl(recipe.image_url)"
+                        :image-url="getImageUrl(recipe)"
                         :alt-text="recipe.title"
                         @image-error="handleImageError"
                     />
@@ -123,6 +123,7 @@ useHead({
 
 const route = useRoute()
 const router = useRouter()
+const config = useRuntimeConfig()
 
 const recipe = ref(null)
 const loading = ref(true)
@@ -132,42 +133,35 @@ const deleting = ref(false)
 
 const recipeId = route.params.id
 
-const getImageUrl = (imageUrl) => {
-    if (!imageUrl) {
-        return '/images/no-image.png'
+const getImageUrl = (recipe) => {
+    if (!recipe) return '/images/no-image.png'
+    if (recipe.image_full_url) {
+        return recipe.image_full_url
     }
-
-    if (imageUrl.startsWith('/storage/')) {
-        return `http://localhost${imageUrl}`
+    if (recipe.image_url) {
+        if (recipe.image_url.includes('firebasestorage.googleapis.com') ||
+            recipe.image_url.includes('firebasestorage.app')) {
+            return recipe.image_url
+        }
+        if (recipe.image_url.startsWith('/storage/')) {
+            return `${config.public.apiBaseUrl}${recipe.image_url}`
+        }
+        return recipe.image_url
     }
-
-    return imageUrl
+    return '/images/no-image.png'
 }
 
 const handleImageError = (event) => {
-    console.error('❌ Image load failed:', {
+    console.error('画像読み込みエラー:', {
         recipe_id: recipe.value?.id,
         recipe_title: recipe.value?.title,
         image_url: recipe.value?.image_url,
+        image_full_url: recipe.value?.image_full_url,
         attempted_src: event.target.src
     })
 
-    event.target.onerror = null
-
-    const img = event.target
-    const parent = img.parentElement
-
-    if (parent) {
-        img.remove()
-
-        if (!parent.querySelector('.no-image-fallback')) {
-            const placeholder = document.createElement('div')
-            placeholder.className = 'no-image-fallback'
-            placeholder.innerHTML = `
-                <div class="no-image-text">No Image</div>
-            `
-            parent.appendChild(placeholder)
-        }
+    if (event.target.src !== '/images/no-image.png') {
+        event.target.src = '/images/no-image.png'
     }
 }
 
@@ -185,14 +179,8 @@ const fetchRecipe = async () => {
 
         const token = await $auth.currentUser.getIdToken()
 
-        if (!token) {
-            throw new Error('認証トークンの取得に失敗しました')
-        }
-
-        const apiUrl = `http://localhost/api/admin/recipes/${recipeId}`
-
-        const response = await fetch(apiUrl, {
-            method: 'GET',
+        const data = await $fetch(`/admin/recipes/${recipeId}`, {
+            baseURL: config.public.apiBaseUrl,
             headers: {
                 'Authorization': `Bearer ${token}`,
                 'Content-Type': 'application/json',
@@ -200,59 +188,26 @@ const fetchRecipe = async () => {
             }
         })
 
-        const responseText = await response.text()
-
-        if (!response.ok) {
-            console.error('❌ HTTPエラー:', {
-                status: response.status,
-                statusText: response.statusText,
-                responseText
-            })
-
-            try {
-                const errorData = JSON.parse(responseText)
-                throw new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`)
-            } catch (parseError) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-            }
-        }
-
-        let responseData
-        try {
-            responseData = JSON.parse(responseText)
-        } catch (parseError) {
-            console.error('❌ JSONパースエラー:', parseError)
-            throw new Error('サーバーからの応答が不正です')
-        }
-
-        if (responseData.status === 'success' && responseData.data) {
-            recipe.value = responseData.data
+        if (data.status === 'success' && data.data) {
+            recipe.value = data.data
         } else {
-            console.error('❌ 予期しないレスポンス構造:', responseData)
             throw new Error('レスポンスデータの形式が不正です')
         }
 
     } catch (err) {
-        console.error('❌ レシピ取得エラー:', {
-            error: err.message,
-            stack: err.stack,
-            recipeId
-        })
+        console.error('レシピ取得エラー:', err)
 
-        if (err.message.includes('401') || err.message.includes('認証')) {
+        if (err.status === 401) {
             error.value = '認証が無効です。再ログインしてください。'
-        } else if (err.message.includes('403')) {
+        } else if (err.status === 403) {
             error.value = 'このレシピを表示する権限がありません。'
-        } else if (err.message.includes('404')) {
+        } else if (err.status === 404) {
             error.value = 'レシピが見つかりません。'
-        } else if (err.message.includes('500')) {
+        } else if (err.status === 500) {
             error.value = 'サーバーエラーが発生しました。しばらく時間をおいて再度お試しください。'
-        } else if (err.message.includes('NetworkError') || err.message.includes('fetch')) {
-            error.value = 'ネットワークエラーが発生しました。接続を確認してください。'
         } else {
-            error.value = `レシピの取得に失敗しました: ${err.message}`
+            error.value = 'レシピの取得に失敗しました。'
         }
-
     } finally {
         loading.value = false
     }
@@ -282,20 +237,15 @@ const deleteRecipe = async () => {
 
         const token = await $auth.currentUser.getIdToken()
 
-        const response = await fetch(`http://localhost/api/admin/recipes/${recipeId}`, {
+        await $fetch(`/admin/recipes/${recipeId}`, {
             method: 'DELETE',
+            baseURL: config.public.apiBaseUrl,
             headers: {
                 'Authorization': `Bearer ${token}`,
                 'Content-Type': 'application/json',
                 'Accept': 'application/json'
             }
         })
-
-        if (!response.ok) {
-            const errorText = await response.text()
-            console.error('❌ 削除API Error:', errorText)
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-        }
 
         alert('レシピが削除されました')
 
@@ -305,17 +255,17 @@ const deleteRecipe = async () => {
         await router.push('/admin/recipes')
 
     } catch (err) {
-        console.error('❌ 削除エラー:', err)
+        console.error('削除エラー:', err)
 
         let errorMessage = '削除に失敗しました。もう一度お試しください。'
 
-        if (err.message.includes('401') || err.message.includes('認証')) {
+        if (err.status === 401) {
             errorMessage = '認証が無効です。再ログインしてください。'
-        } else if (err.message.includes('404')) {
+        } else if (err.status === 404) {
             errorMessage = 'レシピが見つかりません。'
-        } else if (err.message.includes('403')) {
+        } else if (err.status === 403) {
             errorMessage = 'このレシピを削除する権限がありません。'
-        } else if (err.message.includes('500')) {
+        } else if (err.status === 500) {
             errorMessage = 'サーバーエラーが発生しました。しばらく時間をおいて再度お試しください。'
         }
 

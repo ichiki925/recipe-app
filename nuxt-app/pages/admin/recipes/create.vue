@@ -1,29 +1,5 @@
 <template>
   <div class="recipe-create-container">
-    <aside class="saved-recipes-sidebar">
-      <h3>保存中のレシピ</h3>
-      <div class="saved-recipes-list">
-        <div
-          v-for="savedRecipe in savedRecipes"
-          :key="savedRecipe.id"
-          class="saved-recipe-tag"
-          @click="loadSavedRecipe(savedRecipe)"
-        >
-          <div class="saved-recipe-title">{{ savedRecipe.title || '無題のレシピ' }}</div>
-          <div class="saved-recipe-date">{{ formatDate(savedRecipe.savedAt) }}</div>
-          <button
-            class="delete-saved-recipe"
-            @click.stop="deleteSavedRecipe(savedRecipe.id)"
-          >
-            ×
-          </button>
-        </div>
-        <div v-if="savedRecipes.length === 0" class="no-saved-recipes">
-          保存中のレシピはありません
-        </div>
-      </div>
-    </aside>
-
     <div class="main-content">
       <div class="image-preview" @click="triggerImageInput">
         <div v-if="!imagePreview" class="no-image-placeholder">
@@ -132,8 +108,9 @@
 definePageMeta({
   layout: 'admin'
 })
-import { ref, reactive, watch, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, reactive, watch, onMounted, nextTick } from 'vue'
+import { useRouter, useRoute  } from 'vue-router'
+import { getStorage, ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage'
 
 const router = useRouter()
 
@@ -154,6 +131,46 @@ const isSubmitting = ref(false)
 const isSaving = ref(false)
 const savedRecipes = ref([])
 const currentEditingRecipe = ref(null)
+
+const uploadTempImage = async (file) => {
+  try {
+    const { $auth } = useNuxtApp()
+    const currentUser = $auth.currentUser
+    if (!currentUser) {
+      throw new Error('認証が必要です')
+    }
+
+    const storage = getStorage()
+    const fileName = `${Date.now()}_${file.name}`
+    const tempPath = `temp/${currentUser.uid}/${fileName}`
+    const imageRef = storageRef(storage, tempPath)
+
+    console.log('Firebase Storageに一時保存中:', tempPath)
+
+    const snapshot = await uploadBytes(imageRef, file)
+    const downloadURL = await getDownloadURL(snapshot.ref)
+
+    console.log('一時保存完了:', downloadURL)
+    return {
+      url: downloadURL,
+      path: tempPath
+    }
+  } catch (error) {
+    console.error('Firebase Storage一時保存エラー:', error)
+    throw error
+  }
+}
+
+const deleteTempImage = async (tempPath) => {
+  try {
+    const storage = getStorage()
+    const imageRef = storageRef(storage, tempPath)
+    await deleteObject(imageRef)
+    console.log('一時保存画像を削除:', tempPath)
+  } catch (error) {
+    console.error('一時保存画像削除エラー:', error)
+  }
+}
 
 const handleImageError = (event) => {
   console.error('❌ 画像読み込みエラー:', event.target.src)
@@ -180,22 +197,7 @@ const updateSavedRecipes = () => {
   }
 }
 
-const formatDate = (dateString) => {
-  try {
-    const date = new Date(dateString)
-    return date.toLocaleDateString('ja-JP', {
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    })
-  } catch (error) {
-    console.error('日付フォーマットエラー:', error)
-    return '不明'
-  }
-}
-
-const saveRecipe = () => {
+const saveRecipe = async () => {
   isSaving.value = true
 
   try {
@@ -206,18 +208,43 @@ const saveRecipe = () => {
       servings: form.servings,
       ingredients: [...form.ingredients],
       instructions: form.instructions,
-      imagePreview: imagePreview.value,
-      savedAt: new Date().toISOString()
+      hasImage: !!selectedFile.value,
+      savedAt: new Date().toISOString(),
+      isEditDraft: false
     }
 
+    // 画像がある場合はFirebase Storageに一時保存
+    if (selectedFile.value?.file) {
+      try {
+        const tempImageData = await uploadTempImage(selectedFile.value.file)
+        recipeData.tempImageUrl = tempImageData.url
+        recipeData.tempImagePath = tempImageData.path
+        console.log('画像を一時保存:', selectedFile.value.file.name)
+      } catch (error) {
+        console.error('画像一時保存エラー:', error)
+        recipeData.hasImage = false
+      }
+    }
+
+    // 既存のレシピを更新する場合、古い一時画像を削除
     const existingIndex = savedRecipes.value.findIndex(r => r.id === recipeData.id)
     if (existingIndex !== -1) {
+      const oldRecipe = savedRecipes.value[existingIndex]
+      if (oldRecipe.tempImagePath && oldRecipe.tempImagePath !== recipeData.tempImagePath) {
+        await deleteTempImage(oldRecipe.tempImagePath)
+      }
       savedRecipes.value[existingIndex] = recipeData
     } else {
       savedRecipes.value.unshift(recipeData)
     }
 
     if (savedRecipes.value.length > 10) {
+      const removedRecipes = savedRecipes.value.slice(10)
+      for (const recipe of removedRecipes) {
+        if (recipe.tempImagePath) {
+          await deleteTempImage(recipe.tempImagePath)
+        }
+      }
       savedRecipes.value = savedRecipes.value.slice(0, 10)
     }
 
@@ -235,10 +262,7 @@ const saveRecipe = () => {
     selectedFile.value = null
     currentEditingRecipe.value = null
 
-    successMessage.value = 'レシピを保存しました'
-    setTimeout(() => {
-      successMessage.value = ''
-    }, 3000)
+    console.log('レシピ保存完了')
   } catch (error) {
     console.error('保存エラー:', error)
     errors.value.push('保存に失敗しました')
@@ -257,32 +281,24 @@ const loadSavedRecipe = (savedRecipe) => {
       instructions: savedRecipe.instructions
     })
 
-    imagePreview.value = savedRecipe.imagePreview || ''
     currentEditingRecipe.value = savedRecipe
 
-    successMessage.value = 'レシピを読み込みました'
-    setTimeout(() => {
-      successMessage.value = ''
-    }, 3000)
+    // 一時保存された画像がある場合は復元
+    if (savedRecipe.hasImage && savedRecipe.tempImageUrl) {
+      imagePreview.value = savedRecipe.tempImageUrl
+      selectedFile.value = {
+        tempImageUrl: savedRecipe.tempImageUrl,
+        tempImagePath: savedRecipe.tempImagePath,
+        isTemp: true
+      }
+      console.log('画像復元完了')
+    } else {
+      imagePreview.value = ''
+      selectedFile.value = null
+    }
   } catch (error) {
     console.error('読み込みエラー:', error)
     errors.value.push('レシピの読み込みに失敗しました')
-  }
-}
-
-const deleteSavedRecipe = (id) => {
-  if (confirm('このレシピを削除しますか？')) {
-    try {
-      savedRecipes.value = savedRecipes.value.filter(r => r.id !== id)
-      updateSavedRecipes()
-
-      if (currentEditingRecipe.value?.id === id) {
-        currentEditingRecipe.value = null
-      }
-    } catch (error) {
-      console.error('削除エラー:', error)
-      errors.value.push('削除に失敗しました')
-    }
   }
 }
 
@@ -290,40 +306,38 @@ const triggerImageInput = () => {
   imageInput.value?.click()
 }
 
-const previewImage = (event) => {
+const previewImage = async (event) => {
   const file = event.target.files[0]
-  if (file) {
-    selectedFile.value = file
-    const reader = new FileReader()
-    reader.onload = (e) => {
-      imagePreview.value = e.target.result
-    }
-    reader.readAsDataURL(file)
+  if (!file) return
+
+  console.log('画像ファイル選択:', file.name, file.type, file.size)
+
+  if (file.size > 5 * 1024 * 1024) {
+    errors.value.push('ファイルサイズは5MB以下にしてください')
+    return
   }
-}
 
-watch(
-  () => form.ingredients,
-  (newIngredients) => {
-    const last = newIngredients[newIngredients.length - 1]
-    if (last && (last.name || last.qty)) {
-      form.ingredients.push({ name: '', qty: '' })
-    }
-  },
-  { deep: true }
-)
+  const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp']
+  if (!allowedTypes.includes(file.type)) {
+    errors.value.push('JPEG、PNG、WebP形式の画像のみアップロード可能です')
+    return
+  }
 
-const resizeTextarea = (event) => {
-  const textarea = event.target
-  textarea.style.height = 'auto'
-  textarea.style.height = Math.max(80, textarea.scrollHeight) + 'px'
-}
+  selectedFile.value = {
+    file,
+    serverUpload: true
+  }
 
-const formatIngredients = () => {
-  return form.ingredients
-    .filter(ingredient => ingredient.name.trim() || ingredient.qty.trim())
-    .map(ingredient => `${ingredient.name.trim()} ${ingredient.qty.trim()}`)
-    .join('\n')
+  const reader = new FileReader()
+  reader.onload = (e) => {
+    imagePreview.value = e.target.result
+    console.log('画像プレビュー表示完了')
+  }
+  reader.onerror = () => {
+    console.error('画像読み込みエラー')
+    errors.value.push('画像の読み込みに失敗しました')
+  }
+  reader.readAsDataURL(file)
 }
 
 const submitRecipe = async () => {
@@ -332,16 +346,26 @@ const submitRecipe = async () => {
   isSubmitting.value = true
 
   try {
-    const { $auth } = useNuxtApp()
+    let currentUser = null
+    let authToken = null
 
-    if (!$auth?.currentUser) {
-      errors.value.push('認証が必要です。')
+    try {
+      const { $auth } = useNuxtApp()
+      if ($auth?.currentUser) {
+        currentUser = $auth.currentUser
+        authToken = await currentUser.getIdToken()
+      }
+    } catch (nuxtError) {
+      console.log('認証取得エラー:', nuxtError.message)
+    }
+
+    if (!currentUser) {
+      errors.value.push('認証が必要です。ページをリロードしてログインしてください。')
       isSubmitting.value = false
       return
     }
 
-    const token = await $auth.currentUser.getIdToken()
-
+    // バリデーション
     if (!form.title.trim()) {
       errors.value.push('料理名は必須です')
     }
@@ -363,31 +387,46 @@ const submitRecipe = async () => {
     }
 
     const formData = new FormData()
-    formData.append('title', form.title)
+    formData.append('title', form.title.trim())
     formData.append('genre', form.genre || '')
-    formData.append('servings', form.servings)
+    formData.append('servings', form.servings.toString())
     formData.append('ingredients', ingredientsText)
-    formData.append('instructions', form.instructions)
+    formData.append('instructions', form.instructions.trim())
 
-    if (selectedFile.value) {
-      formData.append('image', selectedFile.value)
+    if (selectedFile.value?.isTemp) {
+      formData.append('temp_image_url', selectedFile.value.tempImageUrl)
+      console.log('一時保存画像URLをサーバーに送信:', selectedFile.value.tempImageUrl)
+    } else if (selectedFile.value?.file instanceof File) {
+      formData.append('image', selectedFile.value.file)
+      console.log('画像ファイルをFormDataに追加:', selectedFile.value.file.name, selectedFile.value.file.size)
     }
 
     const response = await fetch('http://localhost/api/admin/recipes', {
       method: 'POST',
-      body: formData,
       headers: {
-        'Authorization': `Bearer ${token}`
-      }
+        'Authorization': `Bearer ${authToken}`
+      },
+      body: formData
     })
 
     if (!response.ok) {
-      const errorText = await response.text()
-      console.error('❌ API Error Response:', errorText)
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      let errorMessage = `HTTP ${response.status}: ${response.statusText}`
+      try {
+        const errorData = await response.json()
+        if (errorData.message) {
+          errorMessage = errorData.message
+        } else if (errorData.errors) {
+          errorMessage = Object.values(errorData.errors).flat().join(', ')
+        }
+      } catch {
+        const errorText = await response.text()
+        if (errorText) errorMessage = errorText
+      }
+      throw new Error(errorMessage)
     }
 
     const data = await response.json()
+    console.log('API成功:', data)
 
     successMessage.value = 'レシピが投稿されました'
 
@@ -421,12 +460,38 @@ const submitRecipe = async () => {
     }
 
   } catch (error) {
-    console.error('❌ API error:', error)
+    console.error('API error:', error)
     errors.value = [`API呼び出しエラー: ${error.message}`]
   } finally {
     isSubmitting.value = false
   }
 }
+
+watch(
+  () => form.ingredients,
+  (newIngredients) => {
+    const last = newIngredients[newIngredients.length - 1]
+    if (last && (last.name || last.qty)) {
+      form.ingredients.push({ name: '', qty: '' })
+    }
+  },
+  { deep: true }
+)
+
+const resizeTextarea = (event) => {
+  const textarea = event.target
+  textarea.style.height = 'auto'
+  textarea.style.height = Math.max(80, textarea.scrollHeight) + 'px'
+}
+
+const formatIngredients = () => {
+  return form.ingredients
+    .filter(ingredient => ingredient.name.trim() || ingredient.qty.trim())
+    .map(ingredient => `${ingredient.name.trim()} ${ingredient.qty.trim()}`)
+    .join('\n')
+}
+
+
 
 let autoSaveTimer = null
 const startAutoSave = () => {
@@ -449,8 +514,41 @@ watch(form, () => {
   }
 }, { deep: true })
 
-onMounted(() => {
+onMounted(async () => {
   loadSavedRecipes()
+
+  try {
+    // URLパラメータから下書きIDを取得
+    const route = useRoute()
+    const draftId = route.query?.draft
+    console.log('Draft ID from URL:', draftId)
+    
+    if (draftId) {
+      await nextTick()
+      const savedRecipe = savedRecipes.value.find(r => r.id === draftId)
+      console.log('Found saved recipe:', savedRecipe)
+      
+      if (savedRecipe) {
+        loadSavedRecipe(savedRecipe)
+        console.log('Auto-loaded recipe with image:', savedRecipe.tempImageUrl)
+      }
+    }
+  } catch (error) {
+    console.error('Auto-load error:', error)
+  }
+
+  const config = useRuntimeConfig()
+  console.log('Firebase Config:', {
+    apiKey: config.public.firebaseApiKey,
+    authDomain: config.public.firebaseAuthDomain,
+    projectId: config.public.firebaseProjectId,
+    storageBucket: config.public.firebaseStorageBucket,
+    messagingSenderId: config.public.firebaseMessagingSenderId,
+    appId: config.public.firebaseAppId
+  })
+
+  const { $auth } = useNuxtApp()
+  console.log('Current User:', $auth.currentUser)
 })
 </script>
 
@@ -467,95 +565,6 @@ body {
     gap: 30px;
     max-width: 1400px;
     margin: 0 auto;
-    padding: 20px;
-}
-
-.saved-recipes-sidebar {
-    width: 300px;
-    background-color: #fff;
-    padding: 20px;
-    border-radius: 8px;
-    height: fit-content;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-    flex-shrink: 0;
-}
-
-.saved-recipes-sidebar h3 {
-    margin-top: 0;
-    margin-bottom: 15px;
-    font-size: 16px;
-    color: #333;
-    border-bottom: 2px solid #e0e0e0;
-    padding-bottom: 8px;
-}
-
-.saved-recipes-list {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    max-height: 600px;
-    overflow-y: auto;
-}
-
-.saved-recipe-tag {
-    background-color: #f8f9fa;
-    border: 1px solid #ddd;
-    border-radius: 8px;
-    padding: 12px;
-    cursor: pointer;
-    transition: all 0.2s;
-    position: relative;
-}
-
-.saved-recipe-tag:hover {
-    background-color: #f0f0f0;
-    border-color: #ccc;
-}
-
-.saved-recipe-title {
-    font-weight: bold;
-    font-size: 14px;
-    margin-bottom: 4px;
-    color: #333;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    max-width: calc(100% - 25px);
-}
-
-.saved-recipe-date {
-    font-size: 12px;
-    color: #666;
-}
-
-.delete-saved-recipe {
-    position: absolute;
-    top: 8px;
-    right: 8px;
-    width: 24px;
-    height: 24px;
-    border: none;
-    background: transparent;
-    color: #555;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 20px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.2s ease;
-    line-height: 1;
-    font-family: system-ui, sans-serif;
-}
-
-.delete-saved-recipe:hover {
-    background-color: #c5414182;
-}
-
-.no-saved-recipes {
-    text-align: center;
-    color: #999;
-    font-size: 14px;
     padding: 20px;
 }
 
@@ -786,73 +795,23 @@ textarea::placeholder {
     opacity: 1 !important;
 }
 
-@media screen and (max-width: 1024px) {
-    .recipe-create-container {
-        flex-direction: column;
-        gap: 20px;
-    }
-
-    .saved-recipes-sidebar {
-        width: 100%;
-        order: 1;
-    }
-
-    .saved-recipes-list {
-        flex-direction: row;
-        flex-wrap: wrap;
-        max-height: 200px;
-    }
-
-    .saved-recipe-tag {
-        min-width: 150px;
-        flex: 1;
-        max-width: 200px;
-    }
-
+@media screen and (max-width: 768px) {
     .main-content {
         flex-direction: column;
         align-items: center;
         gap: 20px;
-        order: 2;
-    }
-
-    .image-preview {
-        width: 100%;
-        max-width: 300px;
-        margin-top: 0;
-    }
-
-    .recipe-form {
-        width: 100%;
-        max-width: 400px;
-    }
-}
-
-@media screen and (max-width: 768px) {
-    .recipe-create-container {
-        padding: 20px;
-        gap: 20px;
-    }
-
-    .saved-recipes-sidebar {
-        padding: 15px;
-    }
-
-    .saved-recipes-list {
-        flex-direction: column;
-        gap: 8px;
-        max-height: 150px;
-    }
-
-    .saved-recipe-tag {
-        min-width: auto;
-        max-width: none;
     }
 
     .image-preview {
         width: 100%;
         max-width: 280px;
         height: 280px;
+        margin-top: 0;
+    }
+
+    .recipe-form {
+        width: 100%;
+        max-width: 400px;
     }
 
     .ingredient-row {

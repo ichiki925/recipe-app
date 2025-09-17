@@ -35,7 +35,9 @@
           </div>
           <div class="recipe-actions">
             <NuxtLink
-              :to="recipe.isEditDraft ? `/admin/recipes/edit/${recipe.originalRecipeId}` : '/admin/recipes/create'"
+              :to="recipe.isEditDraft
+                ? `/admin/recipes/edit/${recipe.originalRecipeId}?draft=${recipe.id}`
+                : `/admin/recipes/create?draft=${recipe.id}`"
               class="edit-link"
             >
               編集を続ける

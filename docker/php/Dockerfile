@@ -20,4 +20,10 @@ RUN apt-get update \
 RUN curl -sS https://getcomposer.org/installer | php \
   && mv composer.phar /usr/local/bin/composer
 
+RUN echo "upload_max_filesize = 10M" >> /usr/local/etc/php/php.ini && \
+    echo "post_max_size = 15M" >> /usr/local/etc/php/php.ini && \
+    echo "max_execution_time = 300" >> /usr/local/etc/php/php.ini && \
+    echo "memory_limit = 512M" >> /usr/local/etc/php/php.ini && \
+    echo "max_input_vars = 3000" >> /usr/local/etc/php/php.ini
+
 WORKDIR /var/www

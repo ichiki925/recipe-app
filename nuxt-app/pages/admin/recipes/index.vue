@@ -27,8 +27,10 @@
         >
           <div class="recipe-image">
             <img
-              :src="recipe.image_full_url || '/images/no-image.png'"
+              :src="recipe.image_full_url || recipe.image_url || '/images/no-image.png'"
               :alt="recipe.title"
+              @error="handleImageError"
+              loading="lazy"
             />
           </div>
 
@@ -101,6 +103,12 @@ const error = ref('')
 const route = useRoute()
 const router = useRouter()
 const config = useRuntimeConfig()
+
+const handleImageError = (event) => {
+  if (event.target.src !== '/images/no-image.png') {
+    event.target.src = '/images/no-image.png'
+  }
+}
 
 const displayPages = computed(() => {
   const pages = []
