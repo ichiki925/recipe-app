@@ -223,7 +223,7 @@ const fetchOriginalRecipe = async () => {
         const token = await $auth.currentUser.getIdToken()
         const recipeId = route.params.id
 
-        const data = await $fetch(`/admin/recipes/${recipeId}`, {
+        const data = await $fetch(`/api/admin/recipes/${recipeId}`, {
             baseURL: config.public.apiBaseUrl,
             headers: {
                 'Authorization': `Bearer ${token}`,
@@ -510,8 +510,8 @@ const submitRecipe = async () => {
         formData.append('instructions', form.instructions.trim())
         formData.append('_method', 'PUT')
 
-        // 画像処理
-        if (selectedFile.value?.isTemp) {
+        // 画像処理 - 条件を明確化
+        if (selectedFile.value?.isTemp && selectedFile.value?.tempImageUrl) {
             // 一時保存画像の場合
             formData.append('temp_image_url', selectedFile.value.tempImageUrl)
             console.log('一時保存画像URLをサーバーに送信:', selectedFile.value.tempImageUrl)
@@ -542,6 +542,16 @@ const submitRecipe = async () => {
 
         successMessage.value = 'レシピが更新されました'
 
+        // 更新成功時の一時保存画像削除処理を追加
+        if (selectedFile.value?.isTemp && selectedFile.value?.tempImagePath) {
+            try {
+                await deleteTempImage(selectedFile.value.tempImagePath)
+                console.log('更新成功後に一時保存画像を削除:', selectedFile.value.tempImagePath)
+            } catch (error) {
+                console.error('一時保存画像削除エラー:', error)
+            }
+        }
+
         // 投稿成功時に下書きと一時画像を削除
         const currentEditingId = currentEditingRecipe.value?.id
         if (currentEditingId) {
@@ -551,9 +561,11 @@ const submitRecipe = async () => {
                     let savedRecipes = JSON.parse(saved)
                     const draftToDelete = savedRecipes.find(r => r.id === currentEditingId)
 
-                    // 一時保存画像があれば削除
-                    if (draftToDelete?.tempImagePath) {
+                    // 下書きの一時保存画像があれば削除（上記とは別の画像の可能性）
+                    if (draftToDelete?.tempImagePath && 
+                        draftToDelete.tempImagePath !== selectedFile.value?.tempImagePath) {
                         await deleteTempImage(draftToDelete.tempImagePath)
+                        console.log('下書きの一時保存画像を削除:', draftToDelete.tempImagePath)
                     }
 
                     savedRecipes = savedRecipes.filter(r => r.id !== currentEditingId)

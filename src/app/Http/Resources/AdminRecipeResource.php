@@ -12,6 +12,15 @@ class AdminRecipeResource extends JsonResource
     {
         $imageFullUrl = null;
         $raw = $this->image_url;
+
+        // デバッグログ追加
+        \Log::info('AdminRecipeResource Debug', [
+            'recipe_id' => $this->id,
+            'raw_image_url' => $raw,
+            'is_string' => is_string($raw),
+            'contains_firebasestorage_com' => $raw ? strpos($raw, 'firebasestorage.googleapis.com') !== false : false,
+            'contains_firebasestorage_app' => $raw ? strpos($raw, 'firebasestorage.app') !== false : false
+        ]);
         
         if (is_string($raw)) {
             // Firebase Storage URL の場合

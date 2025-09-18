@@ -179,7 +179,7 @@ const fetchRecipe = async () => {
 
         const token = await $auth.currentUser.getIdToken()
 
-        const data = await $fetch(`/admin/recipes/${recipeId}`, {
+        const data = await $fetch(`/api/admin/recipes/${recipeId}`, {
             baseURL: config.public.apiBaseUrl,
             headers: {
                 'Authorization': `Bearer ${token}`,
@@ -237,7 +237,7 @@ const deleteRecipe = async () => {
 
         const token = await $auth.currentUser.getIdToken()
 
-        await $fetch(`/admin/recipes/${recipeId}`, {
+        await $fetch(`/api/admin/recipes/${recipeId}`, {
             method: 'DELETE',
             baseURL: config.public.apiBaseUrl,
             headers: {

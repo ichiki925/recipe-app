@@ -236,12 +236,31 @@ class RecipeController extends Controller
                 'servings' => 'required|string',
                 'ingredients' => 'required|string',
                 'instructions' => 'required|string',
-                'image' => 'nullable|image|mimes:jpeg,jpg,png,webp|max:5120'
+                'image' => 'nullable|image|mimes:jpeg,jpg,png,webp|max:5120',
+                'temp_image_url' => 'nullable|string'
             ]);
 
             $imageUrl = null;
 
-            if ($request->hasFile('image')) {
+            // 1. temp_image_urlが送信された場合の処理（優先）
+            if ($request->has('temp_image_url') && !empty($request->temp_image_url)) {
+                try {
+                    $imageUrl = $this->moveTempImageToPermanent($request->temp_image_url);
+                    \Log::info('Temp image moved to permanent storage', [
+                        'temp_url' => $request->temp_image_url,
+                        'permanent_url' => $imageUrl
+                    ]);
+                } catch (\Exception $e) {
+                    \Log::error('Failed to move temp image', [
+                        'temp_url' => $request->temp_image_url,
+                        'error' => $e->getMessage()
+                    ]);
+                    // temp_image_urlの処理に失敗した場合は通常のアップロード処理に進む
+                }
+            }
+
+            // 2. 通常のファイルアップロード処理（temp_image_urlがない場合、または処理に失敗した場合）
+            if (!$imageUrl && $request->hasFile('image')) {
                 $imageUrl = $this->uploadToFirebaseStorage($request->file('image'));
                 \Log::info('Image uploaded to Firebase Storage', [
                     'url' => $imageUrl
@@ -329,14 +348,45 @@ class RecipeController extends Controller
                 'ingredients' => 'required|string',
                 'instructions' => 'required|string',
                 'image' => 'nullable|image|mimes:jpeg,jpg,png,webp|max:5120',
+                'temp_image_url' => 'nullable|string',
                 'is_published' => 'boolean'
             ]);
 
             // 画像アップロード処理
-            if ($request->hasFile('image')) {
-                $imageUrl = $this->uploadToFirebaseStorage($request->file('image'));
-                $recipe->image_url = $imageUrl;
+            $newImageUrl = null;
+
+            // 1. temp_image_urlが送信された場合の処理（優先）
+            if ($request->has('temp_image_url') && !empty($request->temp_image_url)) {
+                try {
+                    $newImageUrl = $this->moveTempImageToPermanent($request->temp_image_url);
+                    \Log::info('Temp image moved to permanent storage (update)', [
+                        'temp_url' => $request->temp_image_url,
+                        'permanent_url' => $newImageUrl
+                    ]);
+                } catch (\Exception $e) {
+                    \Log::error('Failed to move temp image (update)', [
+                        'temp_url' => $request->temp_image_url,
+                        'error' => $e->getMessage()
+                    ]);
+                    // temp_image_urlの処理に失敗した場合は通常のアップロード処理に進む
+                }
             }
+
+            // 2. 通常のファイルアップロード処理
+            if (!$newImageUrl && $request->hasFile('image')) {
+                $newImageUrl = $this->uploadToFirebaseStorage($request->file('image'));
+            }
+
+            // 古い画像を削除（新しい画像がアップロードされた場合のみ）
+            if ($newImageUrl && $recipe->image_url) {
+                $this->deleteOldImage($recipe->image_url);
+            }
+
+            // 新しい画像URLがある場合のみ更新
+            if ($newImageUrl) {
+                $recipe->image_url = $newImageUrl;
+            }
+
 
             $recipe->update([
                 'title' => $request->title,
@@ -736,6 +786,92 @@ class RecipeController extends Controller
         }
     }
 
+    private function moveTempImageToPermanent($tempImageUrl)
+    {
+        try {
+            $factory = (new Factory)
+                ->withServiceAccount(storage_path('app/firebase-service-account.json'))
+                ->withProjectId(env('FIREBASE_PROJECT_ID'))
+                ->withDefaultStorageBucket(env('FIREBASE_STORAGE_BUCKET'));
+
+            $storage = $factory->createStorage();
+            $bucket = $storage->getBucket();
+
+            // 一時保存URLから元のファイル名を抽出
+            $parsedUrl = parse_url($tempImageUrl);
+            $pathParts = explode('/', $parsedUrl['path']);
+            $encodedFileName = end($pathParts);
+            $decodedFileName = urldecode($encodedFileName);
+
+            // temp/ から recipes/ への移動
+            if (strpos($decodedFileName, 'temp/') !== 0) {
+                throw new \Exception('Invalid temp image URL format');
+            }
+
+            // temp/userId/filename から recipes/timestamp_filename への変換
+            $tempPath = $decodedFileName; // temp/userId/filename
+            $fileNameParts = explode('/', $tempPath);
+            $originalFileName = end($fileNameParts); // filename
+
+            // 新しいファイル名を生成（タイムスタンプ付き）
+            $microtime = microtime(true);
+            $timestamp = number_format($microtime, 6, '', '');
+            $newFileName = "recipes/{$timestamp}_{$originalFileName}";
+
+            \Log::info('Moving temp image to permanent location', [
+                'temp_path' => $tempPath,
+                'new_path' => $newFileName,
+                'temp_url' => $tempImageUrl
+            ]);
+
+            // 一時保存ファイルの内容を取得
+            $tempObject = $bucket->object($tempPath);
+            if (!$tempObject->exists()) {
+                throw new \Exception("Temp file not found: {$tempPath}");
+            }
+
+            $fileContent = $tempObject->downloadAsString();
+            $metadata = $tempObject->info();
+
+            // 新しい場所にファイルを作成
+            $newObject = $bucket->upload($fileContent, [
+                'name' => $newFileName,
+                'metadata' => [
+                    'contentType' => $metadata['contentType'] ?? 'image/jpeg',
+                    'metadata' => [
+                        'moved_from_temp' => $tempPath,
+                        'moved_at' => date('Y-m-d H:i:s'),
+                        'original_name' => $originalFileName
+                    ]
+                ]
+            ]);
+
+            // 一時保存ファイルを削除
+            $tempObject->delete();
+
+            // 新しいダウンロードURLを生成
+            $encodedNewFileName = urlencode($newFileName);
+            $downloadUrl = "https://firebasestorage.googleapis.com/v0/b/" . env('FIREBASE_STORAGE_BUCKET') . "/o/{$encodedNewFileName}?alt=media";
+
+            \Log::info('Temp image moved successfully', [
+                'temp_path' => $tempPath,
+                'new_path' => $newFileName,
+                'new_url' => $downloadUrl
+            ]);
+
+            return $downloadUrl;
+
+        } catch (\Exception $e) {
+            \Log::error('Failed to move temp image to permanent location', [
+                'temp_url' => $tempImageUrl,
+                'error' => $e->getMessage()
+            ]);
+
+            throw new \Exception('一時保存画像の移動に失敗しました: ' . $e->getMessage());
+        }
+    }
+
+
     private function uploadToFirebaseStorage($file)
     {
         try {
@@ -788,6 +924,78 @@ class RecipeController extends Controller
             ]);
 
             throw new \Exception('画像のアップロードに失敗しました: ' . $e->getMessage());
+        }
+    }
+
+    private function deleteOldImage($imageUrl)
+    {
+        try {
+            if (empty($imageUrl)) {
+                \Log::info('Empty image URL, skipping deletion');
+                return;
+            }
+
+            \Log::info('Attempting to delete image', ['image_url' => $imageUrl]);
+
+            // Firebase Storage URLの場合
+            if (strpos($imageUrl, 'firebasestorage.googleapis.com') !== false) {
+                $factory = (new Factory)
+                    ->withServiceAccount(storage_path('app/firebase-service-account.json'))
+                    ->withProjectId(env('FIREBASE_PROJECT_ID'))
+                    ->withDefaultStorageBucket(env('FIREBASE_STORAGE_BUCKET'));
+
+                $storage = $factory->createStorage();
+                $bucket = $storage->getBucket();
+
+                // URLからファイルパスを抽出（修正版）
+                $parsedUrl = parse_url($imageUrl);
+                
+                // /v0/b/bucket/o/encoded_file_path から encoded_file_path を抽出
+                if (isset($parsedUrl['path']) && preg_match('/\/o\/(.+)/', $parsedUrl['path'], $matches)) {
+                    $encodedFileName = $matches[1];
+                    $fileName = urldecode($encodedFileName);
+                    
+                    \Log::info('Extracted file path for deletion', [
+                        'original_url' => $imageUrl,
+                        'encoded_path' => $encodedFileName,
+                        'decoded_path' => $fileName
+                    ]);
+
+                    // ファイルを削除
+                    $object = $bucket->object($fileName);
+                    if ($object->exists()) {
+                        $object->delete();
+                        \Log::info('Firebase image deleted successfully', ['file_name' => $fileName]);
+                    } else {
+                        \Log::warning('Firebase image not found', ['file_name' => $fileName]);
+                    }
+                } else {
+                    \Log::error('Could not extract file path from Firebase URL', [
+                        'image_url' => $imageUrl,
+                        'parsed_path' => $parsedUrl['path'] ?? 'null'
+                    ]);
+                }
+            }
+            // ローカルストレージの場合（後方互換性）
+            elseif (strpos($imageUrl, '/storage/') === 0) {
+                $imagePath = str_replace('/storage/', '', $imageUrl);
+                if (Storage::disk('public')->exists($imagePath)) {
+                    Storage::disk('public')->delete($imagePath);
+                    \Log::info('Local image deleted successfully', ['file_path' => $imagePath]);
+                } else {
+                    \Log::warning('Local image not found', ['file_path' => $imagePath]);
+                }
+            } else {
+                \Log::warning('Unknown image URL format', ['image_url' => $imageUrl]);
+            }
+
+        } catch (\Exception $e) {
+            \Log::error('Image deletion failed', [
+                'image_url' => $imageUrl,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            // 画像削除の失敗は致命的ではないので、例外を再スローしない
         }
     }
 }

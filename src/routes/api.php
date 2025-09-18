@@ -44,21 +44,6 @@ Route::prefix('recipes')->group(function () {
 
 // 認証必須API（ログインユーザー）
 Route::middleware('firebase.auth')->group(function () {
-    Route::get('/auth/check', function (Request $request) {
-        $user = $request->user();
-        return response()->json([
-            'success' => true,
-            'authenticated' => true,
-            'user' => [
-                'id' => $user->id,
-                'name' => $user->name,
-                'email' => $user->email,
-                'role' => $user->role,
-                'firebase_uid' => $user->firebase_uid
-            ]
-        ]);
-    });
-
     Route::get('/user/recipes', [RecipeController::class, 'userIndex']);
     Route::get('/user/liked-recipes', [RecipeController::class, 'likedRecipes']);
     Route::get('/recipes/{recipe}', [RecipeController::class, 'show']);
@@ -109,3 +94,8 @@ Route::middleware(['firebase.auth', 'admin'])->prefix('admin')->group(function (
     Route::get('/like-stats', [LikeController::class, 'stats']);
     Route::get('/users/stats', [UserController::class, 'stats']);
 });
+
+Route::options('{any}', function () {
+    return response('', 200);
+})->where('any', '.*');
+

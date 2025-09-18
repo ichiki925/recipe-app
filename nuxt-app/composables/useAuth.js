@@ -79,7 +79,7 @@ export const useAuth = () => {
     }
 
     const authenticateUser = async (idToken) => {
-        const endpoints = ['/auth/check', '/admin/check']
+        const endpoints = ['/api/auth/check', '/api/admin/check']
         for (let i = 0; i < endpoints.length; i++) {
             try {
                 const res = await $fetch(endpoints[i], {

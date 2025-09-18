@@ -207,7 +207,7 @@ const fetchRecipes = async () => {
     if (!$auth?.currentUser) throw new Error('認証が必要です')
     const token = await $auth.currentUser.getIdToken()
 
-    const data = await $fetch('/admin/recipes', {
+    const data = await $fetch('/api/admin/recipes', {
       baseURL: config.public.apiBaseUrl,
       headers: { Authorization: `Bearer ${token}` },
       query: {

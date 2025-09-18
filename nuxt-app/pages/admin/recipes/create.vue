@@ -411,7 +411,8 @@ const submitRecipe = async () => {
     formData.append('ingredients', ingredientsText)
     formData.append('instructions', form.instructions.trim())
 
-    if (selectedFile.value?.isTemp) {
+    // 画像処理 - temp_image_urlを優先
+    if (selectedFile.value?.isTemp && selectedFile.value?.tempImageUrl) {
       formData.append('temp_image_url', selectedFile.value.tempImageUrl)
       console.log('一時保存画像URLをサーバーに送信:', selectedFile.value.tempImageUrl)
     } else if (selectedFile.value?.file instanceof File) {
@@ -419,7 +420,16 @@ const submitRecipe = async () => {
       console.log('画像ファイルをFormDataに追加:', selectedFile.value.file.name, selectedFile.value.file.size)
     }
 
-    const response = await fetch('http://localhost/api/admin/recipes', {
+    // **修正: config.public.apiBaseUrlを使用**
+    const config = useRuntimeConfig()
+    console.log('🔍 Config debug:', {
+        apiBaseUrl: config.public.apiBaseUrl,
+        apiBase: config.public.apiBase,
+        fullUrl: `${config.public.apiBaseUrl}/api/admin/recipes`
+    })
+    const apiUrl = `${config.public.apiBaseUrl}/api/admin/recipes`
+
+    const response = await fetch(apiUrl, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${authToken}`
@@ -448,8 +458,20 @@ const submitRecipe = async () => {
 
     successMessage.value = 'レシピが投稿されました'
 
+    // 投稿成功時の下書き削除処理
     const currentEditingId = currentEditingRecipe.value?.id
 
+    // 一時保存画像があれば削除
+    if (selectedFile.value?.isTemp && selectedFile.value?.tempImagePath) {
+      try {
+        await deleteTempImage(selectedFile.value.tempImagePath)
+        console.log('投稿成功後に一時保存画像を削除:', selectedFile.value.tempImagePath)
+      } catch (error) {
+        console.error('一時保存画像削除エラー:', error)
+      }
+    }
+
+    // フォームリセット
     Object.assign(form, {
       title: '',
       genre: '',
@@ -462,11 +484,13 @@ const submitRecipe = async () => {
     selectedFile.value = null
     currentEditingRecipe.value = null
 
+    // 下書きを削除
     if (currentEditingId) {
       savedRecipes.value = savedRecipes.value.filter(r => r.id !== currentEditingId)
       updateSavedRecipes()
     }
 
+    // 成功後のリダイレクト
     if (data.data?.id) {
       setTimeout(() => {
         router.push(`/admin/recipes/show/${data.data.id}`)

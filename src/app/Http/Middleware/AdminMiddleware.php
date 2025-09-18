@@ -11,6 +11,14 @@ class AdminMiddleware
 {
     public function handle(Request $request, Closure $next)
     {
+        // OPTIONSリクエスト（プリフライト）はスキップ
+        if ($request->isMethod('OPTIONS')) {
+            return response('', 200)
+                ->header('Access-Control-Allow-Origin', '*')
+                ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+                ->header('Access-Control-Allow-Headers', 'Authorization, Content-Type, Accept');
+        }
+        
         $user = $request->user();
 
         if (!$user) {
