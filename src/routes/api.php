@@ -95,7 +95,3 @@ Route::middleware(['firebase.auth', 'admin'])->prefix('admin')->group(function (
     Route::get('/users/stats', [UserController::class, 'stats']);
 });
 
-Route::options('{any}', function () {
-    return response('', 200);
-})->where('any', '.*');
-

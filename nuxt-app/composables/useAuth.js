@@ -97,7 +97,7 @@ export const useAuth = () => {
     const register = (userData) =>
         registerUser(
             { name: userData.name, email: userData.email, password: userData.password },
-            '/auth/register'
+            '/api/auth/register'
         )
 
     const registerAdmin = (adminData) =>
@@ -108,7 +108,7 @@ export const useAuth = () => {
                 password: adminData.password,
                 admin_code: adminData.adminCode
             },
-            '/admin/register'
+            '/api/admin/register'
         )
 
     const login = async (email, password) => {

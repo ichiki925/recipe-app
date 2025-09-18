@@ -114,7 +114,7 @@ const loadComments = async () => {
     const token = await getIdToken()
     const config = useRuntimeConfig()
 
-    const response = await $fetch('/admin/comments', {
+    const response = await $fetch('/api/admin/comments', {
       baseURL: config.public.apiBaseUrl,
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -193,7 +193,7 @@ const deleteComment = async (id) => {
     const token = await getIdToken()
     const config = useRuntimeConfig()
 
-    await $fetch(`/admin/comments/${id}`, {
+    await $fetch(`/api/admin/comments/${id}`, {
       baseURL: config.public.apiBaseUrl,
       method: 'DELETE',
       headers: {

@@ -100,7 +100,7 @@
                 </button>
             </form>
 
-            <NuxtLink to="/auth/login" class="login-link">管理者ログインはこちら</NuxtLink>
+            <NuxtLink to="/admin/login" class="login-link">管理者ログインはこちら</NuxtLink>
         </div>
     </div>
 </template>
