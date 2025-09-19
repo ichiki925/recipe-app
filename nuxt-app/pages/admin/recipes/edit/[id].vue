@@ -105,7 +105,8 @@
 
 <script setup>
 definePageMeta({
-    layout: 'admin'
+    layout: 'admin',
+    ssr: false
 })
 
 import { ref, reactive, watch, onMounted, nextTick  } from 'vue'

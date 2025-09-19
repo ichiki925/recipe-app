@@ -86,6 +86,10 @@
 <script setup>
 import { ref, onMounted, watch } from 'vue'
 
+definePageMeta({
+  ssr: false
+})
+
 useHead({
   link: [
     {
@@ -211,7 +215,7 @@ const fetchRecipes = async () => {
     }
 
 
-    const response = await $fetch('/recipes/search', {
+    const response = await $fetch('/api/recipes/search', {
       baseURL: config.public.apiBaseUrl,
       headers,
       query: {
@@ -286,7 +290,7 @@ const toggleLike = async (recipe, event) => {
     const token = await $auth.currentUser.getIdToken(true)
     const config = useRuntimeConfig()
 
-    const response = await $fetch(`/recipes/${recipe.id}/toggle-like`, {
+    const response = await $fetch(`/api/recipes/${recipe.id}/toggle-like`, {
       baseURL: config.public.apiBaseUrl,
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }

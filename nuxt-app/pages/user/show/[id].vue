@@ -55,6 +55,10 @@ import RecipeLikeButton from '~/components/RecipeLikeButton.vue'
 import RecipeIngredients from '~/components/RecipeIngredients.vue'
 import RecipeInstructions from '~/components/RecipeInstructions.vue'
 
+definePageMeta({
+  ssr: false
+})
+
 const { user, isLoggedIn, initAuth } = useAuth()
 
 useHead({
@@ -348,7 +352,8 @@ const handleSubmitComment = async ({ content, onSuccess, onError }) => {
     const { $auth } = useNuxtApp()
     const token = await $auth.currentUser.getIdToken()
 
-    await $fetch(`${config.public.apiBase}/api/recipes/${recipeId}/comments`, {
+    await $fetch(`/api/recipes/${recipeId}/comments`, {
+      baseURL: config.public.apiBaseUrl,
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -392,7 +397,8 @@ const toggleLike = async () => {
     const { $auth } = useNuxtApp()
     const token = await $auth.currentUser.getIdToken()
 
-    const response = await $fetch(`${config.public.apiBase}/api/recipes/${recipe.value.id}/toggle-like`, {
+    const response = await $fetch(`/api/recipes/${recipe.value.id}/toggle-like`, {
+      baseURL: config.public.apiBaseUrl,
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -442,7 +448,8 @@ const fetchComments = async () => {
     const { $auth } = useNuxtApp()
     const token = await $auth.currentUser.getIdToken()
 
-    const response = await $fetch(`${config.public.apiBase}/api/recipes/${recipeId}/comments`, {
+    const response = await $fetch(`/api/recipes/${recipeId}/comments`, {
+      baseURL: config.public.apiBaseUrl,
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -524,7 +531,8 @@ onMounted(async () => {
     const token = await $auth.currentUser.getIdToken()
 
     try {
-      const response = await $fetch(`${config.public.apiBase}/api/recipes/${recipeId}`, {
+      const response = await $fetch(`/api/recipes/${recipeId}`, {
+        baseURL: config.public.apiBaseUrl,
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,

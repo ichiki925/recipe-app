@@ -82,6 +82,11 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { useHead, useRuntimeConfig } from '#app'
 import { onAuthStateChanged } from 'firebase/auth'
 
+definePageMeta({
+  ssr: false
+})
+
+
 const { getIdToken } = useAuth()
 const { $auth } = useNuxtApp()
 const config = useRuntimeConfig()
@@ -294,7 +299,7 @@ const saveProfile = async () => {
 
     formData.append('_method', 'PUT')
 
-    const response = await $fetch('/user/profile', {
+    const response = await $fetch('/api/user/profile', {
       baseURL: config.public.apiBaseUrl,
       method: 'POST',
       headers: {
@@ -374,7 +379,7 @@ onMounted(async () => {
     const token = await getIdToken()
     tokenStatus.value = token ? 'トークンあり' : 'トークンなし'
 
-    const response = await $fetch('/user/profile', {
+    const response = await $fetch('/api/user/profile', {
       baseURL: config.public.apiBaseUrl,
       headers: {
         'Authorization': `Bearer ${token}`,

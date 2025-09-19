@@ -1,26 +1,36 @@
 <template>
     <div class="action-buttons">
-        <button
-            v-if="!isAdmin"
-            class="icon-button"
-            @click="handleToggleLike"
-            :disabled="loading"
-        >
-            <i
-                :class="isLiked ? 'fas fa-heart heart-icon-filled' : 'far fa-heart heart-icon-outline'"
-            ></i>
-            <span class="like-count">{{ likeCount }}</span>
-        </button>
+        <template v-if="mounted">
+            <button
+                v-if="!isAdmin"
+                class="icon-button"
+                @click="handleToggleLike"
+                :disabled="loading"
+            >
+                <i
+                    :class="isLiked ? 'fas fa-heart heart-icon-filled' : 'far fa-heart heart-icon-outline'"
+                ></i>
+                <span class="like-count">{{ likeCount }}</span>
+            </button>
 
-        <!-- 管理者の場合は表示のみ -->
-        <div v-else class="like-display">
-            <i class="far fa-heart heart-icon"></i>
-            <span class="like-count">{{ likeCount }}</span>
-        </div>
+            <!-- 管理者の場合は表示のみ -->
+            <div v-else class="like-display">
+                <i class="far fa-heart heart-icon"></i>
+                <span class="like-count">{{ likeCount }}</span>
+            </div>
+        </template>
     </div>
 </template>
 
 <script setup>
+import { ref, onMounted } from 'vue'
+
+const mounted = ref(false)
+
+onMounted(() => {
+    mounted.value = true
+})
+
 const props = defineProps({
     isLiked: {
         type: Boolean,

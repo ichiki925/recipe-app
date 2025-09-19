@@ -102,7 +102,7 @@
 
 <script setup>
 definePageMeta({
-  // layout: 'default' が自動適用
+  ssr: false
 })
 
 useHead({
@@ -139,7 +139,7 @@ const fetchFavoriteRecipes = async () => {
     const { $auth } = useNuxtApp()
     const token = await $auth.currentUser.getIdToken(true)
 
-    const response = await $fetch('/user/liked-recipes', {
+    const response = await $fetch('/api/user/liked-recipes', {
       baseURL: config.public.apiBaseUrl,
       headers: {
         Authorization: `Bearer ${token}`,
@@ -233,7 +233,7 @@ const toggleLike = async (recipe) => {
     const { $auth } = useNuxtApp()
     const token = await $auth.currentUser.getIdToken()
 
-    const response = await $fetch(`/recipes/${recipe.id}/toggle-like`, {
+    const response = await $fetch(`/api/recipes/${recipe.id}/toggle-like`, {
       baseURL: config.public.apiBaseUrl,
       method: 'POST',
       headers: {

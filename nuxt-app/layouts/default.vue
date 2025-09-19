@@ -19,21 +19,17 @@
                 Recipes
               </NuxtLink>
             </li>
-            <li v-if="isLoggedIn">
-              <NuxtLink to="/user/favorite" :class="{ active: $route.path === '/user/favorite' }">
-                Favorite
-              </NuxtLink>
-            </li>
-            <li v-if="isLoggedIn">
-              <NuxtLink to="/user/profile" :class="{ active: $route.path === '/user/profile' }">
-                Profile
-              </NuxtLink>
-            </li>
-            <li v-if="isLoggedIn">
-              <a href="#" @click.prevent="handleLogout" class="logout-link">
-                Logout
-              </a>
-            </li>
+            <ClientOnly>
+              <template v-if="isLoggedIn">
+                <li>
+                  <NuxtLink to="/user/favorite" :class="{ active: $route.path === '/user/favorite' }">Favorite</NuxtLink>
+                </li>
+                <li>
+                  <NuxtLink to="/user/profile" :class="{ active: $route.path === '/user/profile' }">Profile</NuxtLink>
+                </li>
+                <li><a href="#" @click.prevent="handleLogout" class="logout-link">Logout</a></li>
+              </template>
+            </ClientOnly>
           </ul>
         </nav>
       </div>

@@ -101,7 +101,8 @@
 
 <script setup>
 definePageMeta({
-    layout: 'admin'
+    layout: 'admin',
+    ssr: false
 })
 
 import { ref, onMounted } from 'vue'

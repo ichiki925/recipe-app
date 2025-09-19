@@ -23,17 +23,27 @@
     </form>
 
     <!-- 新規レシピ作成ボタン（管理者のみ） -->
-    <button
-      v-if="userType === 'admin'"
-      @click="handleCreateRecipe"
-      class="create-button"
-    >
-      ＋ 新規レシピ作成
-    </button>
+    <template v-if="mounted">
+      <button
+        v-if="userType === 'admin'"
+        @click="handleCreateRecipe"
+        class="create-button"
+      >
+        ＋ 新規レシピ作成
+      </button>
+    </template>
   </aside>
 </template>
 
 <script setup>
+import { ref, onMounted } from 'vue'
+
+const mounted = ref(false)
+
+onMounted(() => {
+  mounted.value = true
+})
+
 const props = defineProps({
   // ユーザータイプ: 'guest', 'user', 'admin'
   userType: {

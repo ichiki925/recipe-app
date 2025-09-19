@@ -85,21 +85,29 @@ const handleSubmit = async () => {
   isSubmitting.value = true
 
   try {
-    console.log('パスワード再設定データ:', {
-      token: token.value,
-      email: form.value.email,
-      password: form.value.password,
-      passwordConfirmation: form.value.passwordConfirmation
+    const config = useRuntimeConfig()
+
+    const response = await $fetch('/api/auth/reset-password', {
+      baseURL: config.public.apiBaseUrl,
+      method: 'POST',
+      body: {
+        token: token.value,
+        email: form.value.email,
+        password: form.value.password,
+        password_confirmation: form.value.passwordConfirmation
+      }
     })
 
-    await new Promise(resolve => setTimeout(resolve, 1000)) // 仮のAPI遅延
-
-    alert('パスワードが正常に変更されました。')
-    await navigateTo('/auth/login')  // 修正: router.push → navigateTo
+    if (response.success) {
+      alert('パスワードが正常に変更されました。')
+      await navigateTo('/auth/login')
+    } else {
+      throw new Error(response.message || 'パスワード変更に失敗しました')
+    }
 
   } catch (error) {
     console.error('エラー:', error)
-    errors.value.general = 'エラーが発生しました。'
+    errors.value.general = error.message || 'エラーが発生しました。'
   } finally {
     isSubmitting.value = false
   }

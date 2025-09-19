@@ -88,7 +88,8 @@
 
 <script setup>
 definePageMeta({
-  layout: 'admin'
+  layout: 'admin',
+  ssr: false
 })
 
 const { isLoggedIn, isAdmin, initAuth } = useAuth()

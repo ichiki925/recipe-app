@@ -79,7 +79,8 @@
 
 <script setup>
 definePageMeta({
-  layout: 'admin'
+  layout: 'admin',
+  ssr: false
 })
 import { ref, onMounted, watch, computed } from 'vue'
 import { useRoute, useRouter, useHead } from '#app'

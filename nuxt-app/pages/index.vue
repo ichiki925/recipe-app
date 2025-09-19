@@ -145,7 +145,7 @@ const fetchRecipes = async () => {
 
         const config = useRuntimeConfig()
 
-        const response = await $fetch('/recipes/search', {
+        const response = await $fetch('/api/recipes/search', {
             baseURL: config.public.apiBaseUrl,
             query: {
                 keyword: searchKeyword.value,
