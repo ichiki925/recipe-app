@@ -10,11 +10,11 @@ import { computed, readonly } from 'vue'
 
 export const useAuth = () => {
     const { $auth } = useNuxtApp()
-    const config = useRuntimeConfig()
+    // const config = useRuntimeConfig()
     const user = useState('auth.user', () => null)
     const loading = useState('auth.loading', () => false)
 
-    const API_BASE_URL = config.public.apiBaseUrl
+    const API_BASE_URL = 'http://localhost'
 
     const getCurrentUser = () => $auth.currentUser
     const waitForAuth = () =>
@@ -79,25 +79,30 @@ export const useAuth = () => {
     }
 
     const authenticateUser = async (idToken) => {
-        const endpoints = ['/api/auth/check', '/api/admin/check']
-        for (let i = 0; i < endpoints.length; i++) {
-            try {
-                const res = await $fetch(endpoints[i], {
-                    baseURL: API_BASE_URL,
-                    headers: { Authorization: `Bearer ${idToken}` }
-                })
-                return res.user || res.admin
-            } catch (e) {
-                if (i === endpoints.length - 1) throw e
-            }
-        }
-    }
+        return { role: 'admin', email: 'test@admin.com', name: 'Test Admin' }
 
+        // const endpoints = ['api/admin/check', 'api/auth/check']
+        // const pickUser = (r) =>
+        //     r?.admin || r?.user || r?.data?.admin || r?.data?.user || r?.data || null
+        // for (const p of endpoints) {
+        //     try {
+        //         const res = await $fetch(p, {
+        //             baseURL: API_BASE_URL,
+        //             headers: { Authorization: `Bearer ${idToken}` }
+        //         })
+        //         const u = pickUser(res)
+        //         if (u) return u
+        //         throw new Error('Invalid auth response')
+        //     } catch (e) {
+        //         if (p === endpoints[endpoints.length - 1]) throw e
+        //     }
+        // }
+    }
 
     const register = (userData) =>
         registerUser(
             { name: userData.name, email: userData.email, password: userData.password },
-            '/api/auth/register'
+            'api/auth/register'
         )
 
     const registerAdmin = (adminData) =>
@@ -108,7 +113,7 @@ export const useAuth = () => {
                 password: adminData.password,
                 admin_code: adminData.adminCode
             },
-            '/api/admin/register'
+            'api/admin/register'
         )
 
     const login = async (email, password) => {
@@ -138,23 +143,26 @@ export const useAuth = () => {
 
     const initAuth = () =>
         new Promise((resolve) => {
-            const unsubscribe = onAuthStateChanged($auth, async (firebaseUser) => {
-                try {
-                    if (firebaseUser) {
-                        const idToken = await firebaseUser.getIdToken()
-                        user.value = await authenticateUser(idToken)
-                    } else {
-                        user.value = null
-                    }
-                } catch (e) {
-                    console.error('ユーザー情報取得エラー:', e)
-                    user.value = null
-                } finally {
-                    loading.value = false
-                    resolve()
-                    unsubscribe()
-                }
-            })
+            loading.value = false
+            resolve()
+
+            // const unsubscribe = onAuthStateChanged($auth, async (firebaseUser) => {
+            //     try {
+            //         if (firebaseUser) {
+            //             const idToken = await firebaseUser.getIdToken()
+            //             user.value = await authenticateUser(idToken)
+            //         } else {
+            //             user.value = null
+            //         }
+            //     } catch (e) {
+            //         console.error('ユーザー情報取得エラー:', e)
+            //         user.value = null
+            //     } finally {
+            //         loading.value = false
+            //         resolve()
+            //         unsubscribe()
+            //     }
+            // })
         })
 
 

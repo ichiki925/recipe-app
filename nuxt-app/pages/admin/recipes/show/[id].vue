@@ -113,6 +113,9 @@ import RecipeLikeButton from '~/components/RecipeLikeButton.vue'
 import RecipeIngredients from '~/components/RecipeIngredients.vue'
 import RecipeInstructions from '~/components/RecipeInstructions.vue'
 
+const { get, delete: del } = useApi()
+
+
 useHead({
     link: [
         {
@@ -172,22 +175,7 @@ const fetchRecipe = async () => {
     recipe.value = null
 
     try {
-        const { $auth } = useNuxtApp()
-
-        if (!$auth?.currentUser) {
-            throw new Error('認証が必要です')
-        }
-
-        const token = await $auth.currentUser.getIdToken()
-
-        const data = await $fetch(`/api/admin/recipes/${recipeId}`, {
-            baseURL: config.public.apiBaseUrl,
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-            }
-        })
+        const data = await get(`/admin/recipes/${recipeId}`)
 
         if (data.status === 'success' && data.data) {
             recipe.value = data.data
@@ -230,29 +218,11 @@ const deleteRecipe = async () => {
     deleting.value = true
 
     try {
-        const { $auth } = useNuxtApp()
-
-        if (!$auth?.currentUser) {
-            throw new Error('認証が必要です')
-        }
-
-        const token = await $auth.currentUser.getIdToken()
-
-        await $fetch(`/api/admin/recipes/${recipeId}`, {
-            method: 'DELETE',
-            baseURL: config.public.apiBaseUrl,
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-            }
-        })
+        await del(`/admin/recipes/${recipeId}`)
 
         alert('レシピが削除されました')
-
         localStorage.setItem('recipeDeleted', 'true')
         localStorage.setItem('deletedRecipeId', recipeId)
-
         await router.push('/admin/recipes')
 
     } catch (err) {

@@ -93,7 +93,8 @@ definePageMeta({
 })
 
 const { isLoggedIn, isAdmin, initAuth } = useAuth()
-const { $auth } = useNuxtApp()
+const { getAuth, postAuth, delAuth } = useApi()
+
 
 const dashboardData = ref({
   stats: {},
@@ -139,19 +140,7 @@ const restoreRecipe = async (recipeId) => {
   isProcessing.value = true
 
   try {
-    const idToken = await $auth.currentUser?.getIdToken()
-    if (!idToken) {
-      throw new Error('認証トークンが取得できませんでした')
-    }
-
-    await $fetch(`/admin/recipes/${recipeId}/restore`, {
-      method: 'POST',
-      baseURL: 'http://localhost/api',
-      headers: {
-        'Authorization': `Bearer ${idToken}`,
-        'Content-Type': 'application/json'
-      }
-    })
+    await postAuth(`/admin/recipes/${recipeId}/restore`)
 
     dashboardData.value.deleted_recipes = dashboardData.value.deleted_recipes.filter(
       recipe => recipe.id !== recipeId
@@ -181,19 +170,7 @@ const permanentlyDeleteRecipe = async (recipeId) => {
   isProcessing.value = true
 
   try {
-    const idToken = await $auth.currentUser?.getIdToken()
-    if (!idToken) {
-      throw new Error('認証トークンが取得できませんでした')
-    }
-
-    await $fetch(`/admin/recipes/${recipeId}/permanent-delete`, {
-      method: 'DELETE',
-      baseURL: 'http://localhost/api',
-      headers: {
-        'Authorization': `Bearer ${idToken}`,
-        'Content-Type': 'application/json'
-      }
-    })
+    await delAuth(`/admin/recipes/${recipeId}/permanent-delete`)
 
     dashboardData.value.deleted_recipes = dashboardData.value.deleted_recipes.filter(
       recipe => recipe.id !== recipeId
@@ -226,46 +203,19 @@ const formatDate = (dateString) => {
 
 onMounted(async () => {
   loadEditingRecipes()
-
-  await new Promise(resolve => {
-    const unsubscribe = $auth.onAuthStateChanged((user) => {
-      unsubscribe()
-      resolve(user)
-    })
-  })
-
-  await initAuth()
-
-  if (!isLoggedIn.value || !isAdmin.value) {
-    console.error('❌ 認証失敗またはadmin権限なし')
-    await navigateTo('/admin/login')
-    return
-  }
+  
+  // await initAuth()
+  // if (!isLoggedIn.value || !isAdmin.value) {
+  //   return navigateTo('/admin/login')
+  // }
 
   try {
-    const idToken = await $auth.currentUser?.getIdToken()
-
-    if (!idToken) {
-      console.error('❌ IDトークンが取得できませんでした')
-      await navigateTo('/admin/login')
-      return
-    }
-
-    const response = await $fetch('/admin/dashboard', {
-      baseURL: 'http://localhost/api',
-      headers: {
-        'Authorization': `Bearer ${idToken}`,
-        'Content-Type': 'application/json'
-      }
-    })
-
+    const response = await getAuth('/admin/dashboard')
     dashboardData.value = response.data || response
-
   } catch (error) {
-    console.error('❌ ダッシュボードデータ取得エラー:', error)
-
-    if (error.status === 401 || error.status === 403) {
-      await navigateTo('/admin/login')
+    console.error('ダッシュボードデータ取得エラー:', error)
+    if (error?.status === 401 || error?.status === 403) {
+      return navigateTo('/admin/login')
     }
   } finally {
     isLoading.value = false

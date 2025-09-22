@@ -18,6 +18,9 @@ use App\Http\Resources\UserResource;
 use App\Http\Resources\RecipeResource;
 use App\Http\Controllers\Admin\UserController;
 
+Route::get('/healthz', function () {
+    return response()->json(['ok' => true, 'time' => now()->toDateTimeString()]);
+});
 
 // 認証関連
 Route::prefix('auth')->group(function () {

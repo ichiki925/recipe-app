@@ -114,6 +114,7 @@ import { useRouter, useRoute  } from 'vue-router'
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage'
 
 const router = useRouter()
+const { post } = useApi()
 
 const form = reactive({
   title: '',
@@ -146,12 +147,9 @@ const uploadTempImage = async (file) => {
     const tempPath = `temp/${currentUser.uid}/${fileName}`
     const imageRef = storageRef(storage, tempPath)
 
-    console.log('Firebase Storageに一時保存中:', tempPath)
-
     const snapshot = await uploadBytes(imageRef, file)
     const downloadURL = await getDownloadURL(snapshot.ref)
 
-    console.log('一時保存完了:', downloadURL)
     return {
       url: downloadURL,
       path: tempPath
@@ -167,7 +165,6 @@ const deleteTempImage = async (tempPath) => {
     const storage = getStorage()
     const imageRef = storageRef(storage, tempPath)
     await deleteObject(imageRef)
-    console.log('一時保存画像を削除:', tempPath)
   } catch (error) {
     console.error('一時保存画像削除エラー:', error)
   }
@@ -216,21 +213,17 @@ const saveRecipe = async () => {
 
     // 画像がある場合はFirebase Storageに一時保存
     if (selectedFile.value?.file) {
-      // 新規選択画像の場合
       try {
         const tempImageData = await uploadTempImage(selectedFile.value.file)
         recipeData.tempImageUrl = tempImageData.url
         recipeData.tempImagePath = tempImageData.path
-        console.log('画像を一時保存:', selectedFile.value.file.name)
       } catch (error) {
         console.error('画像一時保存エラー:', error)
         recipeData.hasImage = false
       }
     } else if (selectedFile.value?.isTemp) {
-      // 既に一時保存済みの画像の場合
       recipeData.tempImageUrl = selectedFile.value.tempImageUrl
       recipeData.tempImagePath = selectedFile.value.tempImagePath
-      console.log('既存の一時保存画像を再利用')
     }
 
     // 既存のレシピを更新する場合、古い一時画像を削除
@@ -269,8 +262,6 @@ const saveRecipe = async () => {
     selectedFile.value = null
     currentEditingRecipe.value = null
 
-    console.log('レシピ保存完了')
-
     successMessage.value = 'レシピを保存しました'
     setTimeout(() => {
       successMessage.value = ''
@@ -286,11 +277,6 @@ const saveRecipe = async () => {
 
 const loadSavedRecipe = (savedRecipe) => {
   try {
-    console.log('🔍 loadSavedRecipe開始:', savedRecipe.id)
-    console.log('🔍 savedRecipe.hasImage:', savedRecipe.hasImage)
-    console.log('🔍 savedRecipe.tempImageUrl:', savedRecipe.tempImageUrl)
-    console.log('🔍 savedRecipe.tempImagePath:', savedRecipe.tempImagePath)
-
     Object.assign(form, {
       title: savedRecipe.title,
       genre: savedRecipe.genre,
@@ -302,16 +288,16 @@ const loadSavedRecipe = (savedRecipe) => {
     currentEditingRecipe.value = savedRecipe
 
     if (savedRecipe.hasImage && savedRecipe.tempImageUrl) {
-      console.log('✅ 画像復元処理開始')
+      console.log('画像復元処理開始')
       imagePreview.value = savedRecipe.tempImageUrl
       selectedFile.value = {
         tempImageUrl: savedRecipe.tempImageUrl,
         tempImagePath: savedRecipe.tempImagePath,
         isTemp: true
       }
-      console.log('✅ imagePreview設定完了:', imagePreview.value)
+      console.log('imagePreview設定完了:', imagePreview.value)
     } else {
-      console.log('❌ 画像復元スキップ - hasImage:', savedRecipe.hasImage, 'tempImageUrl:', !!savedRecipe.tempImageUrl)
+      console.log('画像復元スキップ - hasImage:', savedRecipe.hasImage, 'tempImageUrl:', !!savedRecipe.tempImageUrl)
       imagePreview.value = ''
       selectedFile.value = null
     }
@@ -328,8 +314,6 @@ const triggerImageInput = () => {
 const previewImage = async (event) => {
   const file = event.target.files[0]
   if (!file) return
-
-  console.log('画像ファイル選択:', file.name, file.type, file.size)
 
   if (file.size > 5 * 1024 * 1024) {
     errors.value.push('ファイルサイズは5MB以下にしてください')
@@ -365,25 +349,6 @@ const submitRecipe = async () => {
   isSubmitting.value = true
 
   try {
-    let currentUser = null
-    let authToken = null
-
-    try {
-      const { $auth } = useNuxtApp()
-      if ($auth?.currentUser) {
-        currentUser = $auth.currentUser
-        authToken = await currentUser.getIdToken()
-      }
-    } catch (nuxtError) {
-      console.log('認証取得エラー:', nuxtError.message)
-    }
-
-    if (!currentUser) {
-      errors.value.push('認証が必要です。ページをリロードしてログインしてください。')
-      isSubmitting.value = false
-      return
-    }
-
     // バリデーション
     if (!form.title.trim()) {
       errors.value.push('料理名は必須です')
@@ -415,47 +380,12 @@ const submitRecipe = async () => {
     // 画像処理 - temp_image_urlを優先
     if (selectedFile.value?.isTemp && selectedFile.value?.tempImageUrl) {
       formData.append('temp_image_url', selectedFile.value.tempImageUrl)
-      console.log('一時保存画像URLをサーバーに送信:', selectedFile.value.tempImageUrl)
     } else if (selectedFile.value?.file instanceof File) {
       formData.append('image', selectedFile.value.file)
-      console.log('画像ファイルをFormDataに追加:', selectedFile.value.file.name, selectedFile.value.file.size)
     }
 
-    // **修正: config.public.apiBaseUrlを使用**
-    const config = useRuntimeConfig()
-    console.log('🔍 Config debug:', {
-        apiBaseUrl: config.public.apiBaseUrl,
-        apiBase: config.public.apiBase,
-        fullUrl: `${config.public.apiBaseUrl}/api/admin/recipes`
-    })
-    const apiUrl = `${config.public.apiBaseUrl}/api/admin/recipes`
-
-    const response = await fetch(apiUrl, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${authToken}`
-      },
-      body: formData
-    })
-
-    if (!response.ok) {
-      let errorMessage = `HTTP ${response.status}: ${response.statusText}`
-      try {
-        const errorData = await response.json()
-        if (errorData.message) {
-          errorMessage = errorData.message
-        } else if (errorData.errors) {
-          errorMessage = Object.values(errorData.errors).flat().join(', ')
-        }
-      } catch {
-        const errorText = await response.text()
-        if (errorText) errorMessage = errorText
-      }
-      throw new Error(errorMessage)
-    }
-
-    const data = await response.json()
-    console.log('API成功:', data)
+    // useApiのpostメソッドを使用（FormDataを自動検出）
+    const result = await post('/admin/recipes', formData)
 
     successMessage.value = 'レシピが投稿されました'
 
@@ -466,7 +396,6 @@ const submitRecipe = async () => {
     if (selectedFile.value?.isTemp && selectedFile.value?.tempImagePath) {
       try {
         await deleteTempImage(selectedFile.value.tempImagePath)
-        console.log('投稿成功後に一時保存画像を削除:', selectedFile.value.tempImagePath)
       } catch (error) {
         console.error('一時保存画像削除エラー:', error)
       }
@@ -492,9 +421,9 @@ const submitRecipe = async () => {
     }
 
     // 成功後のリダイレクト
-    if (data.data?.id) {
+    if (result.data?.id) {
       setTimeout(() => {
-        router.push(`/admin/recipes/show/${data.data.id}`)
+        router.push(`/admin/recipes/show/${result.data.id}`)
       }, 1500)
     } else {
       setTimeout(() => {
@@ -565,12 +494,12 @@ onMounted(async () => {
     const route = useRoute()
     const draftId = route.query?.draft
     console.log('Draft ID from URL:', draftId)
-    
+
     if (draftId) {
       await nextTick()
       const savedRecipe = savedRecipes.value.find(r => r.id === draftId)
       console.log('Found saved recipe:', savedRecipe)
-      
+
       if (savedRecipe) {
         loadSavedRecipe(savedRecipe)
         console.log('Auto-loaded recipe with image:', savedRecipe.tempImageUrl)

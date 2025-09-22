@@ -85,6 +85,8 @@ definePageMeta({
 import { ref, onMounted, watch, computed } from 'vue'
 import { useRoute, useRouter, useHead } from '#app'
 
+const { get } = useApi()
+
 useHead({
   link: [
     {
@@ -204,13 +206,7 @@ const fetchRecipes = async () => {
   loading.value = true
   error.value   = ''
   try {
-    const { $auth } = useNuxtApp()
-    if (!$auth?.currentUser) throw new Error('認証が必要です')
-    const token = await $auth.currentUser.getIdToken()
-
-    const data = await $fetch('/api/admin/recipes', {
-      baseURL: config.public.apiBaseUrl,
-      headers: { Authorization: `Bearer ${token}` },
+    const data = await get('/admin/recipes', {
       query: {
         keyword: searchKeyword.value || '',
         page: currentPage.value,

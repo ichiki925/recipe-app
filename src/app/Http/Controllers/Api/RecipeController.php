@@ -419,15 +419,48 @@ class RecipeController extends Controller
 
     public function destroy(Recipe $recipe)
     {
-        if ($recipe->image_url) {
-            $this->deleteOldImage($recipe->image_url);
+        try {
+            \Log::info('destroy method called', [
+                'recipe_id' => $recipe->id,
+                'recipe_title' => $recipe->title
+            ]);
+
+            $user = request()->user();
+            if (!$user || !$user->isAdmin()) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => '管理者権限が必要です'
+                ], 403);
+            }
+
+            // コメントとライクを削除
+            if ($recipe->comments()->exists()) {
+                $recipe->comments()->delete();
+            }
+
+            if ($recipe->likes()->exists()) {
+                $recipe->likes()->delete();
+            }
+
+            // 論理削除のみ（画像は残す）
+            $recipe->delete();
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'レシピが削除されました'
+            ]);
+
+        } catch (\Exception $e) {
+            \Log::error('Recipe deletion failed', [
+                'recipe_id' => $recipe->id,
+                'error' => $e->getMessage()
+            ]);
+
+            return response()->json([
+                'status' => 'error',
+                'message' => 'レシピの削除に失敗しました'
+            ], 500);
         }
-
-        $recipe->delete();
-
-        return response()->json([
-            'message' => 'レシピが削除されました'
-        ]);
     }
 
     public function adminDestroy($id)
@@ -470,13 +503,14 @@ class RecipeController extends Controller
                 $recipe->likes()->delete();
             }
 
-            if ($recipe->image_url) {
-                $this->deleteOldImage($recipe->image_url);
-            }
-
             if ($recipe->trashed()) {
+                // 既に論理削除済み → 完全削除（画像も削除）
+                if ($recipe->image_url) {
+                    $this->deleteOldImage($recipe->image_url);
+                }
                 $recipe->forceDelete();
             } else {
+                // 初回削除 → 論理削除のみ（画像は残す）
                 $recipe->delete();
             }
 
