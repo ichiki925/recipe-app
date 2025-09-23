@@ -30,7 +30,7 @@ class CommentController extends Controller
         try {
             $query = RecipeComment::with(['user:id,name,username,email', 'recipe:id,title']);
 
-            // 各種フィルター（省略せず残す）
+            // 各種フィルター
             if ($request->has('keyword') && !empty($request->keyword)) {
                 $keyword = $request->keyword;
                 $query->where(function($q) use ($keyword) {
@@ -73,7 +73,6 @@ class CommentController extends Controller
             $perPage = min(max((int)$request->get('per_page', 10), 5), 100);
             $comments = $query->paginate($perPage);
 
-            // Resourceで返却
             return AdminCommentResource::collection($comments);
 
         } catch (\Exception $e) {

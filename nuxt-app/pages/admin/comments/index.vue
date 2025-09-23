@@ -125,7 +125,7 @@ const loadComments = async () => {
     totalPages.value = response.meta?.last_page || 1
     currentPage.value = response.meta?.current_page || 1
   } catch (apiError) {
-    console.error('❌ API接続失敗:', apiError)
+    console.error('API接続失敗:', apiError)
     comments.value = []
     totalPages.value = 1
     currentPage.value = 1
@@ -190,7 +190,7 @@ const deleteComment = async (id) => {
       await loadComments()
     }
   } catch (error) {
-    console.error('❌ 削除エラー:', error)
+    console.error('削除エラー:', error)
     alert('削除に失敗しました')
   }
 }

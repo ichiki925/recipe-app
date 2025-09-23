@@ -62,7 +62,7 @@ export const useAuth = () => {
                     email: userData.email,
                     ...(userData.admin_code ? { admin_code: userData.admin_code } : {})
                 },
-                credentials: 'omit',   // ← 追加
+                credentials: 'omit',
                 redirect: 'error'
             })
 
@@ -92,13 +92,12 @@ export const useAuth = () => {
                         'Content-Type': 'application/json'
                     },
                     credentials: 'omit',   // Cookie送らない（CORSでBearer運用）
-                    redirect: 'error'      // 302を即検知
+                    redirect: 'error'
                 })
                 const userData = pickUser(response)
                 if (userData) return userData
                 throw new Error('Invalid auth response')
             } catch (e) {
-                // 最後まで失敗したら投げる
                 if (endpoint === endpoints[endpoints.length - 1]) throw e
             }
         }
@@ -129,7 +128,7 @@ export const useAuth = () => {
             user.value = await authenticateUser(idToken)
             return user.value
         } catch (error) {
-            console.error('❌ ログインエラー:', error)
+            console.error('ログインエラー:', error)
             throw error
         } finally {
             loading.value = false
@@ -160,7 +159,7 @@ export const useAuth = () => {
                         user.value = null
                     }
                 } catch (error) {
-                    console.error('❌ 認証初期化エラー:', error)
+                    console.error('認証初期化エラー:', error)
                     user.value = null
                 } finally {
                     loading.value = false

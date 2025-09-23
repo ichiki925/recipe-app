@@ -31,6 +31,7 @@
               :alt="recipe.title"
               @error="handleImageError"
               loading="lazy"
+              style="min-height: 200px; object-fit: cover; background-color: #f5f5f5; transition: opacity 0.3s ease;"
             />
           </div>
 
@@ -82,7 +83,7 @@ definePageMeta({
   layout: 'admin',
   ssr: false
 })
-import { ref, onMounted, watch, computed } from 'vue'
+import { ref, onMounted, watch, computed, nextTick  } from 'vue'
 import { useRoute, useRouter, useHead } from '#app'
 
 const { getAuth } = useApi()
@@ -202,6 +203,16 @@ const updateUrl = () => {
   }
 }
 
+// 画像のプリロード
+const preloadFirebaseImages = () => {
+  recipes.value.forEach(recipe => {
+    if (recipe.image_url && recipe.image_url.includes('firebase')) {
+      const img = new Image()
+      img.src = recipe.image_url
+    }
+  })
+}
+
 const fetchRecipes = async () => {
   loading.value = true
   error.value   = ''
@@ -226,6 +237,11 @@ const fetchRecipes = async () => {
   } finally {
     loading.value = false
   }
+
+  nextTick(() => {
+    preloadFirebaseImages()
+  })
+
 }
 
 watch(() => route.query, (newQuery) => {

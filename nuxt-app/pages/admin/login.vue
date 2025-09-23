@@ -45,7 +45,7 @@ definePageMeta({
   layout: false
 })
 
-const { login, logout, initAuth, isAdmin, loading } = useAuth()
+const { login, logout, loading } = useAuth()
 
 const form = ref({
   email: '',
@@ -59,14 +59,6 @@ const errors = ref({
 })
 const localLoading = ref(false)
 
-onMounted(async () => {
-  // 既にFirebaseでログイン済み&adminならログイン画面を飛ばす
-  // await initAuth()
-  // if (isAdmin.value) {
-  //   await navigateTo('/admin/dashboard')
-  // }
-})
-
 // 「ログイン」ボタンを押した時の処理
 const handleLogin = async () => {
   // いったんエラーをクリア
@@ -79,7 +71,7 @@ const handleLogin = async () => {
 
   localLoading.value = true
   try {
-    // 実際のログイン処理（成功すると「ユーザー情報」が返ってくる）
+    // 実際のログイン処理
     const userData = await login(form.value.email, form.value.password)
 
     // 管理者ならダッシュボードへ遷移
@@ -88,12 +80,11 @@ const handleLogin = async () => {
       return
     }
 
-    // 管理者じゃない場合はサインアウトしてメッセージ表示
+    // 管理者じゃない場合
     await logout()
     errors.value.general = '管理者権限がありません'
 
   } catch (e) {
-    // よくあるエラーを日本語で表示（Firebase / Laravel 両方に対応）
     const firebaseMsg = {
       'auth/user-not-found': 'ユーザーが見つかりません',
       'auth/wrong-password': 'パスワードが正しくありません',
@@ -116,70 +107,6 @@ const handleLogin = async () => {
     localLoading.value = false
   }
 }
-
-// const handleLogin = async () => {
-//   errors.value = { email: '', password: '', general: '' }
-//   localLoading.value = true
-
-//   if (!form.value.email) {
-//     errors.value.email = 'メールアドレスを入力してください'
-//   }
-//   if (!form.value.password) {
-//     errors.value.password = 'パスワードを入力してください'
-//   }
-
-//   if (Object.keys(errors.value).length > 0) {
-//     localLoading.value = false
-//     return
-//   }
-
-//   try {
-//     const userData = await login(form.value.email, form.value.password)
-
-//     if (userData && userData.role === 'admin') {
-//       await navigateTo('/admin/dashboard')
-//     } else {
-//       const { logout } = useAuth()
-//       await logout()
-//       errors.value.general = '管理者権限がありません'
-//     }
-
-//   } catch (error) {
-//     console.error('❌ ログインエラー:', error)
-
-//     let errorMessage = 'ログインに失敗しました'
-
-//     if (error.code) {
-//       switch (error.code) {
-//         case 'auth/user-not-found':
-//           errorMessage = 'ユーザーが見つかりません'
-//           break
-//         case 'auth/wrong-password':
-//           errorMessage = 'パスワードが正しくありません'
-//           break
-//         case 'auth/invalid-email':
-//           errorMessage = 'メールアドレスの形式が正しくありません'
-//           break
-//         case 'auth/user-disabled':
-//           errorMessage = 'このアカウントは無効になっています'
-//           break
-//         case 'auth/too-many-requests':
-//           errorMessage = 'ログイン試行回数が多すぎます。しばらく待ってからお試しください'
-//           break
-//         case 'auth/network-request-failed':
-//           errorMessage = 'ネットワークエラーが発生しました'
-//           break
-//       }
-//     }
-//     else if (error.data) {
-//       errorMessage = error.data.error || error.data.message || 'サーバーエラーが発生しました'
-//     }
-
-//     errors.value.general = errorMessage
-//   } finally {
-//     localLoading.value = false
-//   }
-// }
 
 onUnmounted(() => {
   localLoading.value = false

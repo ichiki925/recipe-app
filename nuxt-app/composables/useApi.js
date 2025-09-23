@@ -43,9 +43,9 @@ export const useApi = () => {
             method,
             headers: { ...h, ...(headers || {}) },
             body: payload,
-            mode: 'cors',          // ← 追加
-            credentials: 'omit',   // ← ここを same-origin から変更
-            redirect: 'error',     // ← リダイレクト検出（デバッグしやすい）
+            mode: 'cors',
+            credentials: 'omit',
+            redirect: 'error',
         })
 
         if (!res.ok) {

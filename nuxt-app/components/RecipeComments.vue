@@ -23,7 +23,6 @@
             </li>
         </ul>
 
-        <!-- もっと見る/折りたたみボタン -->
         <div v-if="hasMoreComments" class="comment-toggle-section">
             <button
                 v-if="!showAllComments"
@@ -41,7 +40,6 @@
             </button>
         </div>
 
-        <!-- コメント投稿フォーム (管理者以外の場合) -->
         <div v-if="!isAdmin" class="comment-wrapper">
             <textarea
                 v-model="newComment"
@@ -61,7 +59,6 @@
                 </span>
             </div>
 
-            <!-- エラーメッセージ -->
             <div v-if="commentError" class="error-message">
                 {{ commentError }}
             </div>
@@ -79,7 +76,6 @@
             </button>
         </div>
 
-        <!-- 管理者メモ -->
         <div v-else class="admin-note">
             <i class="fas fa-info-circle"></i>
             管理者はコメント表示のみです

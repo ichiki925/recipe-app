@@ -50,7 +50,7 @@ const handleLogout = async () => {
     await logout()
     favoriteStore.value.clear()
   } catch (error) {
-    console.error('❌ Layout: ログアウト失敗:', error)
+    console.error('Layout: ログアウト失敗:', error)
   }
 }
 </script>
