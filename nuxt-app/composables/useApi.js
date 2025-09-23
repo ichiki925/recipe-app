@@ -3,26 +3,51 @@ export const useApi = () => {
     const { $auth } = useNuxtApp()
 
     const base = apiBaseUrl.replace(/\/+$/, '')
-    const buildUrl = (p) => `${base}/${String(p).replace(/^\/+/, '')}`
+    const buildUrl = (p) => {
+        let path = String(p || '').replace(/^\/+/, '')
+        // 先頭が api/ でなければ自動で付与（/api/api を防ぐため base には /api を入れない）
+        if (!/^api(\/|$)/i.test(path)) path = `api/${path}`
+        return `${base}/${path}`
+    }
+
 
     const buildHeaders = async (needAuth, isForm) => {
         const h = { Accept: 'application/json' }
         if (!isForm) h['Content-Type'] = 'application/json'
         if (needAuth) {
             if (!process.client) throw Object.assign(new Error('AUTH_ON_SERVER'), { status: 401 })
-            const token = await $auth.currentUser?.getIdToken()
-            if (!token)   throw Object.assign(new Error('UNAUTHENTICATED'), { status: 401 })
+            // getIdToken() は失敗時があるので一応 try/catch（任意）
+            let token = null
+            try { token = await $auth.currentUser?.getIdToken() } catch {}
+            if (!token) throw Object.assign(new Error('UNAUTHENTICATED'), { status: 401 })
             h['Authorization'] = `Bearer ${token}`
         }
         return h
     }
 
-    const request = async (path, { method='GET', body, auth=false, headers } = {}) => {
+    const request = async (path, { method='GET', body, auth=false, headers, query } = {}) => {
         const isForm = body instanceof FormData
         const h = await buildHeaders(auth, isForm)
         const payload = body && !isForm && typeof body !== 'string' ? JSON.stringify(body) : body
 
-        const res = await fetch(buildUrl(path), { method, headers: { ...h, ...(headers||{}) }, body: payload, credentials: 'same-origin' })
+        let url = buildUrl(path)
+        if (query && Object.keys(query).length) {
+            const qs = new URLSearchParams()
+            for (const [k, v] of Object.entries(query)) {
+                if (v !== undefined && v !== null && v !== '') qs.append(k, String(v))
+            }
+            const qstr = qs.toString()
+            if (qstr) url += (url.includes('?') ? '&' : '?') + qstr
+        }
+        const res = await fetch(url, {
+            method,
+            headers: { ...h, ...(headers || {}) },
+            body: payload,
+            mode: 'cors',          // ← 追加
+            credentials: 'omit',   // ← ここを same-origin から変更
+            redirect: 'error',     // ← リダイレクト検出（デバッグしやすい）
+        })
+
         if (!res.ok) {
             const text = await res.text()
             const err = Object.assign(new Error(`HTTP ${res.status}`), { status: res.status })

@@ -10,11 +10,11 @@ import { computed, readonly } from 'vue'
 
 export const useAuth = () => {
     const { $auth } = useNuxtApp()
-    // const config = useRuntimeConfig()
+    const config = useRuntimeConfig()
     const user = useState('auth.user', () => null)
     const loading = useState('auth.loading', () => false)
 
-    const API_BASE_URL = 'http://localhost'
+    const API_BASE_URL = config.public.apiBaseUrl
 
     const getCurrentUser = () => $auth.currentUser
     const waitForAuth = () =>
@@ -42,7 +42,6 @@ export const useAuth = () => {
         }
     }
 
-
     const registerUser = async (userData, endpoint) => {
         loading.value = true
         try {
@@ -59,11 +58,12 @@ export const useAuth = () => {
                 baseURL: API_BASE_URL,
                 body: {
                     firebase_uid: firebaseUser.uid,
-                    // 必要なフィールドだけ明示的に
                     name: userData.name,
                     email: userData.email,
                     ...(userData.admin_code ? { admin_code: userData.admin_code } : {})
-                }
+                },
+                credentials: 'omit',   // ← 追加
+                redirect: 'error'
             })
 
             if (!response?.success) {
@@ -79,24 +79,29 @@ export const useAuth = () => {
     }
 
     const authenticateUser = async (idToken) => {
-        return { role: 'admin', email: 'test@admin.com', name: 'Test Admin' }
+        const endpoints = ['api/admin/check', 'api/auth/check']
+        const pickUser = (r) => r?.admin || r?.user || r?.data?.admin || r?.data?.user || r?.data || null
 
-        // const endpoints = ['api/admin/check', 'api/auth/check']
-        // const pickUser = (r) =>
-        //     r?.admin || r?.user || r?.data?.admin || r?.data?.user || r?.data || null
-        // for (const p of endpoints) {
-        //     try {
-        //         const res = await $fetch(p, {
-        //             baseURL: API_BASE_URL,
-        //             headers: { Authorization: `Bearer ${idToken}` }
-        //         })
-        //         const u = pickUser(res)
-        //         if (u) return u
-        //         throw new Error('Invalid auth response')
-        //     } catch (e) {
-        //         if (p === endpoints[endpoints.length - 1]) throw e
-        //     }
-        // }
+        for (const endpoint of endpoints) {
+            try {
+                const response = await $fetch(endpoint, {
+                    baseURL: API_BASE_URL,
+                    headers: {
+                        'Authorization': `Bearer ${idToken}`,
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json'
+                    },
+                    credentials: 'omit',   // Cookie送らない（CORSでBearer運用）
+                    redirect: 'error'      // 302を即検知
+                })
+                const userData = pickUser(response)
+                if (userData) return userData
+                throw new Error('Invalid auth response')
+            } catch (e) {
+                // 最後まで失敗したら投げる
+                if (endpoint === endpoints[endpoints.length - 1]) throw e
+            }
+        }
     }
 
     const register = (userData) =>
@@ -123,6 +128,9 @@ export const useAuth = () => {
             const idToken = await firebaseUser.getIdToken()
             user.value = await authenticateUser(idToken)
             return user.value
+        } catch (error) {
+            console.error('❌ ログインエラー:', error)
+            throw error
         } finally {
             loading.value = false
         }
@@ -140,31 +148,27 @@ export const useAuth = () => {
         }
     }
 
-
     const initAuth = () =>
         new Promise((resolve) => {
-            loading.value = false
-            resolve()
-
-            // const unsubscribe = onAuthStateChanged($auth, async (firebaseUser) => {
-            //     try {
-            //         if (firebaseUser) {
-            //             const idToken = await firebaseUser.getIdToken()
-            //             user.value = await authenticateUser(idToken)
-            //         } else {
-            //             user.value = null
-            //         }
-            //     } catch (e) {
-            //         console.error('ユーザー情報取得エラー:', e)
-            //         user.value = null
-            //     } finally {
-            //         loading.value = false
-            //         resolve()
-            //         unsubscribe()
-            //     }
-            // })
+            const unsubscribe = onAuthStateChanged($auth, async (firebaseUser) => {
+                try {
+                    loading.value = true
+                    if (firebaseUser) {
+                        const idToken = await firebaseUser.getIdToken()
+                        user.value = await authenticateUser(idToken)
+                    } else {
+                        user.value = null
+                    }
+                } catch (error) {
+                    console.error('❌ 認証初期化エラー:', error)
+                    user.value = null
+                } finally {
+                    loading.value = false
+                    resolve()
+                    unsubscribe()
+                }
+            })
         })
-
 
     const isAdmin = computed(() => user.value?.role === 'admin')
     const isLoggedIn = computed(() => !!user.value)

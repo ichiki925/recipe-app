@@ -85,7 +85,8 @@ definePageMeta({
 import { ref, onMounted, watch, computed } from 'vue'
 import { useRoute, useRouter, useHead } from '#app'
 
-const { get } = useApi()
+const { getAuth } = useApi()
+const { waitForAuth, isAdmin } = useAuth()
 
 useHead({
   link: [
@@ -153,12 +154,14 @@ const checkUpdateFlag = () => {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
+  await waitForAuth()
   searchKeyword.value = route.query.keyword || ''
   currentPage.value = parseInt(route.query.page) || 1
   checkDeleteFlag()
   checkUpdateFlag()
-  fetchRecipes()
+  if (!isAdmin.value) return navigateTo('/admin/login')
+  await fetchRecipes()
 })
 
 if (typeof window !== 'undefined') {
@@ -175,20 +178,17 @@ const onSearch = (keyword) => {
   searchKeyword.value = k
   currentPage.value = 1
   updateUrl()
-  fetchRecipes()
 }
 
 const handleClearSearch = () => {
   searchKeyword.value = ''
   currentPage.value = 1
   updateUrl()
-  fetchRecipes()
 }
 
 const goToPage = (page) => {
   currentPage.value = page
   updateUrl()
-  fetchRecipes()
 }
 
 const updateUrl = () => {
@@ -206,7 +206,7 @@ const fetchRecipes = async () => {
   loading.value = true
   error.value   = ''
   try {
-    const data = await get('/admin/recipes', {
+    const data = await getAuth('admin/recipes', {
       query: {
         keyword: searchKeyword.value || '',
         page: currentPage.value,

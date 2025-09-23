@@ -204,10 +204,10 @@ const formatDate = (dateString) => {
 onMounted(async () => {
   loadEditingRecipes()
   
-  // await initAuth()
-  // if (!isLoggedIn.value || !isAdmin.value) {
-  //   return navigateTo('/admin/login')
-  // }
+  await initAuth()
+  if (!isLoggedIn.value || !isAdmin.value) {
+    return navigateTo('/admin/login')
+  }
 
   try {
     const response = await getAuth('/admin/dashboard')

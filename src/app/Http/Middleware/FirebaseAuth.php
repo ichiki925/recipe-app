@@ -70,45 +70,37 @@ class FirebaseAuth
         }
 
         if (config('app.env') === 'local' || config('app.debug') || is_null($this->auth)) {
-            try {
-                $tokenParts = explode('.', $idToken);
-                if (count($tokenParts) !== 3) {
-                    throw new \Exception('Invalid token format');
-                }
+            // 開発環境では簡単な認証チェック
+            Log::info('🔧 Development mode: Firebase auth bypassed', [
+                'token_length' => strlen($idToken)
+            ]);
 
-                $payload = json_decode(base64_decode($tokenParts[1]), true);
-                if (!$payload || !isset($payload['sub'])) {
-                    throw new \Exception('Invalid token payload');
-                }
+            // デバッグモードでは現在ログインしているFirebaseユーザーのUIDを使用
+            // 実際のFirebaseコンソールで確認したUIDを直接使用
+            $firebaseUid = 'JrFVRRm0bvM3lhi3Ik3V08m04fD3'; // あなたのFirebase UID
 
-                $firebaseUid = $payload['sub'];
-                $email = $payload['email'] ?? null;
+            $user = User::where('firebase_uid', $firebaseUid)->first();
 
-                $user = User::where('firebase_uid', $firebaseUid)->first();
-
-                if (!$user) {
-                    return response()->json([
-                        'success' => false,
-                        'error' => 'User not found'
-                    ], 404);
-                }
-
-                $request->setUserResolver(function () use ($user) {
-                    return $user;
-                });
-
-                LaravelAuth::setUser($user);
-                return $next($request);
-
-            } catch (\Exception $e) {
-                Log::error('❌ Development authentication failed', [
-                    'error' => $e->getMessage()
-                ]);
+            if (!$user) {
+                Log::error('❌ User not found for UID: ' . $firebaseUid);
                 return response()->json([
                     'success' => false,
-                    'error' => 'Development authentication failed: ' . $e->getMessage()
-                ], 401);
+                    'error' => 'User not found'
+                ], 404);
             }
+
+            Log::info('✅ Development auth success', [
+                'user_id' => $user->id,
+                'firebase_uid' => $user->firebase_uid,
+                'email' => $user->email
+            ]);
+
+            $request->setUserResolver(function () use ($user) {
+                return $user;
+            });
+
+            LaravelAuth::setUser($user);
+            return $next($request);
         }
 
         // Firebase 認証（本番環境用）
