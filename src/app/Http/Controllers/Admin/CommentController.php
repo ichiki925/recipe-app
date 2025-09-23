@@ -118,7 +118,9 @@ class CommentController extends Controller
      */
     public function destroy(RecipeComment $comment)
     {
+        \Log::info('Delete request received for comment ID: ' . $comment->id);
         $user = auth()->user();
+        \Log::info('Authenticated user: ' . ($user ? $user->id : 'null'));
 
         if (!$user || !$user->isAdmin()) {
             return response()->json([
@@ -133,14 +135,14 @@ class CommentController extends Controller
                 'comment_id' => $comment->id,
                 'user_name' => $comment->user ? $comment->user->name : 'unknown',
                 'recipe_title' => $comment->recipe ? $comment->recipe->title : 'unknown',
-                'content_preview' => substr($comment->content, 0, 50),
+                'content_preview' => \Str::limit($comment->content, 50),
                 'deleted_by' => $user->name,
                 'deleted_at' => now(),
             ];
 
             \Log::info('Comment deleted by admin: ', $deletedCommentInfo);
 
-            $comment->delete();
+            $comment->forceDelete();
 
             return response()->json([
                 'message' => 'コメントを削除しました',

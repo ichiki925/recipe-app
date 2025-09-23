@@ -84,9 +84,11 @@ import { ref, onMounted } from 'vue'
 import { useAuth } from '~/composables/useAuth'
 import { useRoute, useRouter } from '#app'
 
+const { initAuth, isAdmin } = useAuth()
+const { getAuth, delAuth } = useApi()
+
 const comments = ref([])
 const loading = ref(false)
-const apiStatus = ref('未実行')
 const currentPage = ref(1)
 const totalPages = ref(1)
 const perPage = 10
@@ -98,43 +100,32 @@ const searchFilters = ref({
 const route = useRoute()
 const router = useRouter()
 
-const { getIdToken } = useAuth()
-
 onMounted(async () => {
+  await initAuth()
+  if (!isAdmin.value) {
+    return navigateTo('/admin/login')
+  }
+
   currentPage.value = parseInt(route.query.page) || 1
   searchFilters.value.keyword = route.query.keyword || ''
-
   await loadComments()
 })
 
 const loadComments = async () => {
   loading.value = true
-  apiStatus.value = '実行中...'
-
   try {
-    const token = await getIdToken()
-    const config = useRuntimeConfig()
-
-    const response = await $fetch('/api/admin/comments', {
-      baseURL: config.public.apiBaseUrl,
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
+    const response = await getAuth('admin/comments', {
       query: {
         page: currentPage.value,
         per_page: perPage,
         keyword: searchFilters.value.keyword
       }
     })
-
     comments.value = response.data
     totalPages.value = response.meta?.last_page || 1
     currentPage.value = response.meta?.current_page || 1
-    apiStatus.value = `成功 (${comments.value.length}件)`
   } catch (apiError) {
     console.error('❌ API接続失敗:', apiError)
-    apiStatus.value = `エラー: ${apiError.message}`
     comments.value = []
     totalPages.value = 1
     currentPage.value = 1
@@ -189,19 +180,8 @@ const formatDate = (datetime) => {
 
 const deleteComment = async (id) => {
   if (!confirm('本当に削除しますか？')) return
-
   try {
-    const token = await getIdToken()
-    const config = useRuntimeConfig()
-
-    await $fetch(`/api/admin/comments/${id}`, {
-      baseURL: config.public.apiBaseUrl,
-      method: 'DELETE',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      }
-    })
+    await delAuth(`admin/comments/${id}`)
     await loadComments()
 
     if (comments.value.length === 0 && currentPage.value > 1) {
@@ -209,7 +189,6 @@ const deleteComment = async (id) => {
       updateUrl()
       await loadComments()
     }
-
   } catch (error) {
     console.error('❌ 削除エラー:', error)
     alert('削除に失敗しました')

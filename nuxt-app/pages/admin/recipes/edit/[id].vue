@@ -113,7 +113,8 @@ import { ref, reactive, watch, onMounted, nextTick  } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage'
 
-const { get, put } = useApi()
+const { getAuth, putAuth } = useApi()
+const { initAuth, isAdmin } = useAuth()
 
 const router = useRouter()
 const route = useRoute()
@@ -175,7 +176,11 @@ const deleteTempImage = async (tempPath) => {
         await deleteObject(imageRef)
         console.log('一時保存画像を削除:', tempPath)
     } catch (error) {
-        console.error('一時保存画像削除エラー:', error)
+        if (error.code === 'storage/object-not-found') {
+            console.log('一時保存画像は既に削除済み:', tempPath)
+        } else {
+            console.error('一時保存画像削除エラー:', error)
+        }
     }
 }
 
@@ -213,7 +218,7 @@ const getImageUrl = (imageUrl) => {
 const fetchOriginalRecipe = async () => {
     try {
         const recipeId = route.params.id
-        const data = await get(`/admin/recipes/${recipeId}`)
+        const data = await getAuth(`admin/recipes/${recipeId}`)
 
         const recipe = data.data
         originalRecipe.value = recipe
@@ -460,6 +465,19 @@ const submitRecipe = async () => {
             errors.value.push('作り方は必須です')
         }
 
+        const currentEditingId = currentEditingRecipe.value?.id
+        if (currentEditingId) {
+        const existingDraft = savedRecipes.value.find(r => r.id === currentEditingId)
+        if (existingDraft?.tempImagePath && 
+            existingDraft.tempImagePath !== selectedFile.value?.tempImagePath) {
+            try {
+            await deleteTempImage(existingDraft.tempImagePath)
+            } catch (error) {
+            console.error('古い一時画像削除エラー（無視）:', error)
+            }
+        }
+        }
+
         const ingredientsText = formatIngredients()
         if (!ingredientsText) {
             errors.value.push('材料は必須です')
@@ -487,7 +505,7 @@ const submitRecipe = async () => {
         }
 
         const recipeId = route.params.id
-        const result = await put(`/admin/recipes/${recipeId}`, formData)
+        const result = await putAuth(`admin/recipes/${recipeId}`, formData)
 
         successMessage.value = 'レシピが更新されました'
 
@@ -500,21 +518,12 @@ const submitRecipe = async () => {
             }
         }
 
-        // 投稿成功時に下書きと一時画像を削除
-        const currentEditingId = currentEditingRecipe.value?.id
+        // 下書きを削除
         if (currentEditingId) {
             try {
                 const saved = localStorage.getItem('savedRecipes')
                 if (saved) {
                     let savedRecipes = JSON.parse(saved)
-                    const draftToDelete = savedRecipes.find(r => r.id === currentEditingId)
-
-                    // 下書きの一時保存画像があれば削除（上記とは別の画像の可能性）
-                    if (draftToDelete?.tempImagePath &&
-                        draftToDelete.tempImagePath !== selectedFile.value?.tempImagePath) {
-                        await deleteTempImage(draftToDelete.tempImagePath)
-                    }
-
                     savedRecipes = savedRecipes.filter(r => r.id !== currentEditingId)
                     localStorage.setItem('savedRecipes', JSON.stringify(savedRecipes))
                 }
@@ -538,6 +547,10 @@ const submitRecipe = async () => {
 }
 
 onMounted(async () => {
+    await initAuth()
+    if (!isAdmin.value) {
+        return navigateTo('/admin/login')
+    }
     await fetchOriginalRecipe()
 
     // URLパラメータから下書きIDを取得

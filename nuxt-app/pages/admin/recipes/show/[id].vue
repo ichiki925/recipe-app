@@ -113,7 +113,8 @@ import RecipeLikeButton from '~/components/RecipeLikeButton.vue'
 import RecipeIngredients from '~/components/RecipeIngredients.vue'
 import RecipeInstructions from '~/components/RecipeInstructions.vue'
 
-const { get, delete: del } = useApi()
+const { getAuth, delAuth } = useApi()
+const { initAuth, isAdmin } = useAuth()
 
 
 useHead({
@@ -175,7 +176,7 @@ const fetchRecipe = async () => {
     recipe.value = null
 
     try {
-        const data = await get(`/admin/recipes/${recipeId}`)
+        const data = await getAuth(`admin/recipes/${recipeId}`)
 
         if (data.status === 'success' && data.data) {
             recipe.value = data.data
@@ -218,11 +219,8 @@ const deleteRecipe = async () => {
     deleting.value = true
 
     try {
-        await del(`/admin/recipes/${recipeId}`)
-
+        await delAuth(`admin/recipes/${recipeId}`)
         alert('レシピが削除されました')
-        localStorage.setItem('recipeDeleted', 'true')
-        localStorage.setItem('deletedRecipeId', recipeId)
         await router.push('/admin/recipes')
 
     } catch (err) {
@@ -247,8 +245,12 @@ const deleteRecipe = async () => {
     }
 }
 
-onMounted(() => {
-    fetchRecipe()
+onMounted(async () => {
+    await initAuth()
+    if (!isAdmin.value) {
+        return navigateTo('/admin/login')
+    }
+    await fetchRecipe()
 })
 </script>
 

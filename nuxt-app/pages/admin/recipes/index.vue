@@ -86,7 +86,7 @@ import { ref, onMounted, watch, computed } from 'vue'
 import { useRoute, useRouter, useHead } from '#app'
 
 const { getAuth } = useApi()
-const { waitForAuth, isAdmin } = useAuth()
+const { initAuth, isAdmin } = useAuth()
 
 useHead({
   link: [
@@ -155,7 +155,7 @@ const checkUpdateFlag = () => {
 }
 
 onMounted(async () => {
-  await waitForAuth()
+  await initAuth()
   searchKeyword.value = route.query.keyword || ''
   currentPage.value = parseInt(route.query.page) || 1
   checkDeleteFlag()

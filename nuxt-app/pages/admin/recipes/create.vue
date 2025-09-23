@@ -114,7 +114,9 @@ import { useRouter, useRoute  } from 'vue-router'
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage'
 
 const router = useRouter()
-const { post } = useApi()
+const route = useRoute()
+const { postAuth } = useApi()
+const { initAuth, isAdmin } = useAuth()
 
 const form = reactive({
   title: '',
@@ -165,8 +167,13 @@ const deleteTempImage = async (tempPath) => {
     const storage = getStorage()
     const imageRef = storageRef(storage, tempPath)
     await deleteObject(imageRef)
+    console.log('一時保存画像を削除:', tempPath)
   } catch (error) {
-    console.error('一時保存画像削除エラー:', error)
+    if (error.code === 'storage/object-not-found') {
+      console.log('一時保存画像は既に削除済み:', tempPath)
+    } else {
+      console.error('一時保存画像削除エラー:', error)
+    }
   }
 }
 
@@ -360,6 +367,19 @@ const submitRecipe = async () => {
       errors.value.push('作り方は必須です')
     }
 
+    const currentEditingId = currentEditingRecipe.value?.id
+    if (currentEditingId) {
+      const existingDraft = savedRecipes.value.find(r => r.id === currentEditingId)
+      if (existingDraft?.tempImagePath &&
+          existingDraft.tempImagePath !== selectedFile.value?.tempImagePath) {
+        try {
+          await deleteTempImage(existingDraft.tempImagePath)
+        } catch (error) {
+          console.error('古い一時画像削除エラー（無視）:', error)
+        }
+      }
+    }
+
     const ingredientsText = formatIngredients()
     if (!ingredientsText) {
       errors.value.push('材料は必須です')
@@ -385,21 +405,9 @@ const submitRecipe = async () => {
     }
 
     // useApiのpostメソッドを使用（FormDataを自動検出）
-    const result = await post('/admin/recipes', formData)
+    const result = await postAuth('admin/recipes', formData)
 
     successMessage.value = 'レシピが投稿されました'
-
-    // 投稿成功時の下書き削除処理
-    const currentEditingId = currentEditingRecipe.value?.id
-
-    // 一時保存画像があれば削除
-    if (selectedFile.value?.isTemp && selectedFile.value?.tempImagePath) {
-      try {
-        await deleteTempImage(selectedFile.value.tempImagePath)
-      } catch (error) {
-        console.error('一時保存画像削除エラー:', error)
-      }
-    }
 
     // フォームリセット
     Object.assign(form, {
@@ -463,8 +471,6 @@ const formatIngredients = () => {
     .join('\n')
 }
 
-
-
 let autoSaveTimer = null
 const startAutoSave = () => {
   if (autoSaveTimer) {
@@ -487,11 +493,14 @@ watch(form, () => {
 }, { deep: true })
 
 onMounted(async () => {
+  await initAuth()
+    if (!isAdmin.value) {
+        return navigateTo('/admin/login')
+    }
+
   loadSavedRecipes()
 
   try {
-    // URLパラメータから下書きIDを取得
-    const route = useRoute()
     const draftId = route.query?.draft
     console.log('Draft ID from URL:', draftId)
 

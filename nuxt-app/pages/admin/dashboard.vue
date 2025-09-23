@@ -43,7 +43,7 @@
               編集を続ける
             </NuxtLink>
             <button
-              @click="deleteEditingRecipe(recipe.id)"
+              @click="deleteEditingRecipe(recipe)"
               class="delete-link"
             >
               下書きを削除
@@ -92,6 +92,8 @@ definePageMeta({
   ssr: false
 })
 
+import { getStorage, ref as storageRef, deleteObject } from 'firebase/storage'
+
 const { isLoggedIn, isAdmin, initAuth } = useAuth()
 const { getAuth, postAuth, delAuth } = useApi()
 
@@ -121,14 +123,32 @@ const loadEditingRecipes = () => {
   }
 }
 
-const deleteEditingRecipe = (id) => {
-  if (confirm('この下書きを削除しますか？')) {
-    try {
-      editingRecipes.value = editingRecipes.value.filter(r => r.id !== id)
-      localStorage.setItem('savedRecipes', JSON.stringify(editingRecipes.value))
-    } catch (error) {
-      console.error('下書き削除エラー:', error)
+const deleteEditingRecipe = async (editingRecipe) => {
+  if (!confirm(`「${editingRecipe.title}」の下書きを削除しますか？`)) {
+    return
+  }
+
+  isProcessing.value = true
+
+  try {
+    if (editingRecipe.tempImagePath) {
+      try {
+        await deleteTempImage(editingRecipe.tempImagePath)
+      } catch (error) {
+        console.error('一時画像削除エラー（無視）:', error)
+      }
     }
+
+    editingRecipes.value = editingRecipes.value.filter(r => r.id !== editingRecipe.id)
+    localStorage.setItem('savedRecipes', JSON.stringify(editingRecipes.value))
+
+    alert('下書きを削除しました')
+
+  } catch (error) {
+    console.error('下書き削除エラー:', error)
+    alert('下書きの削除に失敗しました')
+  } finally {
+    isProcessing.value = false
   }
 }
 
@@ -161,6 +181,22 @@ const restoreRecipe = async (recipeId) => {
     isProcessing.value = false
   }
 }
+
+const deleteTempImage = async (tempPath) => {
+  try {
+    const storage = getStorage()
+    const imageRef = storageRef(storage, tempPath)
+    await deleteObject(imageRef)
+    console.log('一時保存画像を削除:', tempPath)
+  } catch (error) {
+    if (error.code === 'storage/object-not-found') {
+      console.log('一時保存画像は既に削除済み:', tempPath)
+    } else {
+      console.error('一時保存画像削除エラー:', error)
+    }
+  }
+}
+
 
 const permanentlyDeleteRecipe = async (recipeId) => {
   if (!confirm('このレシピを完全に削除しますか？\n※この操作は取り消せません')) {
@@ -203,7 +239,7 @@ const formatDate = (dateString) => {
 
 onMounted(async () => {
   loadEditingRecipes()
-  
+
   await initAuth()
   if (!isLoggedIn.value || !isAdmin.value) {
     return navigateTo('/admin/login')
