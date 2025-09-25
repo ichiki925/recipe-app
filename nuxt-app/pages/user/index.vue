@@ -101,11 +101,13 @@ useHead({
 })
 
 const { user, isLoggedIn, initAuth } = useAuth()
+console.log('useAuth result:', { user, isLoggedIn, initAuth })
+console.log('user value:', user?.value)
+const { getAuth, postAuth } = useApi()
 
 const searchKeyword = ref('')
 const currentPage = ref(1)
 const totalPages = ref(1)
-
 const recipes = ref([])
 const isLoading = ref(false)
 
@@ -137,32 +139,6 @@ const handleImageError = (event) => {
 
 // お気に入り状態管理用のグローバルストア
 const favoriteStore = useState('favorites', () => new Set())
-
-// コンポーネント初期化
-onMounted(async () => {
-
-  try {
-    await initAuth()
-
-    if (!isLoggedIn.value || !user.value) {
-      await navigateTo('/auth/login')
-      return
-    }
-
-    favoriteStore.value.clear()
-
-    // URLクエリの設定
-    searchKeyword.value = route.query.keyword || ''
-    currentPage.value = parseInt(route.query.page) || 1
-
-    // レシピ取得
-    await fetchRecipes()
-
-  } catch (error) {
-    console.error('認証エラー:', error)
-    await navigateTo('/auth/login')
-  }
-})
 
 // 詳細ページへの遷移
 const goToRecipeDetail = (recipeId) => {
@@ -199,25 +175,7 @@ const updateUrl = () => {
 const fetchRecipes = async () => {
   isLoading.value = true
   try {
-    const config = useRuntimeConfig()
-    let headers = {}
-
-    if (user.value) {
-      const { $auth } = useNuxtApp()
-
-      try {
-        const token = await $auth.currentUser.getIdToken(true)
-        headers.Authorization = `Bearer ${token}`
-      } catch (tokenError) {
-        await navigateTo('/auth/login')
-        return
-      }
-    }
-
-
-    const response = await $fetch('/api/recipes/search', {
-      baseURL: config.public.apiBaseUrl,
-      headers,
+    const response = await getAuth('recipes/search', {
       query: {
         keyword: searchKeyword.value || '',
         page: currentPage.value,
@@ -257,7 +215,7 @@ const fetchRecipes = async () => {
     currentPage.value = Number(response.current_page ?? 1)
     totalPages.value = Number(response.last_page ?? 1)
 
-    } catch (e) {
+  } catch (e) {
     console.error('❌ レシピ取得エラー:', e)
 
     if (e.status === 401 || e.statusCode === 401) {
@@ -274,7 +232,8 @@ const toggleLike = async (recipe, event) => {
     event.stopPropagation()
   }
 
-  if (!user.value) {
+  const currentUser = user?.value || auth?.user?.value
+  if (!currentUser) {
     alert('ログインが必要です')
     return
   }
@@ -286,15 +245,7 @@ const toggleLike = async (recipe, event) => {
   recipe.likes = originalState ? recipe.likes - 1 : recipe.likes + 1
 
   try {
-    const { $auth } = useNuxtApp()
-    const token = await $auth.currentUser.getIdToken(true)
-    const config = useRuntimeConfig()
-
-    const response = await $fetch(`/api/recipes/${recipe.id}/toggle-like`, {
-      baseURL: config.public.apiBaseUrl,
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
-    })
+    const response = await postAuth(`recipes/${recipe.id}/toggle-like`)
 
     if (response && typeof response.is_liked !== 'undefined') {
       const newLikedState = !!response.is_liked
@@ -321,6 +272,23 @@ const toggleLike = async (recipe, event) => {
     alert('いいねの更新に失敗しました')
   }
 }
+
+onMounted(async () => {
+  await initAuth()
+
+  if (!isLoggedIn.value) {
+    return navigateTo('/auth/login')
+  }
+
+  favoriteStore.value.clear()
+
+  // URLクエリの設定
+  searchKeyword.value = route.query.keyword || ''
+  currentPage.value = parseInt(route.query.page) || 1
+
+  // レシピ取得
+  await fetchRecipes()
+})
 
 watch(() => route.query, (newQuery) => {
   const newKeyword = newQuery.keyword || ''

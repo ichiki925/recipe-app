@@ -114,7 +114,8 @@ useHead({
   ]
 })
 
-const { user, initAuth } = useAuth()
+const { user, isLoggedIn, initAuth } = useAuth()
+const { getAuth, postAuth } = useApi()
 
 const searchKeyword = ref('')
 const currentPage = ref(1)
@@ -135,16 +136,7 @@ const fetchFavoriteRecipes = async () => {
   try {
     isLoading.value = true
 
-    const config = useRuntimeConfig()
-    const { $auth } = useNuxtApp()
-    const token = await $auth.currentUser.getIdToken(true)
-
-    const response = await $fetch('/api/user/liked-recipes', {
-      baseURL: config.public.apiBaseUrl,
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
+    const response = await getAuth('user/liked-recipes', {
       query: {
         keyword: searchKeyword.value || '',
         page: currentPage.value,
@@ -229,18 +221,7 @@ const toggleLike = async (recipe) => {
 
     favoriteStore.value.delete(recipe.id)
 
-    const config = useRuntimeConfig()
-    const { $auth } = useNuxtApp()
-    const token = await $auth.currentUser.getIdToken()
-
-    const response = await $fetch(`/api/recipes/${recipe.id}/toggle-like`, {
-      baseURL: config.public.apiBaseUrl,
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      }
-    })
+    const response = await postAuth(`recipes/${recipe.id}/toggle-like`)
 
     await fetchFavoriteRecipes()
 
@@ -262,24 +243,16 @@ const toggleLike = async (recipe) => {
 }
 
 onMounted(async () => {
+  await initAuth()
 
-  try {
-    await initAuth()
-
-    if (!user.value) {
-      await navigateTo('/auth/login')
-      return
-    }
-
-    searchKeyword.value = route.query.keyword || ''
-    currentPage.value = parseInt(route.query.page) || 1
-
-    await fetchFavoriteRecipes()
-
-  } catch (error) {
-    console.error('❌ 認証処理エラー:', error)
-    await navigateTo('/auth/login')
+  if (!isLoggedIn.value) {
+    return navigateTo('/auth/login')
   }
+
+  searchKeyword.value = route.query.keyword || ''
+  currentPage.value = parseInt(route.query.page) || 1
+
+  await fetchFavoriteRecipes()
 })
 
 watch(() => route.query, (newQuery) => {

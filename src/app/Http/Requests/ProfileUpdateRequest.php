@@ -43,7 +43,8 @@ class ProfileUpdateRequest extends FormRequest
                         return;
                     }
 
-                    if (!preg_match('/^[\p{Hiragana}\p{Katakana}\p{Han}\p{L}\p{N}_\-\s・、。！？\(\)（）]+$/u', $value)) {
+                    // より柔軟な正規表現に修正（英数字、日本語、アンダースコア、ハイフンを許可）
+                    if (!preg_match('/^[a-zA-Z0-9\p{Hiragana}\p{Katakana}\p{Han}_\-\s・、。！？\(\)（）]+$/u', $value)) {
                         $fail('使用できない文字が含まれています');
                         return;
                     }

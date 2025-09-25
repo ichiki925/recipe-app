@@ -44,7 +44,6 @@
           type="text"
           name="name"
           v-model="user.name"
-
           :class="{ 'error': nameError }"
           @input="handleNameInput"
           :disabled="isSubmitting"
@@ -78,18 +77,15 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
-import { useHead, useRuntimeConfig } from '#app'
-import { onAuthStateChanged } from 'firebase/auth'
+import { ref, reactive, computed, onMounted, nextTick } from 'vue'
+import { useHead } from '#app'
 
 definePageMeta({
   ssr: false
 })
 
-
-const { getIdToken } = useAuth()
-const { $auth } = useNuxtApp()
-const config = useRuntimeConfig()
+const { isLoggedIn, initAuth } = useAuth()
+const { getAuth, postAuth } = useApi()
 
 const avatarUrl = computed(() => {
   if (!user.avatar) return null
@@ -110,21 +106,6 @@ const avatarUrl = computed(() => {
   const fileName = user.avatar.includes('/') ? user.avatar.split('/').pop() : user.avatar
   return `http://localhost/storage/avatars/${fileName}`
 })
-
-const tokenStatus = ref('未確認')
-
-const waitForAuth = () => {
-  return new Promise((resolve) => {
-    if ($auth.currentUser) {
-      resolve($auth.currentUser)
-    } else {
-      const unsubscribe = onAuthStateChanged($auth, (user) => {
-        unsubscribe()
-        resolve(user)
-      })
-    }
-  })
-}
 
 useHead({
   title: 'プロフィール編集',
@@ -269,15 +250,6 @@ const saveProfile = async () => {
   isLoading.value = true
 
   try {
-    const currentUser = await waitForAuth()
-    if (!currentUser) {
-      alert('認証エラーが発生しました。再度ログインしてください。')
-      await navigateTo('/auth/login')
-      return
-    }
-
-    const token = await getIdToken()
-
     const formData = new FormData()
 
     const trimmedName = user.name.trim()
@@ -299,16 +271,7 @@ const saveProfile = async () => {
 
     formData.append('_method', 'PUT')
 
-    const response = await $fetch('/api/user/profile', {
-      baseURL: config.public.apiBaseUrl,
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Accept': 'application/json',
-      },
-      body: formData,
-      credentials: 'omit',
-    })
+    const response = await postAuth('user/profile', formData)
 
     if (response.data) {
       user.name = response.data.name || user.name
@@ -329,12 +292,7 @@ const saveProfile = async () => {
     await navigateTo('/user')
 
   } catch (error) {
-    console.error('❌ 保存エラー詳細:', {
-      status: error.status,
-      statusText: error.statusText,
-      data: error.data,
-      message: error.message
-    })
+    console.error('❌ 保存エラー詳細:', error)
 
     if (error.status === 401) {
       console.error('❌ 認証エラー: トークンが無効または期限切れ')
@@ -368,38 +326,14 @@ const saveProfile = async () => {
 }
 
 onMounted(async () => {
+  await initAuth()
+
+  if (!isLoggedIn.value) {
+    return navigateTo('/auth/login')
+  }
+
   try {
-    const currentUser = await waitForAuth()
-
-    if (!currentUser) {
-      await navigateTo('/auth/login')
-      return
-    }
-
-    const token = await getIdToken()
-    tokenStatus.value = token ? 'トークンあり' : 'トークンなし'
-
-    const response = await $fetch('/api/user/profile', {
-      baseURL: config.public.apiBaseUrl,
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      onRequestError({ request, options, error }) {
-        console.error('❌ プロフィール取得リクエストエラー:', error)
-        console.error('❌ リクエスト URL:', request)
-        console.error('❌ リクエスト Headers:', options.headers)
-      },
-      onResponseError({ request, response }) {
-        console.error('❌ プロフィール取得レスポンスエラー:', {
-          url: request,
-          status: response.status,
-          statusText: response.statusText,
-          body: response._data,
-          headers: response.headers
-        })
-      }
-    })
+    const response = await getAuth('user/profile')
 
     if (response.data) {
       user.id = response.data.id
@@ -407,25 +341,17 @@ onMounted(async () => {
 
       if (response.data.avatar_url) {
         user.avatar = response.data.avatar_url
-
         await nextTick()
-
       } else {
         user.avatar = null
       }
     }
   } catch (error) {
     console.error('❌ プロフィール取得エラー:', error)
-    console.error('❌ エラーの詳細:', {
-      status: error.status,
-      statusText: error.statusText,
-      data: error.data,
-      message: error.message
-    })
 
     if (error.status === 401) {
       console.error('❌ 認証エラー: ログインが必要です')
-      alert(`認証エラーが発生しました。詳細: ${JSON.stringify(error.data)}`)
+      alert('認証エラーが発生しました。再度ログインしてください。')
       await navigateTo('/auth/login')
       return
     }

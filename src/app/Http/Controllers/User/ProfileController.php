@@ -48,7 +48,15 @@ class ProfileController extends Controller
             ], 401);
         }
 
-        $validatedData = $request->validated();
+        try {
+            $validatedData = $request->validated();
+        } catch (\Exception $e) {
+            \Log::error('プロフィール更新バリデーションエラー', [
+                'user_id' => $user->id,
+                'error' => $e->getMessage()
+            ]);
+            throw $e;
+        }
 
         $avatarUrl = $user->avatar_url;
         if ($request->hasFile('avatar')) {
@@ -62,15 +70,15 @@ class ProfileController extends Controller
 
                 $avatarUrl = $this->handleAvatarUpload($request->file('avatar'));
             } catch (\Exception $e) {
-                \Log::error('❌ アバター画像アップロードエラー:', [
-                    'error' => $e->getMessage(),
-                    'trace' => $e->getTraceAsString()
+                \Log::error('アバター画像アップロードエラー:', [
+                    'user_id' => $user->id,
+                    'error' => $e->getMessage()
                 ]);
 
                 return response()->json([
                     'message' => 'アバター画像のアップロードに失敗しました',
                     'errors' => [
-                        'avatar' => ['画像のアップロードに失敗しました: ' . $e->getMessage()]
+                        'avatar' => ['画像のアップロードに失敗しました']
                     ]
                 ], 422);
             }
@@ -81,10 +89,6 @@ class ProfileController extends Controller
         if ($request->has('name')) {
             $updateData['name'] = trim($request->name);
         }
-
-        if ($request->has('username')) {
-        $updateData['username'] = $request->username ? trim($request->username) : null;
-    }
 
         if ($avatarUrl !== $user->avatar_url) {
             $updateData['avatar_url'] = $avatarUrl;
@@ -128,13 +132,13 @@ class ProfileController extends Controller
             return $avatarUrl;
 
         } catch (\Exception $e) {
-            \Log::error('❌ handleAvatarUpload エラー:', [
+            \Log::error('handleAvatarUpload エラー:', [
                 'error' => $e->getMessage(),
                 'file_name' => $file->getClientOriginalName(),
                 'file_size' => $file->getSize(),
                 'trace' => $e->getTraceAsString()
             ]);
-            
+
             throw new \Exception('画像のアップロード処理中にエラーが発生しました: ' . $e->getMessage());
         }
     }

@@ -69,15 +69,32 @@ class FirebaseAuth
             ], 401);
         }
 
+        // 開発環境での認証処理を修正
         if (config('app.env') === 'local' || config('app.debug') || is_null($this->auth)) {
-            // 開発環境では簡単な認証チェック
             Log::info('🔧 Development mode: Firebase auth bypassed', [
                 'token_length' => strlen($idToken)
             ]);
 
-            // デバッグモードでは現在ログインしているFirebaseユーザーのUIDを使用
-            // 実際のFirebaseコンソールで確認したUIDを直接使用
-            $firebaseUid = 'JrFVRRm0bvM3lhi3Ik3V08m04fD3'; // あなたのFirebase UID
+            // IDトークンからFirebase UIDを簡易抽出
+            try {
+                // JWTトークンの簡易デコード（開発環境用）
+                $tokenParts = explode('.', $idToken);
+                if (count($tokenParts) === 3) {
+                    $payload = json_decode(base64_decode(str_pad(strtr($tokenParts[1], '-_', '+/'), strlen($tokenParts[1]) % 4, '=', STR_PAD_RIGHT)), true);
+                    $firebaseUid = $payload['sub'] ?? null;
+                }
+
+                if (empty($firebaseUid)) {
+                    throw new \Exception('Cannot extract Firebase UID from token');
+                }
+
+            } catch (\Exception $e) {
+                Log::error('Token parsing failed: ' . $e->getMessage());
+                return response()->json([
+                    'success' => false,
+                    'error' => 'Invalid token format'
+                ], 401);
+            }
 
             $user = User::where('firebase_uid', $firebaseUid)->first();
 
@@ -92,7 +109,8 @@ class FirebaseAuth
             Log::info('✅ Development auth success', [
                 'user_id' => $user->id,
                 'firebase_uid' => $user->firebase_uid,
-                'email' => $user->email
+                'email' => $user->email,
+                'role' => $user->role
             ]);
 
             $request->setUserResolver(function () use ($user) {

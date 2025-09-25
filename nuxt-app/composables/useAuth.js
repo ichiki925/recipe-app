@@ -94,13 +94,19 @@ export const useAuth = () => {
                     credentials: 'omit',   // Cookie送らない（CORSでBearer運用）
                     redirect: 'error'
                 })
+
+                console.log(`${endpoint} response:`, response) // デバッグ用
                 const userData = pickUser(response)
-                if (userData) return userData
-                throw new Error('Invalid auth response')
+                if (userData) {
+                    console.log('認証成功 - ユーザーデータ:', userData) // デバッグ用
+                    return userData
+                }
             } catch (e) {
+                console.log(`${endpoint} failed:`, e.message) // デバッグ用
                 if (endpoint === endpoints[endpoints.length - 1]) throw e
             }
         }
+        throw new Error('認証に失敗しました')
     }
 
     const register = (userData) =>
@@ -137,10 +143,12 @@ export const useAuth = () => {
 
     const logout = async () => {
         try {
-            const isAdminUser = user.value?.role === 'admin'
+            const route = useRoute()
+            const isAdminArea = route.path.startsWith('/admin')
+
             await signOut($auth)
             user.value = null
-            await navigateTo(isAdminUser ? '/admin/login' : '/')
+            await navigateTo(isAdminArea ? '/admin/login' : '/')
         } catch (error) {
             console.error('ログアウトエラー:', error)
             throw error

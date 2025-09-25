@@ -89,6 +89,20 @@ class AuthController extends Controller
         try {
             $user = $request->user();
 
+            // 管理者の場合は403を返す（管理者は api/admin/check を使用）
+            if ($user->isAdmin()) {
+                Log::warning('Admin user tried to access user endpoint', [
+                    'user_id' => $user->id,
+                    'user_role' => $user->role,
+                    'firebase_uid' => $user->firebase_uid
+                ]);
+
+                return response()->json([
+                    'success' => false,
+                    'error' => 'Use admin endpoint for admin users'
+                ], 403);
+            }
+
             Log::info('User access granted', [
                 'user_id' => $user->id,
                 'firebase_uid' => $user->firebase_uid,

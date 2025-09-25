@@ -60,6 +60,7 @@ definePageMeta({
 })
 
 const { user, isLoggedIn, initAuth } = useAuth()
+const { getAuth, postAuth } = useApi()
 
 useHead({
   title: 'レシピ詳細',
@@ -348,23 +349,9 @@ const handleSubmitComment = async ({ content, onSuccess, onError }) => {
   }
 
   try {
-    const config = useRuntimeConfig()
-    const { $auth } = useNuxtApp()
-    const token = await $auth.currentUser.getIdToken()
-
-    await $fetch(`/api/recipes/${recipeId}/comments`, {
-      baseURL: config.public.apiBaseUrl,
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      body: { content }
-    })
-
+    await postAuth(`recipes/${recipeId}/comments`, { content })
     await fetchComments()
     onSuccess()
-
   } catch (error) {
     let errorMessage = 'コメントの送信に失敗しました'
 
@@ -378,7 +365,6 @@ const handleSubmitComment = async ({ content, onSuccess, onError }) => {
 
     onError(new Error(errorMessage))
   }
-
 }
 
 const toggleLike = async () => {
@@ -393,18 +379,7 @@ const toggleLike = async () => {
   recipe.value.likes = originalLiked ? recipe.value.likes - 1 : recipe.value.likes + 1
 
   try {
-    const config = useRuntimeConfig()
-    const { $auth } = useNuxtApp()
-    const token = await $auth.currentUser.getIdToken()
-
-    const response = await $fetch(`/api/recipes/${recipe.value.id}/toggle-like`, {
-      baseURL: config.public.apiBaseUrl,
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      }
-    })
+    const response = await postAuth(`recipes/${recipe.value.id}/toggle-like`)
 
     const newLikedState = Boolean(response.is_liked)
     const newLikesCount = response.likes_count || 0
@@ -440,23 +415,10 @@ const toggleLike = async () => {
   }
 }
 
-
 const fetchComments = async () => {
   commentsLoading.value = true
   try {
-    const config = useRuntimeConfig()
-    const { $auth } = useNuxtApp()
-    const token = await $auth.currentUser.getIdToken()
-
-    const response = await $fetch(`/api/recipes/${recipeId}/comments`, {
-      baseURL: config.public.apiBaseUrl,
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      }
-    })
-
+    const response = await getAuth(`recipes/${recipeId}/comments`)
     const apiComments = response.data || []
 
     const convertedComments = apiComments.map(comment => ({
@@ -518,78 +480,60 @@ const autoResize = () => {
 }
 
 onMounted(async () => {
-  try {
-    await initAuth()
+  await initAuth()
 
-    if (!isLoggedIn.value || !user.value) {
-      await navigateTo('/auth/login')
+  if (!isLoggedIn.value) {
+    return navigateTo('/auth/login')
+  }
+
+  try {
+    const response = await getAuth(`recipes/${recipeId}`)
+    const recipeData = response.data || response
+
+    recipe.value = {
+      id: recipeData.id,
+      title: recipeData.title,
+      genre: recipeData.genre,
+      servings: recipeData.servings,
+      image: getImageUrl(recipeData.image_url),
+      body: recipeData.instructions,
+      likes: recipeData.likes_count,
+      isLiked: recipeData.is_liked || false,
+      ingredients: parseIngredients(recipeData.ingredients || '')
+    }
+
+  } catch (apiError) {
+    console.error('❌ レシピAPI取得エラー:', apiError)
+
+    const recipeData = recipeDatabase[recipeId]
+
+    if (!recipeData) {
+      alert(`レシピ（ID: ${recipeId}）が見つかりません`)
+      await navigateTo('/user')
       return
     }
 
-    const config = useRuntimeConfig()
-    const { $auth } = useNuxtApp()
-    const token = await $auth.currentUser.getIdToken()
-
-    try {
-      const response = await $fetch(`/api/recipes/${recipeId}`, {
-        baseURL: config.public.apiBaseUrl,
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      })
-
-      const recipeData = response.data || response
-
-      recipe.value = {
-        id: recipeData.id,
-        title: recipeData.title,
-        genre: recipeData.genre,
-        servings: recipeData.servings,
-        image: getImageUrl(recipeData.image_url),
-        body: recipeData.instructions,
-        likes: recipeData.likes_count,
-        isLiked: recipeData.is_liked || false,
-        ingredients: parseIngredients(recipeData.ingredients || '')
-      }
-
-    } catch (apiError) {
-      console.error('❌ レシピAPI取得エラー:', apiError)
-
-      const recipeData = recipeDatabase[recipeId]
-
-      if (!recipeData) {
-        alert(`レシピ（ID: ${recipeId}）が見つかりません`)
-        await navigateTo('/user')
-        return
-      }
-
-      recipe.value = { ...recipeData }
-    }
-
-    await fetchComments()
-
-    recipe.value.isLiked = favoriteStore.value.has(recipe.value.id)
-
-    autoResize()
-
-  } catch (error) {
-    console.error('❌ 認証処理エラー:', error)
-    await navigateTo('/auth/login')
+    recipe.value = { ...recipeData }
   }
+
+  await fetchComments()
+  recipe.value.isLiked = favoriteStore.value.has(recipe.value.id)
+  autoResize()
 })
 
 // お気に入りストアの変更を監視（他のページからの変更を反映）
-watch(favoriteStore, (newFavorites) => {
-  if (recipe.value.id) {
-    const shouldBeLiked = newFavorites.has(recipe.value.id)
-    if (recipe.value.isLiked !== shouldBeLiked) {
-      recipe.value.isLiked = shouldBeLiked
+watch(
+  () => favoriteStore.value,
+  (newFavorites) => {
+    if (recipe.value.id) {
+      const shouldBeLiked = newFavorites.has(recipe.value.id)
+      if (recipe.value.isLiked !== shouldBeLiked) {
+        recipe.value.isLiked = shouldBeLiked
+      }
     }
-  }
-}, { deep: true })
-
+  },
+  { deep: true }
+)
 
 </script>
 
