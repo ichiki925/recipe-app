@@ -54,6 +54,17 @@ class ProfileUpdateRequest extends FormRequest
                     }
                 },
             ],
+            // Firebase Storage URL（新方式）
+            'avatar_url' => [
+                'nullable',
+                'string',
+                'url',
+                function ($attribute, $value, $fail) {
+                    if ($value && !str_contains($value, 'firebasestorage.googleapis.com')) {
+                        $fail('無効なFirebase Storage URLです');
+                    }
+                },
+            ],
             'avatar' => [
                 'nullable',
                 'image',
@@ -68,6 +79,7 @@ class ProfileUpdateRequest extends FormRequest
         return [
             'name.required' => 'ユーザーネームを入力してください',
             'name.string' => 'ユーザーネームは文字列で入力してください',
+            'avatar_url.url' => '有効なURLを入力してください',
             'avatar.image' => '画像ファイルを選択してください',
             'avatar.mimes' => '対応している形式: JPEG, PNG, GIF, WebP',
             'avatar.max' => 'ファイルサイズは5MB以下にしてください',

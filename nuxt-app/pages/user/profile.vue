@@ -79,13 +79,15 @@
 <script setup>
 import { ref, reactive, computed, onMounted, nextTick } from 'vue'
 import { useHead } from '#app'
+import { uploadAvatarToFirebase, deleteAvatarFromFirebase, extractPathFromFirebaseUrl } from '~/utils/firebaseAvatar.js'
+
 
 definePageMeta({
   ssr: false
 })
 
 const { isLoggedIn, initAuth } = useAuth()
-const { getAuth, postAuth } = useApi()
+const { getAuth, postAuth, putAuth } = useApi()
 
 const avatarUrl = computed(() => {
   if (!user.avatar) return null
@@ -125,11 +127,13 @@ const isLoading = ref(false)
 const nameError = ref('')
 const fileError = ref('')
 const isSubmitting = ref(false)
+const selectedFile = ref(null)
 
 const user = reactive({
   id: 1,
   name: '',
-  avatar: null
+  avatar: null,
+  firebase_uid: null
 })
 
 const nameLength = computed(() => {
@@ -196,6 +200,7 @@ const handleNameInput = () => {
 const handleAvatarChange = (event) => {
   const file = event.target.files[0]
   fileError.value = ''
+  selectedFile.value = null
 
   if (!file) {
     return
@@ -208,6 +213,8 @@ const handleAvatarChange = (event) => {
     event.target.value = ''
     return
   }
+
+  selectedFile.value = file
 
   const reader = new FileReader()
 
@@ -250,28 +257,53 @@ const saveProfile = async () => {
   isLoading.value = true
 
   try {
-    const formData = new FormData()
+    let avatarFirebaseUrl = null
 
-    const trimmedName = user.name.trim()
-    if (trimmedName) {
-      formData.append('name', trimmedName)
-    } else {
-      console.error('❌ 名前が空です')
-      nameError.value = 'ユーザーネームを入力してください'
-      return
+    // 新しい画像がアップロードされた場合、Firebase Storageにアップロード
+    if (selectedFile.value) {
+      try {
+        const { $auth } = useNuxtApp()
+        const currentUser = $auth.currentUser
+
+        if (!currentUser) {
+          throw new Error('認証が必要です')
+        }
+
+        console.log('Firebase Storage アップロード開始')
+        const uploadResult = await uploadAvatarToFirebase(selectedFile.value, currentUser.uid)
+        avatarFirebaseUrl = uploadResult.url
+        console.log('Firebase Storage アップロード完了:', avatarFirebaseUrl)
+
+        // 古い画像を削除（Firebase Storage URLの場合のみ）
+        if (user.avatar && user.avatar.includes('firebasestorage.googleapis.com')) {
+          const oldPath = extractPathFromFirebaseUrl(user.avatar)
+          if (oldPath) {
+            console.log('古い画像削除開始:', oldPath)
+            await deleteAvatarFromFirebase(oldPath)
+          }
+        }
+
+      } catch (uploadError) {
+        console.error('Firebase Storage アップロードエラー:', uploadError)
+        fileError.value = '画像のアップロードに失敗しました'
+        return
+      }
     }
 
-    const avatarInput = document.getElementById('avatar-upload')
-    let hasNewAvatar = false
-
-    if (avatarInput && avatarInput.files && avatarInput.files[0]) {
-      formData.append('avatar', avatarInput.files[0])
-      hasNewAvatar = true
+    // Laravel APIに送信するデータを準備
+    const updateData = {
+      name: user.name.trim()
     }
 
-    formData.append('_method', 'PUT')
+    // Firebase Storage URLがある場合は追加
+    if (avatarFirebaseUrl) {
+      updateData.avatar_url = avatarFirebaseUrl
+    }
 
-    const response = await postAuth('user/profile', formData)
+    console.log('プロフィール更新データ送信:', updateData)
+
+    // FormDataではなく、JSONで送信
+    const response = await putAuth('user/profile', updateData)
 
     if (response.data) {
       user.name = response.data.name || user.name
@@ -284,25 +316,28 @@ const saveProfile = async () => {
       }
     }
 
-    if (hasNewAvatar && avatarInput) {
+    // 成功時はファイル選択をクリア
+    const avatarInput = document.getElementById('avatar-upload')
+    if (avatarInput) {
       avatarInput.value = ''
     }
+    selectedFile.value = null
 
     alert('プロフィールを保存しました！')
     await navigateTo('/user')
 
   } catch (error) {
-    console.error('❌ 保存エラー詳細:', error)
+    console.error('保存エラー詳細:', error)
 
     if (error.status === 401) {
-      console.error('❌ 認証エラー: トークンが無効または期限切れ')
+      console.error('認証エラー: トークンが無効または期限切れ')
       alert('認証が失効しています。再度ログインしてください。')
       await navigateTo('/auth/login')
       return
     }
 
     if (error.status === 422 && error.data && error.data.errors) {
-      console.error('❌ バリデーションエラー:', error.data.errors)
+      console.error('バリデーションエラー:', error.data.errors)
 
       if (error.data.errors.name) {
         nameError.value = error.data.errors.name[0]
@@ -325,6 +360,7 @@ const saveProfile = async () => {
   }
 }
 
+
 onMounted(async () => {
   await initAuth()
 
@@ -338,6 +374,7 @@ onMounted(async () => {
     if (response.data) {
       user.id = response.data.id
       user.name = response.data.name || ''
+      user.firebase_uid = response.data.firebase_uid
 
       if (response.data.avatar_url) {
         user.avatar = response.data.avatar_url

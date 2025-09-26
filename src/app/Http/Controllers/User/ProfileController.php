@@ -7,9 +7,8 @@ use App\Http\Resources\UserProfileResource;
 use App\Http\Requests\ProfileUpdateRequest;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
-use Intervention\Image\ImageManagerStatic as Image;
-use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Response;
+use Illuminate\Support\Str;
 
 
 class ProfileController extends Controller
@@ -58,19 +57,54 @@ class ProfileController extends Controller
             throw $e;
         }
 
-        $avatarUrl = $user->avatar_url;
+        $updateData = [];
+
+        // 名前の更新
+        if ($request->has('name')) {
+            $updateData['name'] = trim($request->name);
+        }
+
+        // アバター画像の更新（Firebase Storage URL）
+        if ($request->has('avatar_url') && !empty($request->avatar_url)) {
+            // 古いローカル画像を削除（Firebase移行時の互換性対応）
+            if ($user->avatar_url && 
+                !str_contains($user->avatar_url, 'firebasestorage.googleapis.com') && 
+                $user->avatar_url !== '/images/default-avatar.png') {
+                $oldImagePath = str_replace('/storage/', '', $user->avatar_url);
+                if (Storage::disk('public')->exists($oldImagePath)) {
+                    Storage::disk('public')->delete($oldImagePath);
+                    \Log::info('旧ローカル画像を削除しました', ['path' => $oldImagePath]);
+                }
+            }
+
+            $updateData['avatar_url'] = $request->avatar_url;
+            \Log::info('Firebase Storage URLでアバター更新', [
+                'user_id' => $user->id,
+                'url' => $request->avatar_url
+            ]);
+        }
+
+        // レガシー対応：ローカルファイルアップロード（後方互換性のため）
         if ($request->hasFile('avatar')) {
             try {
+                // 古い画像を削除
                 if ($user->avatar_url && $user->avatar_url !== '/images/default-avatar.png') {
-                    $oldImagePath = str_replace('/storage/', '', $user->avatar_url);
-                    if (Storage::disk('public')->exists($oldImagePath)) {
-                        Storage::disk('public')->delete($oldImagePath);
+                    if (str_contains($user->avatar_url, 'firebasestorage.googleapis.com')) {
+                        \Log::warning('Firebase画像の削除はフロントエンドで実行済み想定', [
+                            'url' => $user->avatar_url
+                        ]);
+                    } else {
+                        $oldImagePath = str_replace('/storage/', '', $user->avatar_url);
+                        if (Storage::disk('public')->exists($oldImagePath)) {
+                            Storage::disk('public')->delete($oldImagePath);
+                        }
                     }
                 }
 
                 $avatarUrl = $this->handleAvatarUpload($request->file('avatar'));
+                $updateData['avatar_url'] = $avatarUrl;
             } catch (\Exception $e) {
-                \Log::error('アバター画像アップロードエラー:', [
+                \Log::error('レガシーアバター画像アップロードエラー:', [
                     'user_id' => $user->id,
                     'error' => $e->getMessage()
                 ]);
@@ -84,16 +118,7 @@ class ProfileController extends Controller
             }
         }
 
-        $updateData = [];
-
-        if ($request->has('name')) {
-            $updateData['name'] = trim($request->name);
-        }
-
-        if ($avatarUrl !== $user->avatar_url) {
-            $updateData['avatar_url'] = $avatarUrl;
-        }
-
+        // データベース更新
         if (!empty($updateData)) {
             $user->update($updateData);
             $user->refresh();
@@ -128,6 +153,12 @@ class ProfileController extends Controller
             }
 
             $avatarUrl = '/storage/' . $path;
+
+            \Log::warning('レガシーローカルストレージを使用しました。Firebase Storageへの移行を推奨します。', [
+                'file_path' => $path,
+                'url' => $avatarUrl
+            ]);
+
 
             return $avatarUrl;
 
@@ -191,11 +222,11 @@ class ProfileController extends Controller
             ], 401);
         }
 
-        // パスワード確認などの追加認証が必要な場合はここに実装
-
         try {
-            // アバター画像を削除
-            if ($user->avatar_url && $user->avatar_url !== '/images/default-avatar.png') {
+            // ローカルアバター画像を削除（Firebase画像は削除しない）
+            if ($user->avatar_url && 
+                $user->avatar_url !== '/images/default-avatar.png' &&
+                !str_contains($user->avatar_url, 'firebasestorage.googleapis.com')) {
                 $imagePath = str_replace('/storage/', '', $user->avatar_url);
                 if (Storage::disk('public')->exists($imagePath)) {
                     Storage::disk('public')->delete($imagePath);
