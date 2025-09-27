@@ -44,7 +44,7 @@ class ProfileUpdateRequest extends FormRequest
                     }
 
                     // より柔軟な正規表現に修正（英数字、日本語、アンダースコア、ハイフンを許可）
-                    if (!preg_match('/^[a-zA-Z0-9\p{Hiragana}\p{Katakana}\p{Han}_\-\s・、。！？\(\)（）]+$/u', $value)) {
+                    if (!preg_match('/^[a-zA-Z0-9\p{Hiragana}\p{Katakana}\p{Han}_\-\s・、。！？\(\)（）ー]+$/u', $value)) {
                         $fail('使用できない文字が含まれています');
                         return;
                     }
@@ -54,6 +54,7 @@ class ProfileUpdateRequest extends FormRequest
                     }
                 },
             ],
+
             // Firebase Storage URL（新方式）
             'avatar_url' => [
                 'nullable',
