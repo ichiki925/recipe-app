@@ -7,6 +7,7 @@ use App\Models\Recipe;
 use App\Models\RecipeComment;
 use App\Http\Resources\CommentResource;
 use Illuminate\Http\Request;
+use App\Http\Requests\CommentStoreRequest;
 
 class CommentController extends Controller
 {
@@ -37,7 +38,7 @@ class CommentController extends Controller
         ]);
     }
 
-    public function store(Request $request, Recipe $recipe)
+    public function store(CommentStoreRequest $request, Recipe $recipe)
     {
         try {
             \Log::info('=== Comment Store START ===', [
@@ -58,10 +59,6 @@ class CommentController extends Controller
             if (!$recipe->is_published) {
                 return response()->json(['message' => 'このレシピは公開されていません'], 404);
             }
-
-            $request->validate([
-                'content' => 'required|string|min:1|max:500'
-            ]);
 
             // 連続投稿制限（1分以内）
             $recentComment = RecipeComment::where('user_id', $user->id)

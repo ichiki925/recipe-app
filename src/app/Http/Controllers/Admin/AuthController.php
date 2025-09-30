@@ -7,22 +7,17 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
+use App\Http\Requests\AdminRegisterRequest;
 
 class AuthController extends Controller
 {
     /**
      * 新規管理者登録
      */
-    public function register(Request $request)
+    public function register(AdminRegisterRequest $request)
     {
         try {
-            // バリデーション
-            $validated = $request->validate([
-                'admin_code' => 'required|string',
-                'firebase_uid' => 'required|string|unique:users,firebase_uid',
-                'name' => 'required|string|max:20|min:2',
-                'email' => 'required|email|unique:users,email',
-            ]);
+            $validated = $request->validated();
 
             // 管理者コード確認
             if ($validated['admin_code'] !== 'VANILLA_KITCHEN_ADMIN_2025') {

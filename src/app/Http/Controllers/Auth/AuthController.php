@@ -7,19 +7,15 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
+use App\Http\Requests\UserRegisterRequest;
 
 class AuthController extends Controller
 {
 
-    public function register(Request $request)
+    public function register(UserRegisterRequest $request)
     {
         try {
-            // バリデーション
-            $validated = $request->validate([
-                'firebase_uid' => 'required|string|unique:users,firebase_uid',
-                'name' => 'required|string|max:20|min:2',
-                'email' => 'required|email|unique:users,email',
-            ]);
+            $validated = $request->validated();
 
             // 新規ユーザー作成
             $user = User::create([

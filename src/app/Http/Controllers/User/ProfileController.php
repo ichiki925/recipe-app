@@ -222,9 +222,20 @@ class ProfileController extends Controller
             ], 401);
         }
 
+        // 管理者は削除不可
+        if ($user->isAdmin()) {
+            return response()->json([
+                'message' => '管理者アカウントは削除できません'
+            ], 403);
+        }
+
+
         try {
-            // ローカルアバター画像を削除（Firebase画像は削除しない）
-            if ($user->avatar_url && 
+            // いいねを削除
+            $user->recipeLikes()->delete();
+
+            // ローカルアバター画像を削除
+            if ($user->avatar_url &&
                 $user->avatar_url !== '/images/default-avatar.png' &&
                 !str_contains($user->avatar_url, 'firebasestorage.googleapis.com')) {
                 $imagePath = str_replace('/storage/', '', $user->avatar_url);
@@ -233,24 +244,25 @@ class ProfileController extends Controller
                 }
             }
 
-            // ユーザー情報を匿名化して論理削除
+            // ユーザー情報を匿名化
             $user->update([
                 'name' => '削除されたユーザー',
                 'email' => 'deleted_' . time() . '@example.com',
                 'username' => null,
                 'avatar_url' => null,
-                'firebase_uid' => null,
+                'firebase_uid' => '',
             ]);
 
-            return response()->json([
-                'message' => 'アカウントを削除しました'
+            \Log::info('User account deleted', [
+                'user_id' => $user->id,
+                'likes_deleted' => true
             ]);
+
+            return response()->json(['message' => 'アカウントを削除しました']);
 
         } catch (\Exception $e) {
             \Log::error('Account deletion failed: ' . $e->getMessage());
-            return response()->json([
-                'message' => 'アカウントの削除に失敗しました'
-            ], 500);
+            return response()->json(['message' => 'アカウントの削除に失敗しました'], 500);
         }
     }
 

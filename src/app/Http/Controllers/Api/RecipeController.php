@@ -12,6 +12,8 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
 use Intervention\Image\ImageManagerStatic as Image;
 use Kreait\Firebase\Factory;
+use App\Http\Requests\RecipeStoreRequest;
+use App\Http\Requests\RecipeUpdateRequest;
 
 
 class RecipeController extends Controller
@@ -222,7 +224,7 @@ class RecipeController extends Controller
         return response()->json(['message' => 'Use POST /admin/recipes to create recipe']);
     }
 
-    public function store(Request $request)
+    public function store(RecipeStoreRequest $request)
     {
         try {
             $user = $request->user();
@@ -230,15 +232,6 @@ class RecipeController extends Controller
             if (!$user || !$user->isAdmin()) {
                 return response()->json(['error' => '認証または権限エラー'], 403);
             }
-
-            $request->validate([
-                'title' => 'required|string|max:255',
-                'servings' => 'required|string',
-                'ingredients' => 'required|string',
-                'instructions' => 'required|string',
-                'image' => 'nullable|image|mimes:jpeg,jpg,png,webp|max:5120',
-                'temp_image_url' => 'nullable|string'
-            ]);
 
             $imageUrl = null;
 
@@ -338,19 +331,9 @@ class RecipeController extends Controller
     }
 
 
-    public function update(Request $request, Recipe $recipe)
+    public function update(RecipeUpdateRequest $request, Recipe $recipe)
     {
         try {
-            $request->validate([
-                'title' => 'required|string|max:255',
-                'genre' => 'nullable|string|max:100',
-                'servings' => 'required|in:1人分,2人分,3人分,4人分,5人分以上',
-                'ingredients' => 'required|string',
-                'instructions' => 'required|string',
-                'image' => 'nullable|image|mimes:jpeg,jpg,png,webp|max:5120',
-                'temp_image_url' => 'nullable|string',
-                'is_published' => 'boolean'
-            ]);
 
             // 画像アップロード処理
             $newImageUrl = null;

@@ -73,6 +73,16 @@
         <span v-else>{{ isLoading ? '保存中...' : '保存する' }}</span>
       </button>
     </form>
+    <div class="danger-zone">
+      <button
+        @click="deleteAccount"
+        class="delete-button"
+        :disabled="isDeleting"
+      >
+        <i v-if="isDeleting" class="fas fa-spinner fa-spin"></i>
+        <span v-else>アカウントを削除</span>
+      </button>
+    </div>
   </div>
 </template>
 
@@ -80,7 +90,7 @@
 import { ref, reactive, computed, onMounted, nextTick } from 'vue'
 import { useHead } from '#app'
 import { uploadAvatarToFirebase, deleteAvatarFromFirebase, extractPathFromFirebaseUrl } from '~/utils/firebaseAvatar.js'
-
+import { getAuth as getFirebaseAuth, deleteUser as deleteFirebaseUser } from 'firebase/auth'
 
 definePageMeta({
   ssr: false
@@ -128,6 +138,7 @@ const nameError = ref('')
 const fileError = ref('')
 const isSubmitting = ref(false)
 const selectedFile = ref(null)
+const isDeleting = ref(false)
 
 const user = reactive({
   id: 1,
@@ -360,6 +371,79 @@ const saveProfile = async () => {
   }
 }
 
+const deleteAccount = async () => {
+  // 確認ダイアログ（二段階）
+  if (!confirm('本当にアカウントを削除しますか？\n\nこの操作は取り消せません。\n- すべてのいいねが削除されます\n- コメントは「削除されたユーザー」として残ります')) {
+    return
+  }
+
+  if (!confirm('最終確認：アカウントを完全に削除してもよろしいですか？')) {
+    return
+  }
+
+  isDeleting.value = true
+
+  try {
+    const { $auth } = useNuxtApp()
+    const currentUser = $auth.currentUser
+
+    if (!currentUser) {
+      throw new Error('認証が必要です')
+    }
+
+    console.log('アカウント削除開始')
+
+    // 1. Laravel APIでDB削除（いいね削除 + 匿名化）
+    await fetch('http://localhost/api/user/profile', {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${await currentUser.getIdToken()}`,
+        'Content-Type': 'application/json'
+      }
+    }).then(async (response) => {
+      if (!response.ok) {
+        const errorData = await response.json()
+
+        // 管理者エラーの場合
+        if (response.status === 403) {
+          throw new Error(errorData.message || '管理者アカウントは削除できません')
+        }
+
+        throw new Error(errorData.message || 'アカウント削除に失敗しました')
+      }
+      return response.json()
+    })
+
+    console.log('DB削除完了')
+
+    // 2. Firebaseアカウント削除
+    const auth = getFirebaseAuth()
+    const firebaseUser = auth.currentUser
+
+    if (firebaseUser) {
+      await deleteFirebaseUser(firebaseUser)
+      console.log('Firebaseアカウント削除完了')
+    }
+
+    // 3. ログアウト処理
+    alert('アカウントを削除しました')
+    await navigateTo('/auth/login')
+
+  } catch (error) {
+    console.error('削除エラー:', error)
+
+    if (error.message.includes('管理者')) {
+      alert('管理者アカウントは削除できません')
+    } else if (error.code === 'auth/requires-recent-login') {
+      alert('セキュリティのため、再ログインが必要です。ログインし直してから削除してください。')
+      await navigateTo('/auth/login')
+    } else {
+      alert(error.message || 'アカウント削除に失敗しました')
+    }
+  } finally {
+    isDeleting.value = false
+  }
+}
 
 onMounted(async () => {
   await initAuth()
@@ -600,6 +684,35 @@ input[type="text"]:disabled {
   margin-right: 5px;
 }
 
+.danger-zone {
+  margin-top: 40px;
+  padding-top: 30px;
+  border-top: 1px solid #eee;
+}
+
+.delete-button {
+  width: 100%;
+  padding: 10px;
+  background: #fff;
+  border: 1px solid #dc3545;
+  border-radius: 6px;
+  font-weight: bold;
+  color: #dc3545;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.delete-button:hover:not(:disabled) {
+  background: #dc3545;
+  color: #fff;
+}
+
+.delete-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+
 @keyframes fa-spin {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
@@ -668,6 +781,11 @@ input[type="text"]:disabled {
   .save-button {
     padding: 12px;
     font-size: 16px;
+  }
+
+  .danger-zone {
+    margin-top: 30px;
+    padding-top: 20px;
   }
 }
 
