@@ -247,10 +247,10 @@ class ProfileController extends Controller
             // ユーザー情報を匿名化
             $user->update([
                 'name' => '削除されたユーザー',
-                'email' => 'deleted_' . time() . '@example.com',
+                'email' => 'deleted_' . time() . '_' . $user->id . '@example.com',
                 'username' => null,
                 'avatar_url' => null,
-                'firebase_uid' => '',
+                'firebase_uid' => 'deleted_' . $user->id . '_' . time(),
             ]);
 
             \Log::info('User account deleted', [

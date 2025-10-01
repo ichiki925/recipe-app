@@ -679,6 +679,7 @@ class RecipeController extends Controller
                         $query->with('user')->orderBy('created_at', 'desc');
                     }
                 ])
+                ->withCount('likes')
                 ->find($id);
 
                 if (!$recipe) {

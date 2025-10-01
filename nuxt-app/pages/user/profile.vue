@@ -73,15 +73,70 @@
         <span v-else>{{ isLoading ? '保存中...' : '保存する' }}</span>
       </button>
     </form>
+
     <div class="danger-zone">
       <button
-        @click="deleteAccount"
+        @click="openPasswordModal"
         class="delete-button"
         :disabled="isDeleting"
       >
         <i v-if="isDeleting" class="fas fa-spinner fa-spin"></i>
         <span v-else>アカウントを削除</span>
       </button>
+    </div>
+
+    <!-- パスワード入力モーダル -->
+    <div v-if="showPasswordModal" class="modal-overlay" @click="closePasswordModal">
+      <div class="modal-content" @click.stop>
+        <div class="modal-header">
+          <h3>パスワードを入力</h3>
+          <button 
+            @click="closePasswordModal" 
+            class="close-button"
+            :disabled="isDeleting"
+          >
+            ×
+          </button>
+        </div>
+
+        <div class="modal-body">
+          <p class="modal-description">
+            セキュリティのため、パスワードを入力してください。
+          </p>
+
+          <input
+            v-model="deletePassword"
+            type="password"
+            placeholder="パスワード"
+            class="password-input"
+            :disabled="isDeleting"
+            @keypress="handlePasswordKeyPress"
+            autofocus
+          />
+
+          <div v-if="passwordError" class="password-error">
+            {{ passwordError }}
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button 
+            @click="closePasswordModal" 
+            class="cancel-button"
+            :disabled="isDeleting"
+          >
+            キャンセル
+          </button>
+          <button 
+            @click="deleteAccount" 
+            class="confirm-button"
+            :disabled="isDeleting || !deletePassword"
+          >
+            <i v-if="isDeleting" class="fas fa-spinner fa-spin"></i>
+            <span v-else>削除する</span>
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -90,7 +145,12 @@
 import { ref, reactive, computed, onMounted, nextTick } from 'vue'
 import { useHead } from '#app'
 import { uploadAvatarToFirebase, deleteAvatarFromFirebase, extractPathFromFirebaseUrl } from '~/utils/firebaseAvatar.js'
-import { getAuth as getFirebaseAuth, deleteUser as deleteFirebaseUser } from 'firebase/auth'
+import {
+  getAuth as getFirebaseAuth,
+  deleteUser as deleteFirebaseUser,
+  EmailAuthProvider,
+  reauthenticateWithCredential
+} from 'firebase/auth'
 
 definePageMeta({
   ssr: false
@@ -140,9 +200,15 @@ const isSubmitting = ref(false)
 const selectedFile = ref(null)
 const isDeleting = ref(false)
 
+// 削除用のパスワード入力モーダル
+const showPasswordModal = ref(false)
+const deletePassword = ref('')
+const passwordError = ref('')
+
 const user = reactive({
   id: 1,
   name: '',
+  email: '',
   avatar: null,
   firebase_uid: null
 })
@@ -185,14 +251,14 @@ const validateFile = (file) => {
 
   if (file.size > maxSize) {
     const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2)
-    console.error('❌ ファイルサイズ超過:', `${fileSizeMB}MB`)
+    console.error('ファイルサイズ超過:', `${fileSizeMB}MB`)
     return `ファイルサイズは5MB以下にしてください（現在: ${fileSizeMB}MB）`
   }
 
   const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
 
   if (!allowedTypes.includes(file.type)) {
-    console.error('❌ 無効なファイル形式:', file.type)
+    console.error('無効なファイル形式:', file.type)
     return '対応している形式: JPEG, PNG, GIF, WebP'
   }
 
@@ -219,7 +285,7 @@ const handleAvatarChange = (event) => {
 
   const validationError = validateFile(file)
   if (validationError) {
-    console.error('❌ バリデーションエラー:', validationError)
+    console.error('バリデーションエラー:', validationError)
     fileError.value = validationError
     event.target.value = ''
     return
@@ -233,24 +299,24 @@ const handleAvatarChange = (event) => {
     try {
       user.avatar = e.target.result
     } catch (error) {
-      console.error('❌ FileReader onload エラー:', error)
+      console.error('FileReader onload エラー:', error)
       fileError.value = 'プレビュー表示に失敗しました'
     }
   }
 
   reader.onerror = (error) => {
-    console.error('❌ FileReader エラー:', error)
+    console.error('FileReader エラー:', error)
     fileError.value = 'ファイル読み込みに失敗しました'
   }
 
   reader.onabort = () => {
-    console.warn('⚠️ FileReader が中断されました')
+    console.warn('FileReader が中断されました')
   }
 
   try {
     reader.readAsDataURL(file)
   } catch (error) {
-    console.error('❌ FileReader.readAsDataURL エラー:', error)
+    console.error('FileReader.readAsDataURL エラー:', error)
     fileError.value = 'ファイル処理に失敗しました'
   }
 }
@@ -259,7 +325,7 @@ const saveProfile = async () => {
   const nameValidationError = validateUserName(user.name)
   if (nameValidationError) {
     nameError.value = nameValidationError
-    console.error('❌ バリデーションエラー:', nameValidationError)
+    console.error('バリデーションエラー:', nameValidationError)
     return
   }
 
@@ -270,7 +336,6 @@ const saveProfile = async () => {
   try {
     let avatarFirebaseUrl = null
 
-    // 新しい画像がアップロードされた場合、Firebase Storageにアップロード
     if (selectedFile.value) {
       try {
         const { $auth } = useNuxtApp()
@@ -371,77 +436,114 @@ const saveProfile = async () => {
   }
 }
 
-const deleteAccount = async () => {
-  // 確認ダイアログ（二段階）
+// パスワードモーダルを開く
+const openPasswordModal = () => {
   if (!confirm('本当にアカウントを削除しますか？\n\nこの操作は取り消せません。\n- すべてのいいねが削除されます\n- コメントは「削除されたユーザー」として残ります')) {
     return
   }
 
+  showPasswordModal.value = true
+  deletePassword.value = ''
+  passwordError.value = ''
+}
+
+// パスワードモーダルを閉じる
+const closePasswordModal = () => {
+  showPasswordModal.value = false
+  deletePassword.value = ''
+  passwordError.value = ''
+}
+
+const deleteAccount = async () => {
+  if (!deletePassword.value) {
+    passwordError.value = 'パスワードを入力してください'
+    return
+  }
+
+  if (isDeleting.value) return
+
+  // 最終確認
   if (!confirm('最終確認：アカウントを完全に削除してもよろしいですか？')) {
     return
   }
 
   isDeleting.value = true
+  passwordError.value = ''
 
   try {
     const { $auth } = useNuxtApp()
     const currentUser = $auth.currentUser
 
-    if (!currentUser) {
-      throw new Error('認証が必要です')
+    if (!currentUser || !currentUser.email) {
+      throw new Error('認証情報を取得できません')
     }
 
-    console.log('アカウント削除開始')
+    console.log('🔐 ステップ1: Firebase再認証開始')
 
-    // 1. Laravel APIでDB削除（いいね削除 + 匿名化）
-    await fetch('http://localhost/api/user/profile', {
+    // Firebase再認証
+    const credential = EmailAuthProvider.credential(currentUser.email, deletePassword.value)
+    await reauthenticateWithCredential(currentUser, credential)
+    console.log('✅ 再認証成功')
+
+    console.log('🗑️ ステップ2: Laravel削除開始')
+
+    // Laravel APIでDB削除
+    const response = await fetch('http://localhost/api/user/profile', {
       method: 'DELETE',
       headers: {
         'Authorization': `Bearer ${await currentUser.getIdToken()}`,
         'Content-Type': 'application/json'
       }
-    }).then(async (response) => {
-      if (!response.ok) {
-        const errorData = await response.json()
-
-        // 管理者エラーの場合
-        if (response.status === 403) {
-          throw new Error(errorData.message || '管理者アカウントは削除できません')
-        }
-
-        throw new Error(errorData.message || 'アカウント削除に失敗しました')
-      }
-      return response.json()
     })
 
-    console.log('DB削除完了')
+    if (!response.ok) {
+      const errorData = await response.json()
+      if (response.status === 403) {
+        throw new Error(errorData.message || '管理者アカウントは削除できません')
+      }
+      throw new Error(errorData.message || 'アカウント削除に失敗しました')
+    }
 
-    // 2. Firebaseアカウント削除
+    console.log('✅ Laravel削除成功')
+
+    console.log('🗑️ ステップ3: Firebase削除開始')
+
+    // Firebaseアカウント削除
     const auth = getFirebaseAuth()
     const firebaseUser = auth.currentUser
 
     if (firebaseUser) {
       await deleteFirebaseUser(firebaseUser)
-      console.log('Firebaseアカウント削除完了')
+      console.log('✅ Firebase削除成功')
     }
 
-    // 3. ログアウト処理
-    alert('アカウントを削除しました')
+    console.log('🎉 アカウント削除完了')
+
+    alert('アカウントを完全に削除しました')
     await navigateTo('/auth/login')
 
   } catch (error) {
     console.error('削除エラー:', error)
+    isDeleting.value = false
 
     if (error.message.includes('管理者')) {
-      alert('管理者アカウントは削除できません')
-    } else if (error.code === 'auth/requires-recent-login') {
-      alert('セキュリティのため、再ログインが必要です。ログインし直してから削除してください。')
-      await navigateTo('/auth/login')
+      passwordError.value = '管理者アカウントは削除できません'
+    } else if (error.code === 'auth/wrong-password') {
+      passwordError.value = 'パスワードが正しくありません'
+    } else if (error.code === 'auth/too-many-requests') {
+      passwordError.value = '試行回数が多すぎます。しばらく待ってから再度お試しください'
+    } else if (error.code === 'auth/invalid-credential') {
+      passwordError.value = '認証情報が無効です'
     } else {
-      alert(error.message || 'アカウント削除に失敗しました')
+      passwordError.value = error.message || 'アカウント削除に失敗しました'
     }
-  } finally {
-    isDeleting.value = false
+  }
+}
+
+// Enterキーでパスワード送信
+const handlePasswordKeyPress = (event) => {
+  if (event.key === 'Enter' && !isDeleting.value) {
+    deleteAccount()
   }
 }
 
@@ -458,6 +560,7 @@ onMounted(async () => {
     if (response.data) {
       user.id = response.data.id
       user.name = response.data.name || ''
+      user.email = response.data.email || ''
       user.firebase_uid = response.data.firebase_uid
 
       if (response.data.avatar_url) {
@@ -468,10 +571,10 @@ onMounted(async () => {
       }
     }
   } catch (error) {
-    console.error('❌ プロフィール取得エラー:', error)
+    console.error('プロフィール取得エラー:', error)
 
     if (error.status === 401) {
-      console.error('❌ 認証エラー: ログインが必要です')
+      console.error('認証エラー: ログインが必要です')
       alert('認証エラーが発生しました。再度ログインしてください。')
       await navigateTo('/auth/login')
       return
@@ -560,7 +663,6 @@ onMounted(async () => {
 .upload-button:hover {
   background-color: #e0e0e0;
 }
-
 
 label {
   display: block;
@@ -671,7 +773,7 @@ input[type="text"].error {
 }
 
 .save-button.disabled:hover {
-  background: #f0f0f0; /* ホバー効果を無効化 */
+  background: #f0f0f0;
 }
 
 input[type="text"]:disabled {
@@ -712,6 +814,148 @@ input[type="text"]:disabled {
   cursor: not-allowed;
 }
 
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.6);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background-color: white;
+  border-radius: 8px;
+  width: 90%;
+  max-width: 400px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px;
+  border-bottom: 1px solid #eee;
+}
+
+.modal-header h3 {
+  margin: 0;
+  font-size: 18px;
+  color: #333;
+}
+
+.close-button {
+  background: none;
+  border: none;
+  font-size: 28px;
+  color: #999;
+  cursor: pointer;
+  padding: 0;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.close-button:hover:not(:disabled) {
+  color: #333;
+}
+
+.close-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.modal-body {
+  padding: 20px;
+}
+
+.modal-description {
+  margin-bottom: 15px;
+  color: #666;
+  font-size: 14px;
+}
+
+.password-input {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 14px;
+  box-sizing: border-box;
+}
+
+.password-input:focus {
+  outline: none;
+  border-color: #007bff;
+}
+
+.password-input:disabled {
+  background-color: #f5f5f5;
+  cursor: not-allowed;
+}
+
+.password-error {
+  margin-top: 10px;
+  padding: 8px;
+  background-color: #fff3f3;
+  color: #dc3545;
+  font-size: 12px;
+  border-radius: 4px;
+  border: 1px solid #ffc1c1;
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 20px;
+  border-top: 1px solid #eee;
+}
+
+.cancel-button {
+  padding: 8px 16px;
+  background-color: #f0f0f0;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  cursor: pointer;
+  color: #606060;
+}
+
+.cancel-button:hover:not(:disabled) {
+  background-color: #e0e0e0;
+}
+
+.cancel-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.confirm-button {
+  padding: 8px 16px;
+  background-color: #dc3545;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  color: white;
+  font-weight: bold;
+}
+
+.confirm-button:hover:not(:disabled) {
+  background-color: #c82333;
+}
+
+.confirm-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
 
 @keyframes fa-spin {
   0% { transform: rotate(0deg); }
@@ -727,7 +971,6 @@ input[type="text"]:disabled {
     width: 100%;
     margin: 0;
     padding: 20px;
-    /* ボックススタイルを削除 */
     background: transparent;
     border-radius: 0;
     box-shadow: none;
@@ -786,6 +1029,10 @@ input[type="text"]:disabled {
   .danger-zone {
     margin-top: 30px;
     padding-top: 20px;
+  }
+
+  .modal-content {
+    width: 95%;
   }
 }
 

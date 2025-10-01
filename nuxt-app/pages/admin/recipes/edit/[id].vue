@@ -113,7 +113,7 @@ import { ref, reactive, watch, onMounted, nextTick  } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage'
 
-const { getAuth, putAuth } = useApi()
+const { getAuth, putAuth, postAuth } = useApi()
 const { initAuth, isAdmin } = useAuth()
 
 const router = useRouter()
@@ -465,17 +465,22 @@ const submitRecipe = async () => {
             errors.value.push('作り方は必須です')
         }
 
+        // 古い一時画像を削除（修正版）
         const currentEditingId = currentEditingRecipe.value?.id
         if (currentEditingId) {
-        const existingDraft = savedRecipes.value.find(r => r.id === currentEditingId)
-        if (existingDraft?.tempImagePath && 
-            existingDraft.tempImagePath !== selectedFile.value?.tempImagePath) {
             try {
-            await deleteTempImage(existingDraft.tempImagePath)
+                const saved = localStorage.getItem('savedRecipes')
+                if (saved) {
+                    const savedRecipes = JSON.parse(saved)
+                    const existingDraft = savedRecipes.find(r => r.id === currentEditingId)
+                    if (existingDraft?.tempImagePath && 
+                        existingDraft.tempImagePath !== selectedFile.value?.tempImagePath) {
+                        await deleteTempImage(existingDraft.tempImagePath)
+                    }
+                }
             } catch (error) {
-            console.error('古い一時画像削除エラー（無視）:', error)
+                console.error('古い一時画像削除エラー（無視）:', error)
             }
-        }
         }
 
         const ingredientsText = formatIngredients()
@@ -489,6 +494,7 @@ const submitRecipe = async () => {
         }
 
         const formData = new FormData()
+        formData.append('_method', 'PUT')
         formData.append('title', form.title.trim())
         formData.append('genre', form.genre || '')
         formData.append('servings', form.servings.toString())
@@ -505,7 +511,7 @@ const submitRecipe = async () => {
         }
 
         const recipeId = route.params.id
-        const result = await putAuth(`admin/recipes/${recipeId}`, formData)
+        await postAuth(`admin/recipes/${recipeId}`, formData)
 
         successMessage.value = 'レシピが更新されました'
 

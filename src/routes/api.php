@@ -80,6 +80,7 @@ Route::middleware(['firebase.auth', 'admin'])->prefix('admin')->group(function (
     Route::post('/recipes', [RecipeController::class, 'store']);
     Route::get('/recipes/{id}', [RecipeController::class, 'adminShow'])->where('id', '[0-9]+');
     Route::put('/recipes/{recipe}', [RecipeController::class, 'update']);
+    Route::post('/recipes/{recipe}', [RecipeController::class, 'update']);
     Route::delete('/recipes/{recipe}', [RecipeController::class, 'destroy']);
     Route::post('/recipes/{id}/restore', [RecipeController::class, 'restore']);
     Route::delete('/recipes/{id}/permanent-delete', [RecipeController::class, 'permanentDelete']);

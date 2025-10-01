@@ -16,7 +16,7 @@ class RecipeUpdateRequest extends FormRequest
         return [
             'title' => ['required', 'string', 'max:255'],
             'genre' => ['nullable', 'string', 'max:100'],
-            'servings' => ['required', 'in:1人分,2人分,3人分,4人分,5人分以上'],
+            'servings' => ['required', 'string'],
             'ingredients' => ['required', 'string'],
             'instructions' => ['required', 'string'],
             'image' => ['nullable', 'image', 'mimes:jpeg,jpg,png,webp', 'max:5120'],
