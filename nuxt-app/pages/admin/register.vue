@@ -138,7 +138,7 @@ const form = reactive({
 const errors = ref({})
 const loading = ref(false)
 
-const ADMIN_CODE = 'VANILLA_KITCHEN_ADMIN_2025'
+const ADMIN_CODE = process.env.ADMIN_REGISTRATION_CODE || ''
 
 const passwordsMatch = computed(() => {
     return form.password && form.password_confirmation && form.password === form.password_confirmation
@@ -165,9 +165,6 @@ const validateAdminCode = (code) => {
         return '管理者コードを入力してください'
     }
 
-    if (trimmed !== ADMIN_CODE) {
-        return '管理者コードが正しくありません'
-    }
 
     return null
 }

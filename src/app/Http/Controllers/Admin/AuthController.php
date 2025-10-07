@@ -20,7 +20,7 @@ class AuthController extends Controller
             $validated = $request->validated();
 
             // 管理者コード確認
-            if ($validated['admin_code'] !== 'VANILLA_KITCHEN_ADMIN_2025') {
+            if ($validated['admin_code'] !== env('ADMIN_REGISTRATION_CODE')) {
                 return response()->json([
                     'success' => false,
                     'error' => '無効な管理者コードです'

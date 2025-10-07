@@ -10,7 +10,7 @@ class AdminCodeSeeder extends Seeder
     public function run()
     {
         $this->command->info('=== 管理者コード情報 ===');
-        $this->command->info('管理者登録用コード: VANILLA_KITCHEN_ADMIN_2025');
+        $this->command->info('管理者登録用コード: ' . env('ADMIN_REGISTRATION_CODE'));
         $this->command->info('');
         $this->command->info('💡 使用方法:');
         $this->command->info('1. Firebase認証でユーザー登録');

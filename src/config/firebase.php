@@ -1,24 +1,7 @@
 <?php
 
 return [
-    /*
-    |--------------------------------------------------------------------------
-    | Firebase Project Configuration
-    |--------------------------------------------------------------------------
-    */
     'project_id' => env('FIREBASE_PROJECT_ID'),
-
-    /*
-    |--------------------------------------------------------------------------
-    | Firebase Service Account
-    |--------------------------------------------------------------------------
-    */
-    'credentials' => env('FIREBASE_CREDENTIALS_PATH'),
-
-    /*
-    |--------------------------------------------------------------------------
-    | Firebase Database URL
-    |--------------------------------------------------------------------------
-    */
+    'credentials' => env('FIREBASE_CREDENTIALS', storage_path('firebase-credentials.json')),
     'database_url' => env('FIREBASE_DATABASE_URL'),
 ];
