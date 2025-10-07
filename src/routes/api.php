@@ -99,3 +99,7 @@ Route::middleware(['firebase.auth', 'admin'])->prefix('admin')->group(function (
     Route::get('/users/stats', [UserController::class, 'stats']);
 });
 
+// 管理者チェック（firebase + adminミドルウェアが必要）
+Route::get('/admin/check', function () {
+    return response()->json(['success' => true, 'admin' => true]);
+})->middleware(\App\Http\Middleware\FirebaseAuth::class)->middleware(\App\Http\Middleware\AdminMiddleware::class);

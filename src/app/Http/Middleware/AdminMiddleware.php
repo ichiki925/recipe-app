@@ -22,8 +22,7 @@ class AdminMiddleware
         $user = $request->user();
 
         if (!$user) {
-            Log::warning('Unauthenticated user tried to access admin endpoint');
-            return response()->json(['error' => 'Unauthenticated'], 401);
+            return response()->json(['message' => 'Unauthorized'], 401);
         }
 
         if (!$user->isAdmin()) {
@@ -33,7 +32,8 @@ class AdminMiddleware
                 'firebase_uid' => $user->firebase_uid
             ]);
 
-            return response()->json(['error' => 'Admin access required'], 403);
+            return response()->json(['message' => 'Forbidden', 'admin' => false], 403);
+
         }
 
         return $next($request);

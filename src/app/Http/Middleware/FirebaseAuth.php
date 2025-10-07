@@ -59,15 +59,12 @@ class FirebaseAuth
                 ->header('Access-Control-Allow-Headers', 'Authorization, Content-Type, Accept');
         }
 
+        if (!$request->bearerToken()) {
+            return $next($request);
+        }
+
         $idToken = $request->bearerToken();
 
-        if (!$idToken) {
-            Log::error('❌ No bearer token found');
-            return response()->json([
-                'success' => false,
-                'error' => 'Authorization token not provided'
-            ], 401);
-        }
 
         // 開発環境での認証処理を修正
         if (config('app.env') === 'local' || config('app.debug') || is_null($this->auth)) {

@@ -79,34 +79,62 @@ export const useAuth = () => {
     }
 
     const authenticateUser = async (idToken) => {
-        const endpoints = ['api/admin/check', 'api/auth/check']
-        const pickUser = (r) => r?.admin || r?.user || r?.data?.admin || r?.data?.user || r?.data || null
-
-        for (const endpoint of endpoints) {
-            try {
-                const response = await $fetch(endpoint, {
-                    baseURL: API_BASE_URL,
-                    headers: {
-                        'Authorization': `Bearer ${idToken}`,
-                        'Accept': 'application/json',
-                        'Content-Type': 'application/json'
-                    },
-                    credentials: 'omit',   // Cookie送らない（CORSでBearer運用）
-                    redirect: 'error'
-                })
-
-                console.log(`${endpoint} response:`, response) // デバッグ用
-                const userData = pickUser(response)
-                if (userData) {
-                    console.log('認証成功 - ユーザーデータ:', userData) // デバッグ用
-                    return userData
-                }
-            } catch (e) {
-                console.log(`${endpoint} failed:`, e.message) // デバッグ用
-                if (endpoint === endpoints[endpoints.length - 1]) throw e
-            }
+        const headers = {
+            Authorization: `Bearer ${idToken}`,
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
         }
-        throw new Error('認証に失敗しました')
+
+        let isAdmin = false
+        let userInfo = null
+
+    　　// 1) admin 判定（401/403 は想定内）
+        try {
+            const a = await $fetch('api/admin/check', { 
+                baseURL: API_BASE_URL, 
+                headers, 
+                credentials: 'omit', 
+                redirect: 'error' 
+            })
+            isAdmin = !!a?.admin
+        
+            // 管理者の場合、トークンからユーザー情報を抽出
+            if (isAdmin) {
+                const tokenParts = idToken.split('.')
+                if (tokenParts.length === 3) {
+                    const payload = JSON.parse(atob(tokenParts[1]))
+                    userInfo = {
+                        firebase_uid: payload.sub,
+                        email: payload.email,
+                        role: 'admin'
+                    }
+                }
+            }
+        } catch (e) {
+            const s = e?.response?.status ?? e?.statusCode ?? e?.status
+            if (s !== 401 && s !== 403) throw e
+        }
+
+        // 2) 認証状態（user 情報）- 管理者でない場合のみ
+        if (!isAdmin) {
+            try {
+                const b = await $fetch('api/auth/check', { 
+                    baseURL: API_BASE_URL, 
+                    headers, 
+                    credentials: 'omit', 
+                    redirect: 'error' 
+                })
+                if (b?.user) userInfo = b.user
+                if (b?.admin) isAdmin = true
+            } catch (_) {}
+        }
+        if (!userInfo) throw new Error('認証に失敗しました')
+
+        return {
+            ...userInfo,
+            admin: isAdmin,
+            role: isAdmin ? 'admin' : 'user',
+        }
     }
 
     const register = (userData) =>
