@@ -13,4 +13,8 @@ npm-debug.log
 yarn-error.log
 /.idea
 /.vscode
-src/storage/app/firebase-service-account.jsonstorage/firebase-credentials.json
+# Firebase認証ファイル（秘密情報）
+firebase-credentials.json
+storage/firebase-credentials.json
+firebase-service-account.json
+storage/app/firebase-service-account.json
