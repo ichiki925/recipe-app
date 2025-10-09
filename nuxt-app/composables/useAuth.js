@@ -1,6 +1,7 @@
 import {
     createUserWithEmailAndPassword,
     signInWithEmailAndPassword,
+    sendEmailVerification,
     signOut,
     onAuthStateChanged,
     getIdToken
@@ -52,6 +53,15 @@ export const useAuth = () => {
                 userData.password
             )
 
+            // 確認メールを送信 ← ここから追加
+            const redirectUrl = process.env.NODE_ENV === 'production'
+                ? 'https://vanilla-kitchen.com/auth/login'
+                : 'http://localhost:3000/auth/login'
+
+            await sendEmailVerification(firebaseUser, {
+                url: redirectUrl,
+            })
+
             // 2) Laravel に登録（パスワードは送らない）
             const response = await $fetch(endpoint, {
                 method: 'POST',
@@ -69,7 +79,15 @@ export const useAuth = () => {
             if (!response?.success) {
                 throw new Error(response?.error || 'ユーザー登録に失敗しました')
             }
-            return response
+
+            // ログアウト（メール確認が必要）
+            await signOut($auth)
+
+            return {
+                ...response,
+                needsVerification: true,
+                message: '登録完了！確認メールを送信しました。メールを確認してログインしてください。'
+            }
         } catch (error) {
             await cleanupFirebaseUser()
             throw error
@@ -88,16 +106,16 @@ export const useAuth = () => {
         let isAdmin = false
         let userInfo = null
 
-    　　// 1) admin 判定（401/403 は想定内）
+        // 1) admin 判定（401/403 は想定内）
         try {
-            const a = await $fetch('api/admin/check', { 
-                baseURL: API_BASE_URL, 
-                headers, 
-                credentials: 'omit', 
-                redirect: 'error' 
+            const a = await $fetch('api/admin/check', {
+                baseURL: API_BASE_URL,
+                headers,
+                credentials: 'omit',
+                redirect: 'error'
             })
             isAdmin = !!a?.admin
-        
+
             // 管理者の場合、トークンからユーザー情報を抽出
             if (isAdmin) {
                 const tokenParts = idToken.split('.')
@@ -158,6 +176,12 @@ export const useAuth = () => {
         loading.value = true
         try {
             const { user: firebaseUser } = await signInWithEmailAndPassword($auth, email, password)
+
+            if (!firebaseUser.emailVerified) {
+                await signOut($auth)
+                throw new Error('メールアドレスが確認されていません。確認メールをご確認ください。')
+            }
+
             const idToken = await firebaseUser.getIdToken()
             user.value = await authenticateUser(idToken)
             return user.value

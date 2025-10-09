@@ -289,7 +289,7 @@ const handleSubmit = async () => {
     try {
         const { register } = useAuth()
 
-        await register({
+        const response = await register({
             name: form.name.trim(),
             email: form.email,
             password: form.password
@@ -297,6 +297,10 @@ const handleSubmit = async () => {
 
         // 成功時の処理
         errors.value = {}
+
+        if (response.needsVerification) {
+            alert(response.message || '登録完了！確認メールを送信しました。')
+        }
 
         await navigateTo('/auth/login?registered=true')
 

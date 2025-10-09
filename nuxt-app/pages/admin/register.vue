@@ -334,7 +334,7 @@ const handleSubmit = async () => {
     try {
         const { registerAdmin } = useAuth()
 
-        await registerAdmin({
+        const response = await registerAdmin({
             adminCode: form.adminCode,
             name: form.name.trim(),
             email: form.email,
@@ -342,6 +342,10 @@ const handleSubmit = async () => {
         })
 
         errors.value = {}
+
+        if (response.needsVerification) {
+            alert(response.message || '登録完了！確認メールを送信しました。')
+        }
 
         await navigateTo('/admin/login?registered=true')
 
