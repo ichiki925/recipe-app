@@ -53,10 +53,14 @@ export const useAuth = () => {
                 userData.password
             )
 
-            // 確認メールを送信 ← ここから追加
+            // 確認メールを送信（環境に応じてリダイレクト）
+            // endpointから管理者登録かどうかを判定
+            const isAdminRegistration = endpoint.includes('admin')
+            const loginPath = isAdminRegistration ? '/admin/login' : '/auth/login'
+
             const redirectUrl = process.env.NODE_ENV === 'production'
-                ? 'https://vanilla-kitchen.com/auth/login'
-                : 'http://localhost:3000/auth/login'
+                ? `https://vanilla-kitchen.com${loginPath}`
+                : `http://localhost:3000${loginPath}`
 
             await sendEmailVerification(firebaseUser, {
                 url: redirectUrl,
