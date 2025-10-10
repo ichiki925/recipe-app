@@ -70,7 +70,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, watch } from 'vue'
+import { ref, watch } from 'vue'
 import { useRoute, useRouter, useHead } from '#app'
 
 definePageMeta({
@@ -103,7 +103,6 @@ const clearSearch = () => {
     searchKeyword.value = ''
     currentPage.value = 1
     updateUrl()
-    fetchRecipes()
 }
 
 // 画像URL処理関数
@@ -111,7 +110,7 @@ const getImageUrl = (imageUrl) => {
     if (!imageUrl) return '/images/no-image.png'
 
     if (imageUrl.startsWith('/storage/')) {
-        return `http://localhost${imageUrl}`
+        return `${window.location.origin}${imageUrl}`
     }
 
     return imageUrl
@@ -130,14 +129,6 @@ const handleImageError = (event, recipe) => {
     }
 }
 
-// 初期化
-onMounted(() => {
-    searchKeyword.value = route.query.keyword || ''
-    currentPage.value = parseInt(route.query.page) || 1
-    totalPages.value = 1
-    fetchRecipes()
-})
-
 // API経由でレシピを検索取得
 const fetchRecipes = async () => {
     try {
@@ -147,11 +138,8 @@ const fetchRecipes = async () => {
 
         const response = await $fetch('/api/recipes/search', {
             baseURL: config.public.apiBaseUrl,
-            query: {
-                keyword: searchKeyword.value,
-                page: currentPage.value,
-                per_page: 9
-            }
+            query: { keyword: searchKeyword.value, page: currentPage.value, per_page: 9 }
+
         })
 
         // レシピデータを更新（ジャンル情報は除外）
@@ -169,20 +157,9 @@ const fetchRecipes = async () => {
 
     } catch (error) {
         console.error('❌ レシピ検索エラー:', error)
-
-        // エラー時はモックデータを使用（ジャンル情報なし）
-        const mockRecipes = []
-
-        if (searchKeyword.value) {
-            // 検索キーワードがある場合はフィルタリング
-            recipes.value = mockRecipes.filter(recipe =>
-                recipe.title.toLowerCase().includes(searchKeyword.value.toLowerCase())
-            )
-        } else {
-            recipes.value = mockRecipes
-        }
-
-        totalPages.value = Math.ceil(recipes.value.length / 9)
+      // 本番はモックを使わない：空で表示
+      recipes.value = []
+      totalPages.value = 1
     } finally {
         isLoading.value = false
     }
@@ -191,7 +168,6 @@ const fetchRecipes = async () => {
 const searchRecipes = () => {
     currentPage.value = 1
     updateUrl()
-    fetchRecipes()
 }
 
 const handleSearch = (keyword) => {
@@ -202,7 +178,6 @@ const handleSearch = (keyword) => {
 const goToPage = (page) => {
     currentPage.value = page
     updateUrl()
-    fetchRecipes()
 }
 
 const updateUrl = () => {
@@ -220,7 +195,7 @@ watch(() => route.query, (newQuery) => {
     searchKeyword.value = newQuery.keyword || ''
     currentPage.value = parseInt(newQuery.page) || 1
     fetchRecipes()
-})
+}, { immediate: true })
 </script>
 
 <style scoped>

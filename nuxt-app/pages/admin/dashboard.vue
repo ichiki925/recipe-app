@@ -160,7 +160,7 @@ const restoreRecipe = async (recipeId) => {
   isProcessing.value = true
 
   try {
-    await postAuth(`/admin/recipes/${recipeId}/restore`)
+    await postAuth(`/api/admin/recipes/${recipeId}/restore`)
 
     dashboardData.value.deleted_recipes = dashboardData.value.deleted_recipes.filter(
       recipe => recipe.id !== recipeId
@@ -206,7 +206,7 @@ const permanentlyDeleteRecipe = async (recipeId) => {
   isProcessing.value = true
 
   try {
-    await delAuth(`/admin/recipes/${recipeId}/permanent-delete`)
+    await delAuth(`/api/admin/recipes/${recipeId}/permanent-delete`)
 
     dashboardData.value.deleted_recipes = dashboardData.value.deleted_recipes.filter(
       recipe => recipe.id !== recipeId
@@ -246,7 +246,7 @@ onMounted(async () => {
   }
 
   try {
-    const response = await getAuth('/admin/dashboard')
+    const response = await getAuth('/api/admin/dashboard')
     dashboardData.value = response.data || response
   } catch (error) {
     console.error('ダッシュボードデータ取得エラー:', error)

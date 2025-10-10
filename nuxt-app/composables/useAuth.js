@@ -112,7 +112,7 @@ export const useAuth = () => {
 
         // 1) admin 判定（401/403 は想定内）
         try {
-            const a = await $fetch('api/admin/check', {
+            const a = await $fetch('/api/admin/check', {
                 baseURL: API_BASE_URL,
                 headers,
                 credentials: 'omit',
@@ -173,7 +173,7 @@ export const useAuth = () => {
                 password: adminData.password,
                 admin_code: adminData.adminCode
             },
-            'api/admin/register'
+            '/api/admin/register'
         )
 
     const login = async (email, password) => {
