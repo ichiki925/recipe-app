@@ -149,20 +149,17 @@ const handleSearch = (keyword) => {
   searchKeyword.value = keyword
   currentPage.value = 1
   updateUrl()
-  fetchRecipes()
 }
 
 const handleClearSearch = () => {
   searchKeyword.value = ''
   currentPage.value = 1
   updateUrl()
-  fetchRecipes()
 }
 
 const goToPage = (page) => {
   currentPage.value = page
   updateUrl()
-  fetchRecipes()
 }
 
 const updateUrl = () => {
@@ -174,6 +171,8 @@ const updateUrl = () => {
 
 const fetchRecipes = async () => {
   isLoading.value = true
+  console.log('🔍 fetchRecipes開始:', { keyword: searchKeyword.value, page: currentPage.value })
+
   try {
     const response = await getAuth('recipes/search', {
       query: {
@@ -182,6 +181,10 @@ const fetchRecipes = async () => {
         per_page: 9
       }
     })
+
+    console.log('📦 API Response:', response)
+    console.log('📦 Response.data:', response.data)
+    console.log('📦 Response全体:', JSON.stringify(response, null, 2))
 
     recipes.value = (response.data || []).map(r => ({
       id: r.id,
@@ -192,6 +195,9 @@ const fetchRecipes = async () => {
       image_url: r.image_url,
       admin: r.admin
     }))
+
+    console.log('✅ recipes.value:', recipes.value)
+
 
     const isFirstLoad = favoriteStore.value.size === 0
 
@@ -281,38 +287,13 @@ onMounted(async () => {
   }
 
   favoriteStore.value.clear()
-
-  // URLクエリの設定
-  searchKeyword.value = route.query.keyword || ''
-  currentPage.value = parseInt(route.query.page) || 1
-
-  // レシピ取得
-  await fetchRecipes()
 })
 
 watch(() => route.query, (newQuery) => {
-  const newKeyword = newQuery.keyword || ''
-  const newPage = parseInt(newQuery.page) || 1
-
-  const oldKeyword = searchKeyword.value
-  const oldPage = currentPage.value
-
-  let shouldFetch = false
-
-  if (newKeyword !== oldKeyword) {
-    searchKeyword.value = newKeyword
-    shouldFetch = true
-  }
-
-  if (newPage !== oldPage) {
-    currentPage.value = newPage
-    shouldFetch = true
-  }
-
-  if (shouldFetch) {
-    fetchRecipes()
-  }
-}, { immediate: false }) // 初回実行を防ぐ
+  searchKeyword.value = newQuery.keyword || ''
+  currentPage.value = parseInt(newQuery.page) || 1
+  fetchRecipes()
+}, { immediate: true })
 
 watch(favoriteStore, (newFavorites) => {
   recipes.value.forEach(recipe => {

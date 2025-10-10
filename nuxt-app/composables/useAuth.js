@@ -53,18 +53,17 @@ export const useAuth = () => {
                 userData.password
             )
 
-            // 確認メールを送信（環境に応じてリダイレクト）
-            // endpointから管理者登録かどうかを判定
-            const isAdminRegistration = endpoint.includes('admin')
-            const loginPath = isAdminRegistration ? '/admin/login' : '/auth/login'
-
-            const redirectUrl = process.env.NODE_ENV === 'production'
-                ? `https://vanilla-kitchen.com${loginPath}`
-                : `http://localhost:3000${loginPath}`
-
-            await sendEmailVerification(firebaseUser, {
-                url: redirectUrl,
-            })
+            // 🔧 開発環境ではメール認証をスキップ
+            if (process.env.NODE_ENV === 'production') {
+                // 本番環境のみメール認証を実施
+                const isAdminRegistration = endpoint.includes('admin')
+                const loginPath = isAdminRegistration ? '/admin/login' : '/auth/login'
+                const redirectUrl = `https://vanilla-kitchen.com${loginPath}`
+                
+                await sendEmailVerification(firebaseUser, {
+                    url: redirectUrl,
+                })
+            }
 
             // 2) Laravel に登録（パスワードは送らない）
             const response = await $fetch(endpoint, {
@@ -85,12 +84,17 @@ export const useAuth = () => {
             }
 
             // ログアウト（メール確認が必要）
-            await signOut($auth)
+            // 🔧 開発環境ではログアウトしない
+            if (process.env.NODE_ENV === 'production') {
+                await signOut($auth)
+            }
 
             return {
                 ...response,
-                needsVerification: true,
-                message: '登録完了！確認メールを送信しました。メールを確認してログインしてください。'
+                needsVerification: process.env.NODE_ENV === 'production',
+                message: process.env.NODE_ENV === 'production' 
+                    ? '登録完了！確認メールを送信しました。メールを確認してログインしてください。'
+                    : '登録完了！そのままログインできます。'
             }
         } catch (error) {
             await cleanupFirebaseUser()
@@ -181,7 +185,8 @@ export const useAuth = () => {
         try {
             const { user: firebaseUser } = await signInWithEmailAndPassword($auth, email, password)
 
-            if (!firebaseUser.emailVerified) {
+            // 🔧 本番環境のみメール確認チェック
+            if (process.env.NODE_ENV === 'production' && !firebaseUser.emailVerified) {
                 await signOut($auth)
                 throw new Error('メールアドレスが確認されていません。確認メールをご確認ください。')
             }
@@ -195,6 +200,7 @@ export const useAuth = () => {
         } finally {
             loading.value = false
         }
+
     }
 
     const logout = async () => {
