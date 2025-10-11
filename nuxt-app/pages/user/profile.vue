@@ -180,7 +180,6 @@ const avatarUrl = computed(() => {
 })
 
 useHead({
-  title: 'プロフィール編集',
   link: [
     {
       rel: 'stylesheet',

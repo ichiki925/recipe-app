@@ -125,19 +125,29 @@ class Recipe extends Model
      */
     public function scopeSearch($query, $keyword)
     {
-        if (empty($keyword)) return $query;
+        $kw = trim((string)$keyword);
+        if ($kw === '') return $query;
 
-        $raw  = $keyword;
-        $likeRaw  = "%{$raw}%";
-        $likeHira = '%' . \App\Support\JaString::normalizeToHiragana($raw) . '%';
+        // 全角・半角スペースで分割し、空要素を除去
+        $keywords = array_values(array_filter(
+            preg_split('/[\s　]+/u', $kw),
+            fn ($w) => $w !== ''
+        ));
 
-        return $query->where(function ($q) use ($likeRaw, $likeHira) {
-            $q->where('title', 'LIKE', $likeRaw)
-            ->orWhere('genre', 'LIKE', $likeRaw)
-            ->orWhere('ingredients', 'LIKE', $likeRaw)
-            ->orWhere('instructions', 'LIKE', $likeRaw)
-            ->orWhere('search_reading', 'LIKE', $likeRaw)
-            ->orWhere('search_reading', 'LIKE', $likeHira);
+        return $query->where(function ($outer) use ($keywords) {
+            foreach ($keywords as $word) {
+                $likeRaw  = "%{$word}%";
+                $likeHira = '%' . \App\Support\JaString::normalizeToHiragana($word) . '%';
+
+                // 各単語ごとに AND で条件を追加
+                $outer->where(function ($q) use ($likeRaw, $likeHira) {
+                    $q->where('title', 'LIKE', $likeRaw)
+                      ->orWhere('genre', 'LIKE', $likeRaw)
+                      ->orWhere('ingredients', 'LIKE', $likeRaw)
+                      ->orWhere('search_reading', 'LIKE', $likeRaw)
+                      ->orWhere('search_reading', 'LIKE', $likeHira);
+                });
+            }
         });
     }
 
