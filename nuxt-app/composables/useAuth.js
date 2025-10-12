@@ -2,6 +2,7 @@ import {
     createUserWithEmailAndPassword,
     signInWithEmailAndPassword,
     sendEmailVerification,
+    sendPasswordResetEmail,
     signOut,
     onAuthStateChanged,
     getIdToken
@@ -59,7 +60,7 @@ export const useAuth = () => {
                 const isAdminRegistration = endpoint.includes('admin')
                 const loginPath = isAdminRegistration ? '/admin/login' : '/auth/login'
                 const redirectUrl = `https://vanilla-kitchen.com${loginPath}`
-                
+
                 await sendEmailVerification(firebaseUser, {
                     url: redirectUrl,
                 })
@@ -217,6 +218,17 @@ export const useAuth = () => {
         }
     }
 
+    const resetPassword = async (email) => {
+        try {
+            await sendPasswordResetEmail($auth, email, {
+                url: 'https://vanilla-kitchen.com/auth/reset-password'
+            })
+        } catch (error) {
+            console.error('パスワードリセットメール送信エラー:', error)
+            throw error
+        }
+    }
+
     const initAuth = () =>
         new Promise((resolve) => {
             const unsubscribe = onAuthStateChanged($auth, async (firebaseUser) => {
@@ -254,6 +266,7 @@ export const useAuth = () => {
         registerAdmin,
         login,
         logout,
+        resetPassword,
         initAuth
     }
 }

@@ -3,18 +3,12 @@
     <div class="form-container">
       <h1 class="title">新しいパスワードの設定</h1>
 
+      <div v-if="errors.general" class="error-message">
+        {{ errors.general }}
+      </div>
+
+
       <form @submit.prevent="handleSubmit" class="form">
-        <div class="form-group">
-          <label class="form-label">メールアドレス</label>
-          <input
-            type="email"
-            v-model="form.email"
-            class="form-input"
-            :class="{ 'error-input': errors.email }"
-            required
-          >
-          <div v-if="errors.email" class="error">{{ errors.email }}</div>
-        </div>
 
         <div class="form-group">
           <label class="form-label">新しいパスワード</label>
@@ -23,6 +17,7 @@
             v-model="form.password"
             class="form-input"
             :class="{ 'error-input': errors.password }"
+            :disabled="isSubmitting"
             required
           >
           <div v-if="errors.password" class="error">{{ errors.password }}</div>
@@ -35,6 +30,7 @@
             v-model="form.passwordConfirmation"
             class="form-input"
             :class="{ 'error-input': errors.passwordConfirmation }"
+            :disabled="isSubmitting"
             required
           >
           <div v-if="errors.passwordConfirmation" class="error">{{ errors.passwordConfirmation }}</div>
@@ -43,7 +39,7 @@
         <button
           type="submit"
           class="submit-button"
-          :disabled="isSubmitting"
+          :disabled="isSubmitting || !oobCode"
         >
           {{ isSubmitting ? '変更中...' : 'パスワードを変更' }}
         </button>
@@ -57,57 +53,64 @@
 </template>
 
 <script setup>
+import { getAuth, confirmPasswordReset } from 'firebase/auth'
+
 definePageMeta({
   layout: false
 })
 
 const route = useRoute()
+const auth = getAuth()
 
 const form = ref({
-  email: '',
   password: '',
   passwordConfirmation: ''
 })
 const errors = ref({})
 const isSubmitting = ref(false)
-const token = ref(null)
+const oobCode = ref(null)
 
 onMounted(() => {
-  token.value = route.query.token || route.params.token || null
-  if (route.query.email) {
-    form.value.email = route.query.email
+  // FirebaseがメールリンクにoobCodeを含めて送信する
+  oobCode.value = route.query.oobCode || null
+
+  if (!oobCode.value) {
+    errors.value.general = '無効なリンクです。再度パスワードリセットを行ってください。'
   }
 })
 
 const handleSubmit = async () => {
   errors.value = {}
   if (!validateForm()) return
+
+  if (!oobCode.value) {
+    errors.value.general = '無効なリンクです'
+    return
+  }
+
   isSubmitting.value = true
-
   try {
-    const config = useRuntimeConfig()
+    // Firebaseでパスワードをリセット
+    await confirmPasswordReset(auth, oobCode.value, form.value.password)
 
-    const response = await $fetch('/api/auth/reset-password', {
-      baseURL: config.public.apiBaseUrl,
-      method: 'POST',
-      body: {
-        token: token.value,
-        email: form.value.email,
-        password: form.value.password,
-        password_confirmation: form.value.passwordConfirmation
-      }
-    })
-
-    if (response.success) {
-      alert('パスワードが正常に変更されました。')
-      await navigateTo('/auth/login')
-    } else {
-      throw new Error(response.message || 'パスワード変更に失敗しました')
-    }
+    alert('パスワードが正常に変更されました。')
+    await navigateTo('/auth/login')
 
   } catch (error) {
     console.error('エラー:', error)
-    errors.value.general = error.message || 'エラーが発生しました。'
+
+    let errorMessage = 'エラーが発生しました。'
+
+    if (error.code === 'auth/expired-action-code') {
+      errorMessage = 'リンクの有効期限が切れています。再度パスワードリセットを行ってください。'
+    } else if (error.code === 'auth/invalid-action-code') {
+      errorMessage = '無効なリンクです。再度パスワードリセットを行ってください。'
+    } else if (error.code === 'auth/weak-password') {
+      errorMessage = 'パスワードが弱すぎます。'
+    }
+
+    errors.value.general = errorMessage
+
   } finally {
     isSubmitting.value = false
   }
@@ -115,15 +118,6 @@ const handleSubmit = async () => {
 
 const validateForm = () => {
   let isValid = true
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-
-  if (!form.value.email) {
-    errors.value.email = 'メールアドレスを入力してください'
-    isValid = false
-  } else if (!emailRegex.test(form.value.email)) {
-    errors.value.email = '正しいメールアドレスを入力してください'
-    isValid = false
-  }
 
   if (!form.value.password) {
     errors.value.password = 'パスワードを入力してください'
@@ -258,6 +252,15 @@ const validateForm = () => {
 
 .login-link:hover {
     color: #9f9b9b;
+}
+
+.error-message {
+  background-color: #f8d7da;
+  color: #721c24;
+  padding: 0.75rem;
+  border-radius: 4px;
+  margin-bottom: 1rem;
+  font-size: 0.9rem;
 }
 
 @media screen and (max-width: 480px) {
