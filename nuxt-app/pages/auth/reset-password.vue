@@ -53,14 +53,15 @@
 </template>
 
 <script setup>
-import { getAuth, confirmPasswordReset } from 'firebase/auth'
+import { confirmPasswordReset } from 'firebase/auth'
 
 definePageMeta({
   layout: false
 })
 
 const route = useRoute()
-const auth = getAuth()
+const { $auth } = useNuxtApp()
+const auth = $auth
 
 const form = ref({
   password: '',
@@ -71,7 +72,6 @@ const isSubmitting = ref(false)
 const oobCode = ref(null)
 
 onMounted(() => {
-  // FirebaseがメールリンクにoobCodeを含めて送信する
   oobCode.value = route.query.oobCode || null
 
   if (!oobCode.value) {
