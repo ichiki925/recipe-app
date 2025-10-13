@@ -220,7 +220,7 @@ export const useAuth = () => {
 
     const resetPassword = async (email, type = 'user') => {
         try {
-            const url = `https://vanilla-kitchen.com/auth/reset-password?type=${type}`
+            const url = `https://vanilla-kitchen.com/reset-password?type=${type}`
 
             await sendPasswordResetEmail($auth, email, {
                 url: url

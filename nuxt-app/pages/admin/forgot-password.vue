@@ -53,7 +53,7 @@
         </button>
       </div>
 
-      <nuxt-link :to="/auth/login" class="login-link">
+      <nuxt-link :to="/admin/login" class="login-link">
         ログイン画面に戻る
       </nuxt-link>
     </div>
@@ -67,7 +67,7 @@ definePageMeta({
   layout: false
 })
 
-const returnType = 'user'
+const returnType = 'admin'
 
 const form = ref({ email: '' })
 const errors = ref({})
