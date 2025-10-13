@@ -6,8 +6,7 @@
       <div v-if="errors.general" class="error-message">
         {{ errors.general }}
       </div>
-
-
+      
       <form @submit.prevent="handleSubmit" class="form">
 
         <div class="form-group">
@@ -45,7 +44,7 @@
         </button>
       </form>
 
-      <NuxtLink to="/auth/login" class="login-link">
+      <NuxtLink :to="returnType === 'admin' ? '/admin/login' : '/auth/login'" class="login-link">
         ログイン画面に戻る
       </NuxtLink>
     </div>
@@ -62,6 +61,8 @@ definePageMeta({
 const route = useRoute()
 const { $auth } = useNuxtApp()
 const auth = $auth
+
+const returnType = route.query.type || 'user'
 
 const form = ref({
   password: '',
@@ -94,7 +95,12 @@ const handleSubmit = async () => {
     await confirmPasswordReset(auth, oobCode.value, form.value.password)
 
     alert('パスワードが正常に変更されました。')
-    await navigateTo('/auth/login')
+
+    if (returnType === 'admin') {
+      await navigateTo('/admin/login')
+    } else {
+      await navigateTo('/auth/login')
+    }
 
   } catch (error) {
     console.error('エラー:', error)

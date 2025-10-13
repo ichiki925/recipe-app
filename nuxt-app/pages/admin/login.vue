@@ -33,7 +33,7 @@
           {{ (localLoading || loading) ? 'ログイン中...' : 'ログイン' }}
         </button>
         <div class="form-footer">
-          <NuxtLink to="/auth/forgot-password" class="forgot-link">パスワードを忘れた場合はこちら</NuxtLink>
+          <NuxtLink to="/auth/forgot-password?type=admin" class="forgot-link">パスワードを忘れた場合はこちら</NuxtLink>
         </div>
       </form>
     </div>

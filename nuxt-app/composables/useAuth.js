@@ -218,10 +218,12 @@ export const useAuth = () => {
         }
     }
 
-    const resetPassword = async (email) => {
+    const resetPassword = async (email, type = 'user') => {
         try {
+            const url = `https://vanilla-kitchen.com/auth/reset-password?type=${type}`
+
             await sendPasswordResetEmail($auth, email, {
-                url: 'https://vanilla-kitchen.com/auth/reset-password'
+                url: url
             })
         } catch (error) {
             console.error('パスワードリセットメール送信エラー:', error)

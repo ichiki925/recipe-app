@@ -53,7 +53,7 @@
         </button>
       </div>
 
-      <nuxt-link to="/auth/login" class="login-link">
+      <nuxt-link :to="returnType === 'admin' ? '/admin/login' : '/auth/login'" class="login-link">
         ログイン画面に戻る
       </nuxt-link>
     </div>
@@ -66,6 +66,9 @@ import { ref, computed } from 'vue'
 definePageMeta({
   layout: false
 })
+
+const route = useRoute()
+const returnType = route.query.type || 'user'
 
 const form = ref({ email: '' })
 const errors = ref({})
@@ -122,7 +125,7 @@ const handleSubmit = async () => {
   successMessage.value = false
 
   try {
-    await resetPassword(form.value.email.trim())
+    await resetPassword(form.value.email.trim(), returnType)
     successMessage.value = true
 
     errors.value = {}
