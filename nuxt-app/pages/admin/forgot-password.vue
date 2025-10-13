@@ -53,7 +53,7 @@
         </button>
       </div>
 
-      <nuxt-link :to="/admin/login" class="login-link">
+      <nuxt-link to="/admin/login" class="login-link">
         ログイン画面に戻る
       </nuxt-link>
     </div>
