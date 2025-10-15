@@ -15,6 +15,7 @@ export const useAuth = () => {
     const config = useRuntimeConfig()
     const user = useState('auth.user', () => null)
     const loading = useState('auth.loading', () => false)
+    const _initOnce = useState('auth._initOnce', () => null)
 
     const API_BASE_URL = config.public.apiBaseUrl
 
@@ -232,26 +233,27 @@ export const useAuth = () => {
     }
 
     const initAuth = () =>
-        new Promise((resolve) => {
-            const unsubscribe = onAuthStateChanged($auth, async (firebaseUser) => {
-                try {
-                    loading.value = true
-                    if (firebaseUser) {
-                        const idToken = await firebaseUser.getIdToken()
-                        user.value = await authenticateUser(idToken)
-                    } else {
-                        user.value = null
-                    }
-                } catch (error) {
-                    console.error('認証初期化エラー:', error)
+   // ★ 既に初期化中/済みなら同じ Promise を返す（多重 onAuthStateChanged を防止）
+    (_initOnce.value ||= new Promise((resolve) => {
+        const unsubscribe = onAuthStateChanged($auth, async (firebaseUser) => {
+            try {
+                loading.value = true
+                if (firebaseUser) {
+                    const idToken = await firebaseUser.getIdToken()
+                    user.value = await authenticateUser(idToken)
+                } else {
                     user.value = null
-                } finally {
-                    loading.value = false
-                    resolve()
-                    unsubscribe()
                 }
-            })
+            } catch (error) {
+                console.error('認証初期化エラー:', error)
+                user.value = null
+            } finally {
+                loading.value = false
+                resolve()
+                unsubscribe()
+            }
         })
+    }))
 
     const isAdmin = computed(() => user.value?.role === 'admin')
     const isLoggedIn = computed(() => !!user.value)

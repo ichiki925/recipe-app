@@ -101,8 +101,6 @@ useHead({
 })
 
 const { user, isLoggedIn, initAuth } = useAuth()
-console.log('useAuth result:', { user, isLoggedIn, initAuth })
-console.log('user value:', user?.value)
 const { getAuth, postAuth } = useApi()
 
 const searchKeyword = ref('')
@@ -110,6 +108,7 @@ const currentPage = ref(1)
 const totalPages = ref(1)
 const recipes = ref([])
 const isLoading = ref(false)
+const isAuthInitialized = ref(false)
 
 const route = useRoute()
 const router = useRouter()
@@ -170,6 +169,11 @@ const updateUrl = () => {
 }
 
 const fetchRecipes = async () => {
+  if (!isAuthInitialized.value) {
+    console.log('⏳ 認証初期化待ち...')
+    return
+  }
+
   isLoading.value = true
   console.log('🔍 fetchRecipes開始:', { keyword: searchKeyword.value, page: currentPage.value })
 
@@ -183,8 +187,6 @@ const fetchRecipes = async () => {
     })
 
     console.log('📦 API Response:', response)
-    console.log('📦 Response.data:', response.data)
-    console.log('📦 Response全体:', JSON.stringify(response, null, 2))
 
     recipes.value = (response.data || []).map(r => ({
       id: r.id,
@@ -197,7 +199,6 @@ const fetchRecipes = async () => {
     }))
 
     console.log('✅ recipes.value:', recipes.value)
-
 
     const isFirstLoad = favoriteStore.value.size === 0
 
@@ -280,20 +281,42 @@ const toggleLike = async (recipe, event) => {
 }
 
 onMounted(async () => {
+  console.log('1️⃣ onMounted開始')
+
   await initAuth()
+  await waitForAuth()
+
+  await new Promise(r => requestAnimationFrame(() => r()))
 
   if (!isLoggedIn.value) {
+    console.log('3️⃣ 最終未ログイン → リダイレクト')
     return navigateTo('/auth/login')
   }
 
+  console.log('4️⃣ ログイン済み')
+
   favoriteStore.value.clear()
+
+  isAuthInitialized.value = true
+  console.log('5️⃣ 認証初期化完了フラグON')
+
+  searchKeyword.value = route.query.keyword || ''
+  currentPage.value = parseInt(route.query.page) || 1
+
+  await fetchRecipes()
+  console.log('6️⃣ 初回レシピ取得完了')
 })
 
 watch(() => route.query, (newQuery) => {
+  console.log('🔄 URLクエリ変更検知:', newQuery)
+
   searchKeyword.value = newQuery.keyword || ''
   currentPage.value = parseInt(newQuery.page) || 1
-  fetchRecipes()
-}, { immediate: true })
+
+  if (isAuthInitialized.value) {
+    fetchRecipes()
+  }
+})
 
 watch(favoriteStore, (newFavorites) => {
   recipes.value.forEach(recipe => {
