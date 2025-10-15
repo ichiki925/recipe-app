@@ -14,20 +14,13 @@
         </div>
         <nav>
           <ul>
-            <li>
-              <NuxtLink to="/user" :class="{ active: $route.path === '/user' }">
-                Recipes
-              </NuxtLink>
-            </li>
+            <li><NuxtLink to="/user" class="nav-link" :class="{ active: $route.path === '/user' }">Recipes</NuxtLink></li>
+
             <ClientOnly>
               <template v-if="isLoggedIn">
-                <li>
-                  <NuxtLink to="/user/favorite" :class="{ active: $route.path === '/user/favorite' }">Favorite</NuxtLink>
-                </li>
-                <li>
-                  <NuxtLink to="/user/profile" :class="{ active: $route.path === '/user/profile' }">Profile</NuxtLink>
-                </li>
-                <li><a href="#" @click.prevent="handleLogout" class="logout-link">Logout</a></li>
+                <li><NuxtLink to="/user/favorite" class="nav-link" :class="{ active: $route.path === '/user/favorite' }">Favorite</NuxtLink></li>
+                <li><NuxtLink to="/user/profile"  class="nav-link" :class="{ active: $route.path === '/user/profile' }">Profile</NuxtLink></li>
+                <li><button type="button" class="nav-link" @click.prevent="handleLogout">Logout</button></li>
               </template>
             </ClientOnly>
           </ul>

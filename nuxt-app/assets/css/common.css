@@ -4,7 +4,6 @@ a,
 button {
     margin: 0;
     padding: 0;
-    font-family: cursive;
     list-style: none;
     text-decoration: none;
     border: none;
@@ -25,13 +24,13 @@ header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-
+    min-height: 64px;
 }
 
-.logo-title {
+.logo {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
     cursor: pointer;
 }
 
@@ -52,11 +51,16 @@ header {
 
 .logo-image {
     height: 50px;
+    display: block;
 }
 
 .logo-text {
-    font-family: cursive;
-    font-size: 30px;
+    font-family: 'Italianno', cursive;
+    font-size: 3rem;
+    font-weight: 400;
+    line-height: 1;
+    margin: 0;
+    transform: translateY(2px);
 }
 
 nav {
@@ -66,29 +70,40 @@ nav {
 
 nav ul {
     display: flex;
-    gap: 20px;
+    align-items: center;
+    gap: 24px;
+    margin: 0;
+    padding: 0;
 }
 
-nav ul li {
-    display: inline-block;
+nav li {
+    list-style: none;
 }
 
-nav ul li a {
+.nav-link {
+    display: flex;
+    /* ベースラインのズレ防止 */
+    align-items: center;
+    /* 縦中央を保証 */
+    font-family: 'Italianno', cursive;
+    font-size: 2rem;
+    line-height: 1;
     color: #111;
-    font-size: 20px;
+    background: none;
+    border: 0;
+    padding: 0;
     text-decoration: none;
-    transition: color 0.3s;
     cursor: pointer;
-    vertical-align: top;
-    line-height: 1.2;
-    display: inline-block;
-    font-family: cursive;
-    font-weight: normal;
     white-space: nowrap;
+    transition: color .2s;
 }
 
-nav ul li a:hover {
-    color: #aaa;
+.nav-link:hover {
+    color: #888;
+}
+
+.active {
+    opacity: .85;
 }
 
 @media (max-width: 768px) {

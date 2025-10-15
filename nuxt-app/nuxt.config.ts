@@ -5,6 +5,20 @@ export default defineNuxtConfig({
     '@/assets/css/sanitize.css',
   ],
 
+  app: {
+    head: {
+      link: [
+        // ↓ この3行を貼る（画面のEmbed codeと同じ）
+        { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
+        { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: '' },
+        { rel: 'stylesheet', href: 'https://fonts.googleapis.com/css2?family=Italianno&display=swap' },
+
+        // 本文でNoto Sans JPを使う場合だけ（任意）
+        // { rel: 'stylesheet', href: 'https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500&display=swap' }
+      ]
+    }
+  },
+
   modules: [
     '@nuxt/eslint',
     '@nuxt/icon',

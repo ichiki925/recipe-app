@@ -370,10 +370,10 @@ const handleSubmit = async () => {
 
 .title {
     text-align: center;
-    font-size: 1.5rem;
-    font-family: cursive;
-    margin-bottom: 2rem;
-    font-weight: 300;
+    font-size: 3rem;
+    font-family: 'Italianno', cursive;
+    margin: 1rem;
+    font-weight: 400;
     color: #222;
 }
 

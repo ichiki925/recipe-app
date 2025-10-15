@@ -14,7 +14,11 @@
                 </div>
                 <nav>
                     <ul>
-                        <li><a href="#" @click.prevent="logout">Logout</a></li>
+                        <li>
+                            <button type="button" class="nav-link" @click.prevent="logout">
+                                Logout
+                            </button>
+                        </li>
                     </ul>
                 </nav>
             </div>

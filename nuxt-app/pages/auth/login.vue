@@ -304,11 +304,11 @@ const handleLogin = async () => {
 
 .login-title {
     color: #222;
-    font-size: 1.8rem;
-    font-family: cursive;
-    margin-bottom: 2rem;
+    font-size: 3rem;
+    font-family: 'Italianno', cursive;
+    font-weight: 400;
+    margin-bottom: 0.5rem;
     margin-top: 0.5rem;
-    font-weight: 300;
     text-align: center;
 }
 

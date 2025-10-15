@@ -153,12 +153,11 @@ onUnmounted(() => {
 }
 
 .login-title {
-  font-size: 24px;
-  font-weight: normal;
+  font-size: 2.5rem;
   color: #333;
   margin: 0 0 30px 0;
-  font-family: cursive;
-  font-style: italic;
+  font-family: 'Italianno', cursive;
+  font-weight: 400;
 }
 
 .form-group {

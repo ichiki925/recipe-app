@@ -158,8 +158,8 @@ const fetchRecipes = async () => {
     } catch (error) {
         console.error('❌ レシピ検索エラー:', error)
       // 本番はモックを使わない：空で表示
-      recipes.value = []
-      totalPages.value = 1
+        recipes.value = []
+        totalPages.value = 1
     } finally {
         isLoading.value = false
     }

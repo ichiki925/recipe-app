@@ -59,10 +59,10 @@ definePageMeta({
 
 .title {
     color: #555;
-    font-size: 1.8rem;
+    font-size: 2.5rem;
     margin-bottom: 0.5rem;
-    font-weight: 300;
-    font-family: cursive;
+    font-family: 'Italianno', cursive;
+    font-weight: 400;
 }
 
 .subtitle {

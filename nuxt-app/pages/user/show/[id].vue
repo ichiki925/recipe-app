@@ -63,7 +63,7 @@ const { user, isLoggedIn, initAuth } = useAuth()
 const { getAuth, postAuth } = useApi()
 
 useHead({
-  title: 'レシピ詳細',
+  title: "Vanilla’s Kitchen",
   link: [
     {
       rel: 'stylesheet',
