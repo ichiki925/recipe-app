@@ -27,13 +27,6 @@ header {
     min-height: 64px;
 }
 
-.logo {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    cursor: pointer;
-}
-
 .logo-title:hover {
     color: #888;
 }
@@ -46,7 +39,16 @@ header {
     display: flex;
     align-items: flex-end;
     gap: 10px;
+    cursor: pointer;
     flex-shrink: 0;
+}
+
+.logo:hover { 
+    color: #888;
+}
+
+.logo:active {
+    opacity: 0.6;
 }
 
 .logo-image {

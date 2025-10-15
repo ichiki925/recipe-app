@@ -8,7 +8,7 @@
 
         <header>
             <div class="container">
-                <div class="logo-title" @click="goToDashboard">
+                <div class="logo" @click="goToDashboard">
                     <img src="/images/rabbit-shape.svg" alt="Logo" class="logo-image" />
                     <span class="logo-text">Vanilla's Kitchen</span>
                 </div>
