@@ -100,7 +100,7 @@ useHead({
   ]
 })
 
-const { user, isLoggedIn, initAuth } = useAuth()
+const { user, isLoggedIn, initAuth, waitForAuth } = useAuth()
 const { getAuth, postAuth } = useApi()
 
 const searchKeyword = ref('')
@@ -283,13 +283,11 @@ const toggleLike = async (recipe, event) => {
 onMounted(async () => {
   console.log('1️⃣ onMounted開始')
 
-  await initAuth()
-  await waitForAuth()
-
-  await new Promise(r => requestAnimationFrame(() => r()))
+  await initAuth()        // 一度だけ初期化（❷の効果）
+  await waitForAuth()     // Firebaseの復元を必ず待つ
+  await new Promise(r => requestAnimationFrame(() => r())) // 1フレーム待機
 
   if (!isLoggedIn.value) {
-    console.log('3️⃣ 最終未ログイン → リダイレクト')
     return navigateTo('/auth/login')
   }
 
@@ -306,6 +304,7 @@ onMounted(async () => {
   await fetchRecipes()
   console.log('6️⃣ 初回レシピ取得完了')
 })
+
 
 watch(() => route.query, (newQuery) => {
   console.log('🔄 URLクエリ変更検知:', newQuery)
