@@ -168,10 +168,16 @@ class RecipeController extends Controller
                 }
             }
 
-            $query = Recipe::published()
-                ->with('admin')
-                ->withCount('likes')
-                ->search($keyword);
+            if ($keyword === '') {
+                $query = Recipe::published()
+                    ->with('admin')
+                    ->withCount('likes');
+            } else {
+                $query = Recipe::published()
+                    ->with('admin')
+                    ->withCount('likes')
+                    ->search($keyword);
+            }
 
             $recipes = $query->latest()->paginate($perPage);
 
