@@ -1,9 +1,15 @@
 <template>
     <div class="register-page">
+    <Head>
+        <Meta name="robots" content="noindex, nofollow" />
+        <Title>Sign up | Vanilla's Kitchen</Title>
+        <Link rel="canonical" href="https://vanilla-kitchen.com/auth/register" />
+    </Head>
+
         <div class="form-container">
             <form class="form" @submit.prevent="handleSubmit">
                 <div class="logo">
-                    <img src="/images/rabbit-shape.svg" alt="Rabbit Logo" class="logo-image">
+                    <img src="/images/rabbit-shape.svg" alt="バニラキッチン（Vanilla's Kitchen）のロゴ" class="logo-image">
                 </div>
                 <h1 class="title">Sign up</h1>
 

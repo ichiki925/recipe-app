@@ -1,5 +1,9 @@
 <template>
   <div class="forgot-password-page">
+    <Head>
+      <Meta name="robots" content="noindex, nofollow" />
+      <Title>Forgot password | Vanilla's Kitchen</Title>
+    </Head>
     <div class="form-container">
       <h1 class="title">パスワードをお忘れですか？</h1>
       <p class="description">
