@@ -660,7 +660,8 @@ body {
 .recipe-form h2 {
     margin-bottom: 20px;
     text-align: center;
-    font-family: cursive;
+    font-family: 'Italianno', cursive;
+    font-size: 2rem;
 }
 
 .recipe-form label {
