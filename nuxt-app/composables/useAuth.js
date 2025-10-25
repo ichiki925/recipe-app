@@ -18,6 +18,7 @@ export const useAuth = () => {
     const _initOnce = useState('auth._initOnce', () => null)
 
     const API_BASE_URL = config.public.apiBaseUrl
+    const APP_BASE_URL = 'https://vanilla-kitchen.com'
 
     const getCurrentUser = () => $auth.currentUser
     const waitForAuth = () =>
@@ -55,15 +56,12 @@ export const useAuth = () => {
                 userData.password
             )
 
-            // 🔧 開発環境ではメール認証をスキップ
             if (process.env.NODE_ENV === 'production') {
-                // 本番環境のみメール認証を実施
                 const isAdminRegistration = endpoint.includes('admin')
-                const loginPath = isAdminRegistration ? '/admin/login' : '/auth/login'
-                const redirectUrl = `https://vanilla-kitchen.com${loginPath}`
-
+                const type = isAdminRegistration ? 'admin' : 'user'
                 await sendEmailVerification(firebaseUser, {
-                    url: redirectUrl,
+                    url: `${APP_BASE_URL}/auth/action?type=${type}`,
+                    handleCodeInApp: true,
                 })
             }
 
@@ -221,10 +219,9 @@ export const useAuth = () => {
 
     const resetPassword = async (email, type = 'user') => {
         try {
-            const url = `https://vanilla-kitchen.com/reset-password?type=${type}`
-
             await sendPasswordResetEmail($auth, email, {
-                url: url
+                url: `${APP_BASE_URL}/auth/reset-password?type=${type}`,
+                handleCodeInApp: true,
             })
         } catch (error) {
             console.error('パスワードリセットメール送信エラー:', error)

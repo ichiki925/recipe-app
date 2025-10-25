@@ -105,10 +105,15 @@ onMounted(() => {
 const validateForm = () => {
     let ok = true
     errors.value = {}
-    if (!form.value.password || form.value.password.length < 8) {
-        errors.value.password = 'パスワードは8文字以上で入力してください'
+
+    // ✅ type に応じたバリデーション（ここだけで判定完了）
+    if (!form.value.password || !validateByType(form.value.password, type.value)) {
+        errors.value.password = (type.value === 'admin')
+            ? '管理者パスワードは大文字・小文字・数字を含む8文字以上にしてください'
+            : 'パスワードは小文字・数字を含む6文字以上にしてください'
         ok = false
     }
+
     if (!form.value.passwordConfirmation) {
         errors.value.passwordConfirmation = 'パスワード確認を入力してください'
         ok = false
@@ -116,6 +121,7 @@ const validateForm = () => {
         errors.value.passwordConfirmation = 'パスワードが一致しません'
         ok = false
     }
+
     return ok
 }
 
@@ -141,6 +147,16 @@ const handleSubmit = async () => {
         isSubmitting.value = false
     }
 }
+
+const validateByType = (pwd, kind) => {
+    if (kind === 'admin') {
+        return pwd.length >= 8 && /[A-Z]/.test(pwd) && /[a-z]/.test(pwd) && /\d/.test(pwd)
+    } else {
+        return pwd.length >= 6 && /[a-z]/.test(pwd) && /\d/.test(pwd)
+    }
+}
+
+    
 </script>
 
 
