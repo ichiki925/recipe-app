@@ -220,7 +220,7 @@ export const useAuth = () => {
     const resetPassword = async (email, type = 'user') => {
         try {
             await sendPasswordResetEmail($auth, email, {
-                url: `${APP_BASE_URL}/auth/reset-password?type=${type}`,
+                url: `${APP_BASE_URL}/auth/action?type=${type}`,
                 handleCodeInApp: true,
             })
         } catch (error) {
