@@ -239,7 +239,7 @@ A: Laravel側のCORS設定を確認し、NuxtのベースURLが正しく設定�
 
 ## 作者
 
-[Your Name] - [your.email@example.com]
+K.Ichiki
 
 
 

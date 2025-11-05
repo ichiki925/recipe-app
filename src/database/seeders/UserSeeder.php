@@ -93,7 +93,7 @@ class UserSeeder extends Seeder
         $this->command->info('- 一般ユーザー: ' . count($users) . '名');
         $this->command->info('');
         $this->command->info(' 管理者情報: ' . env('ADMIN_REGISTRATION_CODE'));
-        $this->command->info('管理者コード: . env('ADMIN_REGISTRATION_CODE'));
+        $this->command->info('管理者コード:' . env('ADMIN_REGISTRATION_CODE'));
         $this->command->info('Email: admin@test.com');
         $this->command->info('Firebase UID: test_admin_uid_001');
         $this->command->info('');

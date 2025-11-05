@@ -367,19 +367,6 @@ const submitRecipe = async () => {
       errors.value.push('作り方は必須です')
     }
 
-    const currentEditingId = currentEditingRecipe.value?.id
-    if (currentEditingId) {
-      const existingDraft = savedRecipes.value.find(r => r.id === currentEditingId)
-      if (existingDraft?.tempImagePath &&
-          existingDraft.tempImagePath !== selectedFile.value?.tempImagePath) {
-        try {
-          await deleteTempImage(existingDraft.tempImagePath)
-        } catch (error) {
-          console.error('古い一時画像削除エラー（無視）:', error)
-        }
-      }
-    }
-
     const ingredientsText = formatIngredients()
     if (!ingredientsText) {
       errors.value.push('材料は必須です')
@@ -397,17 +384,42 @@ const submitRecipe = async () => {
     formData.append('ingredients', ingredientsText)
     formData.append('instructions', form.instructions.trim())
 
-    // 画像処理 - temp_image_urlを優先
-    if (selectedFile.value?.isTemp && selectedFile.value?.tempImageUrl) {
-      formData.append('temp_image_url', selectedFile.value.tempImageUrl)
-    } else if (selectedFile.value?.file instanceof File) {
-      formData.append('image', selectedFile.value.file)
+    if (selectedFile.value) {
+      // 新しい画像ファイルの場合は、まずFirebase Storageに保存
+      if (selectedFile.value.file instanceof File && !selectedFile.value.isTemp) {
+        console.log('新しい画像をFirebase Storageに保存中...')
+        const tempImageData = await uploadTempImage(selectedFile.value.file)
+        formData.append('temp_image_url', tempImageData.url)
+        // 投稿後に削除するためのパスを保存
+        selectedFile.value.tempImagePath = tempImageData.path
+      } 
+      // すでにFirebase Storageに保存済みの場合
+      else if (selectedFile.value.isTemp && selectedFile.value.tempImageUrl) {
+        console.log('保存済み画像URLを使用:', selectedFile.value.tempImageUrl)
+        formData.append('temp_image_url', selectedFile.value.tempImageUrl)
+      }
     }
 
     // useApiのpostメソッドを使用（FormDataを自動検出）
     const result = await postAuth('admin/recipes', formData)
 
     successMessage.value = 'レシピが投稿されました'
+
+    // 投稿成功後、一時画像を削除
+    const currentEditingId = currentEditingRecipe.value?.id
+    if (currentEditingId) {
+      const existingDraft = savedRecipes.value.find(r => r.id === currentEditingId)
+      if (existingDraft?.tempImagePath) {
+        try {
+          await deleteTempImage(existingDraft.tempImagePath)
+        } catch (error) {
+          console.error('一時画像削除エラー（無視）:', error)
+        }
+      }
+      // 下書きを削除
+      savedRecipes.value = savedRecipes.value.filter(r => r.id !== currentEditingId)
+      updateSavedRecipes()
+    }
 
     // フォームリセット
     Object.assign(form, {
@@ -421,12 +433,6 @@ const submitRecipe = async () => {
     imagePreview.value = ''
     selectedFile.value = null
     currentEditingRecipe.value = null
-
-    // 下書きを削除
-    if (currentEditingId) {
-      savedRecipes.value = savedRecipes.value.filter(r => r.id !== currentEditingId)
-      updateSavedRecipes()
-    }
 
     // 成功後のリダイレクト
     if (result.data?.id) {

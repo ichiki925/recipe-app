@@ -501,13 +501,19 @@ const submitRecipe = async () => {
         formData.append('ingredients', ingredientsText)
         formData.append('instructions', form.instructions.trim())
 
-        // 画像処理 - 条件を明確化
-        if (selectedFile.value?.isTemp && selectedFile.value?.tempImageUrl) {
-            // 一時保存画像の場合
-            formData.append('temp_image_url', selectedFile.value.tempImageUrl)
-        } else if (selectedFile.value?.file instanceof File) {
-            // 新規選択画像の場合
-            formData.append('image', selectedFile.value.file)
+        if (selectedFile.value) {
+            // 新しい画像ファイルの場合は、まずFirebase Storageに保存
+            if (selectedFile.value.file instanceof File && !selectedFile.value.isTemp) {
+                console.log('新しい画像をFirebase Storageに保存中...')
+                const tempImageData = await uploadTempImage(selectedFile.value.file)
+                formData.append('temp_image_url', tempImageData.url)
+                selectedFile.value.tempImagePath = tempImageData.path
+            } 
+            // すでにFirebase Storageに保存済みの場合
+            else if (selectedFile.value.isTemp && selectedFile.value.tempImageUrl) {
+                console.log('保存済み画像URLを使用')
+                formData.append('temp_image_url', selectedFile.value.tempImageUrl)
+            }
         }
 
         const recipeId = route.params.id
