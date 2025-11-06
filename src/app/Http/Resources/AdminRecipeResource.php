@@ -21,7 +21,7 @@ class AdminRecipeResource extends JsonResource
             'contains_firebasestorage_com' => $raw ? strpos($raw, 'firebasestorage.googleapis.com') !== false : false,
             'contains_firebasestorage_app' => $raw ? strpos($raw, 'firebasestorage.app') !== false : false
         ]);
-        
+
         if (is_string($raw)) {
             // Firebase Storage URL の場合
             if (strpos($raw, 'firebasestorage.googleapis.com') !== false || 
@@ -105,6 +105,7 @@ class AdminRecipeResource extends JsonResource
                         'id' => $comment->id,
                         'content' => $comment->content ?? $comment->body ?? '',
                         'user_name' => $comment->user->name ?? '不明',
+                        'avatar_url' => $comment->user->avatar_url ?? null,
                         'created_at_human' => $comment->created_at->diffForHumans(),
                     ];
                 });
@@ -120,6 +121,7 @@ class AdminRecipeResource extends JsonResource
                         'user' => [
                             'id' => $comment->user->id ?? null,
                             'name' => $comment->user->name ?? 'ゲスト',
+                            'avatar_url' => $comment->user->avatar_url ?? null,
                         ],
                         'created_at' => $comment->created_at->toISOString(),
                     ];
