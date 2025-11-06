@@ -126,21 +126,21 @@ const commentLength = computed(() => {
 })
 
 const getAvatarUrl = (user) => {
-    if (!user || !user.avatar_path) {
+    if (!user || !user.avatar_url) {
         return null
     }
 
-    if (user.avatar_path.startsWith('http://') || user.avatar_path.startsWith('https://')) {
-        return user.avatar_path
+    if (user.avatar_url.startsWith('http://') || user.avatar_url.startsWith('https://')) {
+        return user.avatar_url
     }
 
-    if (user.avatar_path.startsWith('/storage/')) {
-        return `http://localhost${user.avatar_path}`
+    if (user.avatar_url.startsWith('/storage/')) {
+        return `http://localhost${user.avatar_url}`
     }
 
-    const fileName = user.avatar_path.includes('/')
-        ? user.avatar_path.split('/').pop()
-        : user.avatar_path
+    const fileName = user.avatar_url.includes('/')
+        ? user.avatar_url.split('/').pop()
+        : user.avatar_url
 
     return `http://localhost/storage/avatars/${fileName}`
 }
