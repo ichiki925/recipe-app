@@ -77,6 +77,18 @@ definePageMeta({
     layout: 'guest'
 })
 
+const { isLoggedIn, initAuth } = useAuth()
+
+onMounted(async () => {
+    await initAuth()
+
+    // ログイン済みなら /user にリダイレクト
+    if (isLoggedIn.value) {
+        await navigateTo('/user')
+    }
+})
+
+
 useHead({
     link: [
         {
