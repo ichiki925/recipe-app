@@ -9,7 +9,7 @@
 <script setup>
 const { initAuth } = useAuth()
 
-    onMounted(() => {
-        initAuth()
-    })
+onMounted(async () => {
+    await initAuth()
+})
 </script>
